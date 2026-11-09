@@ -1,1 +1,34 @@
-# audit-compass-test-data-workshop
+# Audit Compass 测试数据工作坊
+
+浏览器内运行的测试数据生成及综合分析报告核验工具。主档、流水、工商测试数据、计算、Excel/ZIP/Word 导出均在本机浏览器完成，无业务后端或数据库。
+
+## 数据说明
+
+内置企业名称用于测试，交易、关联关系、人员及工商风险信息为测试样本，不代表相关企业的真实交易、关联关系或风险。内置样本会随页面源代码一起发布。用户自行导入的数据仅在浏览器中处理，不会通过应用接口上传；完整项目需使用“保存项目”下载后保管。
+
+## GitHub Pages 部署
+
+1. 新建仓库 `audit-compass-test-data-workshop`。
+2. 将本目录内容上传到仓库根目录，确保根目录有 `index.html`。
+3. 在 Settings → Pages → Build and deployment 中选择 Deploy from a branch。
+4. Branch 选择 `main`，文件夹选择 `/(root)`，保存。
+5. 等待 Pages 构建完成，以设置页显示的实际网址为准。
+
+## 更新页面
+
+源码位于 `src/`。修改后运行：
+
+```sh
+node build.mjs
+cp dist/index.html index.html
+```
+
+提交并推送更新后的源码和根目录 `index.html`；Pages 会重新部署。Node.js 只用于打包，访问者无需安装。
+
+## 本地使用
+
+用现代浏览器打开 `index.html` 即可使用。浏览器只自动保留部分设置，切换网址、浏览器或设备不会自动同步项目；离开前下载项目 JSON。
+
+## 发布内容
+
+本目录仅包含工作坊程序、内置测试样本、构建脚本及依赖许可证。不包含工作目录中的测试用例 Excel、用户导出的项目或其他附件。
