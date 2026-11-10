@@ -51,12 +51,9 @@ function intervalLabels(bounds,id){
 function value(record,id,asOf,rates={}){
  if(!record)return null;
  if(id==='days'){
-  const start=record.start||record.formed;
-  if(date(start)&&date(asOf)&&start>asOf)return null;
-  if(record.days!=null)return record.days;
+  const start=record.start;
   if(!date(start)||!date(asOf))return null;
-  const end=date(record.end)&&record.end<asOf?record.end:asOf;
-  return end<start?null:(Date.parse(end)-Date.parse(start))/oneDay;
+  return asOf<start?null:(Date.parse(asOf)-Date.parse(start))/oneDay;
  }
  if(id==='paidRatio')return record.capital>0&&record.paidIn!=null?record.paidIn*100/record.capital:null;
  if(id==='capital'||id==='paidIn'){
@@ -64,6 +61,42 @@ function value(record,id,asOf,rates={}){
   return record[id]!=null&&Number.isFinite(rate)&&rate>0?Math.round(record[id]*rate*100)/100:null;
  }
  return record[id]??null;
+}
+function planStartDates(records,asOf,indices=null){
+ if(!date(asOf))throw Error('请输入有效的报告结束日期。');
+ const selected=indices==null?null:new Set(indices);
+ const rows=[];
+ records.forEach((record,index)=>{
+  if(selected&&!selected.has(index))return;
+  const raw=record.days,n=Number(raw),row={index,name:record.name||'未填写名称',days:raw,oldStart:record.start??'',newStart:'',calculated:null,status:'skip',reason:''};
+  if(raw==null||clean(raw)===''){row.reason='未填写原经营天数，保留原日期';}
+  else if(!Number.isSafeInteger(n)||n<0){row.reason='原经营天数须为非负整数，保留原日期';}
+  else{
+   const begin=new Date(Date.parse(asOf)-n*oneDay);
+   if(!Number.isFinite(begin.getTime())||begin.getUTCFullYear()<1||begin.getUTCFullYear()>9999)row.reason='推算日期超出有效范围，保留原日期';
+   else{
+    const start=begin.toISOString().slice(0,10);
+    if(date(record.end)&&record.end<start)row.reason='经营结束时间早于推算开始时间；只改开始时间会产生日期冲突，已跳过';
+    else{
+     row.newStart=start;row.calculated=(Date.parse(asOf)-Date.parse(start))/oneDay;
+     row.status=start===row.oldStart?'same':'change';
+     row.reason=row.status==='same'?'日期已一致，无需修改':'仅修改经营开始时间';
+     if(date(record.formed)&&start<record.formed)row.reason+='；推算日早于成立日期，成立日期保持不变';
+    }
+   }
+  }
+  rows.push(row);
+ });
+ return {asOf,signature:JSON.stringify(records),rows,changed:rows.filter(r=>r.status==='change').length,unchanged:rows.filter(r=>r.status==='same').length,skipped:rows.filter(r=>r.status==='skip').length};
+}
+function applyStartDates(records,plan){
+ if(!plan||JSON.stringify(records)!==plan.signature)throw Error('工商档案已发生变化，请重新预览后再应用。');
+ const starts=new Map(plan.rows.filter(r=>r.status==='change').map(r=>[r.index,r.newStart]));
+ return records.map((record,index)=>starts.has(index)?{...record,start:starts.get(index)}:record);
+}
+function startDatePreviewTable(plan){
+ const labels={change:'待修改',same:'无需修改',skip:'跳过'};
+ return {headers:['对手方名称','原经营天数（保留）','原经营开始时间','推算经营开始时间','报告结束日期','按日期计算天数','处理结果','说明'],rows:plan.rows.map(r=>[r.name,r.days??null,r.oldStart,r.newStart,plan.asOf,r.calculated,labels[r.status],r.reason])};
 }
 function bucket(n,bounds,id){
  if(n==null||!Number.isFinite(n)||n<0)return bounds.length+1;
@@ -116,7 +149,7 @@ function generate(names,asOf,settings={},offset=0){
  });
 }
 function table(records,asOf,rates){
- return {headers:fields.map(x=>x[1]),rows:records.map(r=>fields.map(([k])=>k==='days'?value(r,k,asOf,rates):r[k]))};
+ return {headers:fields.map(x=>x[1]),rows:records.map(r=>fields.map(([k])=>r[k]))};
 }
-g.AuditRegistry={INTERVAL_VERSION,migrateSettings,fields,metrics,boundsFor,intervalLabels,value,bucket,readRecord,parseBounds,generate,table};
+g.AuditRegistry={INTERVAL_VERSION,migrateSettings,fields,metrics,boundsFor,intervalLabels,value,bucket,readRecord,parseBounds,generate,table,planStartDates,applyStartDates,startDatePreviewTable};
 })(globalThis);

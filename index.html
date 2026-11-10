@@ -1351,6 +1351,19 @@ body .statement-sticky-clone-table thead th.ba-filtered .ba-filter-btn::before{
 .report-document .report-toc h2{color:#153763;border-bottom-color:#e8f0fa}
 .report-document .report-toc a{color:#263a55}
 .report-document .report-cover-notes{color:#172438}
+.registry-start-tools{margin:20px 0;padding:20px;border:1px solid #cbdff5;border-radius:10px;background:#f4f8ff}
+.registry-start-tools h4{margin:0 0 10px;color:#173d70;font-size:15px}
+.registry-start-tools p{max-width:1050px;line-height:1.75}
+.registry-start-tools .registry-controls{border:0;padding:10px 0;background:transparent;display:flex;gap:18px;align-items:end;flex-wrap:wrap}
+.registry-start-tools .registry-sync{display:flex;align-items:center;gap:8px;align-self:center}
+.registry-start-tools input[type=checkbox]{width:16px;height:16px;margin:0}
+#registryStartDateModal{width:min(1180px,94vw);max-width:94vw;max-height:90vh}
+#registryStartDatePreview{padding:0 22px 18px}
+.registry-date-preview{max-height:380px;overflow:auto;border:1px solid #dce5ef;border-radius:8px}
+.registry-date-preview th{position:sticky;top:0;background:#edf4fd;z-index:1}
+.registry-date-preview td{white-space:normal;min-width:100px;max-width:280px;line-height:1.6}
+.registry-date-preview td:last-child{min-width:220px}
+@media(max-width:650px){.registry-start-tools{padding:14px}.registry-start-tools .registry-controls{display:grid;grid-template-columns:1fr}.registry-start-tools input[type=date],.registry-start-tools select{width:100%}}
 </style></head><body>
 <header class="layout-header">
  <div class="layout-header-name">Audit Compass测试数据工作坊 <span class="layout-header-project" id="sourceLabel"></span></div>
@@ -1382,6 +1395,7 @@ body .statement-sticky-clone-table thead th.ba-filtered .ba-filter-btn::before{
 </dialog>
 <dialog id="masterSampleModal" aria-labelledby="masterSampleTitle"><div class="dialog-heading"><h3 id="masterSampleTitle">按被审计单位配置主档组合</h3><button type="button" id="closeMasterSamples" aria-label="关闭">×</button></div><form id="masterSampleForm"><div id="masterSampleFields"></div><div class="dialog-footer"><p>生成主档后，到「设置异常并生成」配置要写入流水的场景。</p><button type="submit" class="btn btn-primary">应用主档组合</button></div></form></dialog>
 <dialog id="catalogModal" aria-labelledby="catalogTitle"><div class="dialog-heading"><h3 id="catalogTitle">离线企业名称库</h3><button type="button" id="closeCatalog" aria-label="关闭">×</button></div><div class="table-tools"><label>搜索名称或来源 <input type="search" id="catalogSearch" placeholder="例如 天眼查、母婴、上海"></label><button type="button" class="btn" id="exportCatalog">下载名称及来源</button></div><p id="catalogCount" class="muted"></p><div class="table-scroll"><table class="table"><thead><tr><th>企业全称</th><th>来源</th></tr></thead><tbody id="catalogRows"></tbody></table></div><p class="muted">名称库随 HTML 内置；来源链接可在联网时查看。测试交易和关系为模拟。</p></dialog>
+<dialog id="registryStartDateModal" aria-labelledby="registryStartDateTitle"><div class="dialog-heading"><h3 id="registryStartDateTitle">经营开始时间修正预览</h3><button type="button" id="closeRegistryStartDates" aria-label="关闭日期修正预览">×</button></div><div id="registryStartDatePreview"></div><div class="dialog-footer"><button type="button" id="exportRegistryStartDates" class="btn">下载全部预览</button><button type="button" id="applyRegistryStartDates" class="btn btn-primary">应用开始时间修正</button></div></dialog>
 <dialog id="registryModal" aria-labelledby="registryTitle"><div class="dialog-heading"><h3 id="registryTitle">编辑对手方工商档案</h3><button type="button" id="closeRegistry" aria-label="关闭">×</button></div><form id="registryRecord"><div id="registryFields" class="modal-fields"></div><div class="dialog-footer"><button type="submit" class="btn btn-primary">保存档案</button></div></form></dialog>
 <div id="flowFilterPopover" class="ba-table-filter-popover" popover="auto" aria-label="流水列筛选"></div><script>/*!
 
@@ -1967,12 +1981,9 @@ function intervalLabels(bounds,id){
 function value(record,id,asOf,rates={}){
  if(!record)return null;
  if(id==='days'){
-  const start=record.start||record.formed;
-  if(date(start)&&date(asOf)&&start>asOf)return null;
-  if(record.days!=null)return record.days;
+  const start=record.start;
   if(!date(start)||!date(asOf))return null;
-  const end=date(record.end)&&record.end<asOf?record.end:asOf;
-  return end<start?null:(Date.parse(end)-Date.parse(start))/oneDay;
+  return asOf<start?null:(Date.parse(asOf)-Date.parse(start))/oneDay;
  }
  if(id==='paidRatio')return record.capital>0&&record.paidIn!=null?record.paidIn*100/record.capital:null;
  if(id==='capital'||id==='paidIn'){
@@ -1980,6 +1991,42 @@ function value(record,id,asOf,rates={}){
   return record[id]!=null&&Number.isFinite(rate)&&rate>0?Math.round(record[id]*rate*100)/100:null;
  }
  return record[id]??null;
+}
+function planStartDates(records,asOf,indices=null){
+ if(!date(asOf))throw Error('请输入有效的报告结束日期。');
+ const selected=indices==null?null:new Set(indices);
+ const rows=[];
+ records.forEach((record,index)=>{
+  if(selected&&!selected.has(index))return;
+  const raw=record.days,n=Number(raw),row={index,name:record.name||'未填写名称',days:raw,oldStart:record.start??'',newStart:'',calculated:null,status:'skip',reason:''};
+  if(raw==null||clean(raw)===''){row.reason='未填写原经营天数，保留原日期';}
+  else if(!Number.isSafeInteger(n)||n<0){row.reason='原经营天数须为非负整数，保留原日期';}
+  else{
+   const begin=new Date(Date.parse(asOf)-n*oneDay);
+   if(!Number.isFinite(begin.getTime())||begin.getUTCFullYear()<1||begin.getUTCFullYear()>9999)row.reason='推算日期超出有效范围，保留原日期';
+   else{
+    const start=begin.toISOString().slice(0,10);
+    if(date(record.end)&&record.end<start)row.reason='经营结束时间早于推算开始时间；只改开始时间会产生日期冲突，已跳过';
+    else{
+     row.newStart=start;row.calculated=(Date.parse(asOf)-Date.parse(start))/oneDay;
+     row.status=start===row.oldStart?'same':'change';
+     row.reason=row.status==='same'?'日期已一致，无需修改':'仅修改经营开始时间';
+     if(date(record.formed)&&start<record.formed)row.reason+='；推算日早于成立日期，成立日期保持不变';
+    }
+   }
+  }
+  rows.push(row);
+ });
+ return {asOf,signature:JSON.stringify(records),rows,changed:rows.filter(r=>r.status==='change').length,unchanged:rows.filter(r=>r.status==='same').length,skipped:rows.filter(r=>r.status==='skip').length};
+}
+function applyStartDates(records,plan){
+ if(!plan||JSON.stringify(records)!==plan.signature)throw Error('工商档案已发生变化，请重新预览后再应用。');
+ const starts=new Map(plan.rows.filter(r=>r.status==='change').map(r=>[r.index,r.newStart]));
+ return records.map((record,index)=>starts.has(index)?{...record,start:starts.get(index)}:record);
+}
+function startDatePreviewTable(plan){
+ const labels={change:'待修改',same:'无需修改',skip:'跳过'};
+ return {headers:['对手方名称','原经营天数（保留）','原经营开始时间','推算经营开始时间','报告结束日期','按日期计算天数','处理结果','说明'],rows:plan.rows.map(r=>[r.name,r.days??null,r.oldStart,r.newStart,plan.asOf,r.calculated,labels[r.status],r.reason])};
 }
 function bucket(n,bounds,id){
  if(n==null||!Number.isFinite(n)||n<0)return bounds.length+1;
@@ -2032,9 +2079,9 @@ function generate(names,asOf,settings={},offset=0){
  });
 }
 function table(records,asOf,rates){
- return {headers:fields.map(x=>x[1]),rows:records.map(r=>fields.map(([k])=>k==='days'?value(r,k,asOf,rates):r[k]))};
+ return {headers:fields.map(x=>x[1]),rows:records.map(r=>fields.map(([k])=>r[k]))};
 }
-g.AuditRegistry={INTERVAL_VERSION,migrateSettings,fields,metrics,boundsFor,intervalLabels,value,bucket,readRecord,parseBounds,generate,table};
+g.AuditRegistry={INTERVAL_VERSION,migrateSettings,fields,metrics,boundsFor,intervalLabels,value,bucket,readRecord,parseBounds,generate,table,planStartDates,applyStartDates,startDatePreviewTable};
 })(globalThis);
 </script><script>(function(g){
 'use strict';
@@ -2379,7 +2426,7 @@ function compute(data,settings={}){
  table(relatedSection,'关联组合明细',['被审计单位公司名称','关联方名称','组合来源'],[...relationPairs.values()]);
 
  const R=g.AuditRegistry;
- const compliance=section('compliance','2.3.1 交易对手方合规事项及工商信息分析','按对手方全称关联工商档案，只统计本期有交易的范围外企业。经营天数计算到报告期末或较早的经营结束日，手工填写的天数优先。一般分界值归右侧区间，经营时长按 365 天折算 1 年，恰好 3 年归入 2~3 年，恰好 100 人归入 50~100 人；注册资本按人民币归档；恰好 1M 归入 500k–1M，最后一档为 >1M。工商区间图表仅统计对应字段有有效数值的本期范围外对手方，缺失或无效字段不参与该图的金额及占比计算。');
+ const compliance=section('compliance','2.3.1 交易对手方合规事项及工商信息分析','按对手方全称关联工商档案，只统计本期有交易的范围外企业。经营天数＝报告结束日期－经营开始时间，按自然日日期差计算，不额外加一天；不读取保存的经营天数作为计算结果，也不按经营结束时间截断。保存的原经营天数可用于反推开始时间和独立核对。一般分界值归右侧区间，经营时长按 365 天折算 1 年，恰好 3 年归入 2~3 年，恰好 100 人归入 50~100 人；注册资本按人民币归档；恰好 1M 归入 500k–1M，最后一档为 >1M。工商区间图表仅统计对应字段有有效数值的本期范围外对手方，缺失或无效字段不参与该图的金额及占比计算。');
  const profiles=new Map((settings.registry||[]).map(r=>[clean(r.name),r]));
  const enterprise=cp.filter(x=>[...x.name].length>4&&x.name!=='【对手方为空】'&&!flagByName.has(x.name));
  const matched=enterprise.filter(x=>profiles.has(x.name));
@@ -2421,7 +2468,7 @@ function compute(data,settings={}){
   }
  }
  const fieldTable=R.table(matched.map(x=>profiles.get(x.name)),to,rates);
- table(compliance,'本期工商匹配明细',[...fieldTable.headers,...moneyHeaders],fieldTable.rows.map((r,i)=>[...r,...financial(matched[i])]));
+ table(compliance,'本期工商匹配明细',[...fieldTable.headers,'报告结束日期','按日期计算经营天数','计算值－原天数',...moneyHeaders],fieldTable.rows.map((r,i)=>{const profile=profiles.get(matched[i].name),days=R.value(profile,'days',to,rates),raw=profile.days;return [...r,to,days,days!=null&&raw!=null&&String(raw).trim()!==''&&Number.isFinite(Number(raw))?days-Number(raw):null,...financial(matched[i])];}));
 
  const persons=section('people','2.3.2 交易对手方为个人或疑似个人的分析','按本方公司及姓名匹配。董监高以关联方主档中的人员关系为准，其次匹配员工主档；其余非空且姓名不超过4个字符的对手方归为其他个人。合计按姓名去重。');
  const individuals=[...people.values()];
@@ -25995,7 +26042,7 @@ const config=builtIn.config;
 try{const saved=JSON.parse(localStorage.getItem('ac-forge-settings')||'null');if(saved){if(!saved.annualCounts)for(const [k,v]of Object.entries({big:6,blankCP:15,blankSummary:15,balanceErrors:6,sameTime:6,sameMissing:5}))if(saved[k]===v)delete saved[k];delete saved.sampleNonMerchants;delete saved.sampleAccountPlans;const annual=saved.annualCounts;delete saved.annualCounts;Object.assign(config,AuditRegistry.migrateSettings(saved));for(const [year,counts] of Object.entries(annual||{}))config.annualCounts[year]={...config.annualCounts[year],...counts};}}catch{}
 const icons={overview:'◫',master:'▦',rules:'≋',anomaly:'◎',preview:'▤',export:'↗'};
 if(!Number.isFinite(config.fx)||config.fx<=0)config.fx=E.DEFAULT_FX;
-let reportPeriod={};
+let reportPeriod=config.registryStartAnchor?{to:config.registryStartAnchor}:{};
 const exchangeRates=()=>({USD:config.fx,...config.rates});
 const registry=()=>config.registryRecords||[];
 const bounds=()=>config.registryBounds||{};
@@ -26153,8 +26200,9 @@ function companyMode(name){
  return Object.hasOwn(config.companyFlow||{},name)?String(config.companyFlow[name]):'auto';
 }
 function snapshot(){
- return {data:E.copy(data),source:E.copy(generationSource),companyFlow:E.copy(config.companyFlow||{}),sampleNonMerchants:E.copy(config.sampleNonMerchants||{}),sampleAccountPlans:E.copy(config.sampleAccountPlans||{}),registryRecords:E.copy(registry()),registryBounds:E.copy(bounds()),reportCriteria:E.copy(config.reportCriteria||{}),label:sourceLabel};
+ return {data:E.copy(data),source:E.copy(generationSource),companyFlow:E.copy(config.companyFlow||{}),sampleNonMerchants:E.copy(config.sampleNonMerchants||{}),sampleAccountPlans:E.copy(config.sampleAccountPlans||{}),registryRecords:E.copy(registry()),registryBounds:E.copy(bounds()),reportCriteria:E.copy(config.reportCriteria||{}),registryStartAnchor:config.registryStartAnchor||'',reportPeriod:E.copy(reportPeriod),registryAsOf,label:sourceLabel};
 }
+function restoreRegistryDateState(next){config.registryStartAnchor=next.registryStartAnchor||'';reportPeriod=E.copy(next.reportPeriod||{});registryAsOf=next.registryAsOf||'';}
 function renameCompanies(d,pairs){
  E.rename(d,pairs);
  const modes=config.companyFlow||{};
@@ -26290,7 +26338,7 @@ function preflight(){
  $('#preflightContent table')?.classList.add('table');$('#preflightModal').showModal();
 }
 const R=AuditRegistry;
-let registryFilter={},registryAsOf='',editingRegistry=null;
+let registryFilter={},registryAsOf='',editingRegistry=null,registryStartPlan=null;
 function registryDate(){return registryAsOf||reportPeriod.to||data[K.flow].rows.reduce((last,r)=>{const d=String(r[5]??'').slice(0,10);return d>last?d:last;},'')||config.end;}
 function registryNames(){
  const names=new Set(),own=new Set(data[K.company].rows.map(r=>r[0]));
@@ -26308,14 +26356,39 @@ function registryFiltered(){
 }
 function registryPage(){
  const asOf=registryDate(),names=registryNames(),filtered=registryFiltered();
+ const anchor=reportPeriod.to||config.registryStartAnchor||data[K.flow].rows.reduce((last,r)=>String(r[5]??'').slice(0,10)>last?String(r[5]).slice(0,10):last,'')||config.end;
  const select=(name,options,chosen)=>`<select name="${name}"><option value="">全部</option>${options.map(([v,label])=>`<option value="${h(v)}" ${String(chosen)===String(v)?'selected':''}>${h(label)}</option>`).join('')}</select>`;
  const metric=registryFilter.metric||'';
  const ranges=metric?R.intervalLabels(R.boundsFor(metric,bounds()),metric).map((s,i)=>[i,s]):[];
+ const shown=R.table(filtered,asOf,exchangeRates());
+ shown.headers.push('按日期计算经营天数','计算值－原天数');
+ shown.rows.forEach((row,i)=>{const calculated=R.value(filtered[i],'days',asOf,exchangeRates()),raw=filtered[i].days;row.push(calculated,calculated!=null&&raw!=null&&String(raw).trim()!==''&&Number.isFinite(Number(raw))?calculated-Number(raw):null);});
  return `<section class="panel"><div class="panel-heading"><h3>工商档案与报告区间</h3><div class="actions"><button id="addRegistry">新增档案</button><button id="exportRegistry">下载筛选结果</button><button data-nav="report">查看报告核验</button></div></div>
  <form id="registryGenerate" class="registry-controls"><label>样本基准日 <input type="date" name="asOf" value="${h(asOf)}" required></label><label>生成范围（可选） <input name="nameFilter" placeholder="按对手方名称包含文字"></label><label>最多生成（可选） <input name="maxRows" type="number" min="1" step="1" placeholder="不限"></label><button type="submit" class="primary">为当前流水补齐工商档案</button><span>按对手方全称匹配；现有档案保留。当前流水识别到 ${names.length} 家企业候选。</span></form>
+ <section class="registry-start-tools" aria-labelledby="registryStartHeading"><h4 id="registryStartHeading">保留经营天数，反推经营开始时间</h4><p>适用于已生成的数据和导入的旧项目。计算公式：经营开始时间＝报告结束日期－原经营天数，不额外加一天。只修改经营开始时间，原经营天数、成立日期、经营结束时间和其他工商信息均保留。</p><form id="registryStartDateForm" class="registry-controls"><label>报告结束日期 <input type="date" name="asOf" value="${h(anchor)}" required></label><label>修正范围 <select name="scope"><option value="all">全部工商档案</option><option value="filtered">当前筛选结果</option></select></label><label class="registry-sync"><input type="checkbox" name="syncReport" checked> 同步报告核验结束日期</label><button type="submit" class="btn btn-primary" ${registry().length?'':'disabled'}>预览日期修正</button></form><p class="muted">例如：2025-12-31结束、原经营天数365天，推算开始时间为2024-12-31。空白或无效天数会跳过；先预览，再应用，可用顶部“撤销”恢复。修改后请保存项目JSON或导出工商Excel。</p></section>
  <form id="registryBounds" class="registry-controls"><div class="registry-grid">${R.metrics.map(([id,label,unit])=>`<label>${label}分界值（${unit}）<input name="${id}" value="${h(R.boundsFor(id,bounds()).join(', '))}" required></label>`).join('')}</div><button type="submit">应用报告区间</button><button id="registryDefaultIntervals" type="button">恢复新版三项区间</button><span>逗号分隔；一般等于分界值归入右侧区间；经营天数、社保人数和注册资本的最后一个分界值计入前一档。默认按 365 天为 1 年；3 年、100 人、1M 均计入第三档。</span></form>
  <form id="registryFilter" class="registry-controls"><label>搜索 <input name="q" value="${h(registryFilter.q||'')}" placeholder="名称、行业、信用代码等"></label><label>经营状态 ${select('status',[...new Set(registry().map(r=>r.status).filter(Boolean))].map(x=>[x,x]),registryFilter.status)}</label><label>失信被执行人 ${select('dishonest',[['是','是'],['否','否']],registryFilter.dishonest)}</label><label>区间指标 ${select('metric',R.metrics.map(([id,label])=>[id,label]),metric)}</label><label>筛选区间 ${select('range',ranges,registryFilter.range)}</label><button type="submit">筛选</button><button type="button" id="clearRegistryFilter">清空筛选</button></form>
- <p class="muted">显示 ${filtered.length} / ${registry().length} 条。此处筛选只影响列表和下载，报告按所选期间重新汇总。</p>${table(R.table(filtered,asOf,exchangeRates()),{registry:true})}</section>`;
+ <p class="muted">显示 ${filtered.length} / ${registry().length} 条。原经营天数在导出时保留；右侧计算天数以 ${h(asOf)} 为截止日按经营开始时间重新计算，差值为0表示一致。报告使用自身所选结束日期。此处筛选只影响列表、下载及选择“当前筛选结果”的修正范围。</p>${table(shown,{registry:true})}</section>`;
+}
+function previewRegistryStartDates(fields){
+ const filtered=new Set(registryFiltered()),indices=fields.scope==='filtered'?registry().flatMap((r,i)=>filtered.has(r)?[i]:[]):null;
+ const plan=R.planStartDates(registry(),fields.asOf,indices);
+ if(!plan.rows.length)throw Error('所选范围没有工商档案。');
+ plan.syncReport=fields.syncReport==='on';
+ if(plan.syncReport&&plan.asOf<reportModel().from)throw Error('报告结束日期不能早于当前报告开始日期；请先调整报告期间，或取消同步。');
+ registryStartPlan=plan;
+ const t=R.startDatePreviewTable(plan),labels=t.headers;
+ $('#registryStartDatePreview').innerHTML=`<p>报告结束日期：<b>${h(plan.asOf)}</b>；共 ${num(plan.rows.length)} 条，待修改 <b>${num(plan.changed)}</b> 条，无需修改 ${num(plan.unchanged)} 条，跳过 ${num(plan.skipped)} 条。</p><p class="muted">原经营天数保持不变。${plan.syncReport?'应用后同步报告核验结束日期。':'报告核验日期不变；核对时请选择相同结束日期。'}下表展示前20条，下载预览可查看全部记录。</p><div class="table-scroll registry-date-preview"><table class="table"><thead><tr>${labels.map(label=>`<th>${h(label)}</th>`).join('')}</tr></thead><tbody>${t.rows.slice(0,20).map(row=>`<tr>${row.map(v=>`<td>${h(v??'—')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+ $('#applyRegistryStartDates').disabled=!plan.changed;
+ $('#registryStartDateModal').showModal();
+}
+function applyRegistryStartDates(){
+ const plan=registryStartPlan,next=R.applyStartDates(registry(),plan);
+ lastData=snapshot();config.registryRecords=next;config.registryStartAnchor=plan.asOf;registryAsOf=plan.asOf;
+ if(plan.syncReport)reportPeriod={...reportPeriod,to:plan.asOf,fiscalYear:undefined};
+ persist();$('#registryStartDateModal').close();render();
+ toast('已修正 '+num(plan.changed)+' 条经营开始时间，原经营天数未修改；跳过 '+num(plan.skipped)+' 条。可撤销或保存项目。');
+ registryStartPlan=null;
 }
 function openRegistry(name=null){
  const record=registry().find(r=>r.name===name)||{};
@@ -26325,10 +26398,11 @@ function openRegistry(name=null){
 }
 document.addEventListener('submit',e=>{
  const id=e.target.id;
- if(!['registryGenerate','registryBounds','registryFilter','registryRecord'].includes(id))return;
+ if(!['registryGenerate','registryBounds','registryFilter','registryRecord','registryStartDateForm'].includes(id))return;
  e.preventDefault();
  const f=Object.fromEntries(new FormData(e.target));
  try{
+  if(id==='registryStartDateForm'){previewRegistryStartDates(f);return;}
   if(id==='registryGenerate'){
    const q=String(f.nameFilter||'').trim().toLowerCase();
    const existing=new Set(registry().map(r=>r.name));
@@ -26445,8 +26519,8 @@ async function importFiles(files){
  generationSource=E.copy(project?.template||data);
  if(project){
   config.companyFlow={};config.sampleNonMerchants={};config.sampleAccountPlans={};
-  config.registryRecords=[];config.registryBounds={};config.reportCriteria={};config.annualCounts={};config.rates=undefined;config.fx=E.DEFAULT_FX;
-  Object.assign(config,project.config);reportPeriod={};
+  config.registryRecords=[];config.registryBounds={};config.reportCriteria={};config.registryStartAnchor='';config.annualCounts={};config.rates=undefined;config.fx=E.DEFAULT_FX;
+  Object.assign(config,project.config);reportPeriod=config.registryStartAnchor?{to:config.registryStartAnchor}:{};
  }
  if(importedRegistry!==null&&!project?.config.registryRecords)config.registryRecords=importedRegistry;
  config.registryIntervalVersion=R.INTERVAL_VERSION;registryFilter.range='';
@@ -26505,6 +26579,9 @@ if(el.dataset.registryEdit!==undefined){openRegistry(el.dataset.registryEdit);re
 if(id==='addRegistry')openRegistry();
 if(id==='closeRegistry')$('#registryModal').close();
 if(id==='clearRegistryFilter'){registryFilter={};pageNo=1;render();}
+if(id==='closeRegistryStartDates'){$('#registryStartDateModal').close();registryStartPlan=null;}
+if(id==='applyRegistryStartDates')run(async()=>applyRegistryStartDates());
+if(id==='exportRegistryStartDates')run(async()=>{if(!registryStartPlan)throw Error('请先预览日期修正。');X.download(new Blob([await X.workbook({'经营开始时间修正预览':R.startDatePreviewTable(registryStartPlan)})]),'经营开始时间修正预览_'+registryStartPlan.asOf+'.xlsx');});
 if(id==='exportRegistry'||id==='exportRegistryFull')run(async()=>X.download(new Blob([await registryWorkbook(id==='exportRegistryFull'?registry():registryFiltered())]),'对手方工商档案.xlsx'));
 if(id==='openMasterSamples')openMasterSamples();
 if(id==='closeMasterSamples')$('#masterSampleModal').close();
@@ -26540,7 +26617,7 @@ if(id==='exportFilteredFlow')run(async()=>{
  const source=E.checksWorkbook(analysis);
  const names=['逐年异常覆盖','专项交易','缺失同名付款明细','余额断点','账号覆盖','核验口径'];
  X.download(new Blob([await X.workbook(Object.fromEntries(names.map(n=>[n,source[n]])))]),'测试数据场景检查.xlsx');
- });if(id==='generate')run(async()=>{const result=E.generate(generationInput(),{...config,rates:exchangeRates()});lastData=snapshot();data=result.data;sourceLabel='新生成 · '+config.seed;recalc();reportPeriod=config.includeForeign===false?{originalCurrency:'CNY'}:{};preview=K.flow;resetFlowFilters();navigate('preview');toast('测试数据已生成，可预览流水或继续导出。');});if(id==='refreshAnalysis')run(async()=>{analyzeConfig();render();toast('已按当前财年重新核验。');});if(id==='reportApply')run(async()=>{const from=$('#reportFrom').value,to=$('#reportTo').value;if(!from||!to||from>to||Number(to.slice(0,4))-Number(from.slice(0,4))>11)throw Error('请选择有效的开始和结束日期。');reportPeriod={...reportPeriod,from,to,fiscalYear:undefined};render();});if(id==='reportPrint')window.print();if(id==='reportWord')run(async()=>{const m=reportModel();X.download(await AuditWord.report(m),'综合分析报告_'+m.from+'_'+m.to+'_'+(m.originalCurrency||'CNY')+'.docx');toast('已导出当前报告期间的 Word 报告。');});if(id==='reportExport')run(async()=>{const m=reportModel();X.download(new Blob([await X.workbook(AuditReport.workbook(m))]),'综合分析报告核验_'+m.from+'_'+m.to+'_'+(m.originalCurrency||'CNY')+'.xlsx');});if(id==='exportZip')run(exportZip);if(id==='exportSingle')run(async()=>{const name=page==='master'?master:preview;X.download(new Blob([await X.workbook({[name]:data[name]})]),name+'.xlsx');});if(id==='undo'||id==='undoTop'){if(lastData){const next=lastData;lastData=snapshot();data=next.data;generationSource=next.source;config.companyFlow=next.companyFlow;config.sampleNonMerchants=next.sampleNonMerchants;config.sampleAccountPlans=next.sampleAccountPlans;config.registryRecords=next.registryRecords;config.registryBounds=next.registryBounds;config.reportCriteria=next.reportCriteria;persist();sourceLabel=next.label;recalc();render();toast('已恢复到上次修改前的数据。');}}if(id==='reset'){if(confirm('恢复内置可优比版数据？建议先保存当前项目。')){lastData=snapshot();const fresh=defaultReportProject();data=fresh.data;generationSource=fresh.source;for(const key of Object.keys(config))delete config[key];Object.assign(config,fresh.config);reportPeriod={};persist();sourceLabel=defaultSourceLabel;recalc();render();toast('已恢复内置数据。');}}if(id==='addCompany'||id==='addRow'&&master===K.company)$('#companyModal').showModal();else if(id==='addRow')editRow(null);if(id==='closeCompany')$('#companyModal').close();if(id==='closeModal')$('#rowModal').close();});
+ });if(id==='generate')run(async()=>{const result=E.generate(generationInput(),{...config,rates:exchangeRates()});lastData=snapshot();data=result.data;sourceLabel='新生成 · '+config.seed;recalc();reportPeriod=config.includeForeign===false?{originalCurrency:'CNY'}:{};preview=K.flow;resetFlowFilters();navigate('preview');toast('测试数据已生成，可预览流水或继续导出。');});if(id==='refreshAnalysis')run(async()=>{analyzeConfig();render();toast('已按当前财年重新核验。');});if(id==='reportApply')run(async()=>{const from=$('#reportFrom').value,to=$('#reportTo').value;if(!from||!to||from>to||Number(to.slice(0,4))-Number(from.slice(0,4))>11)throw Error('请选择有效的开始和结束日期。');reportPeriod={...reportPeriod,from,to,fiscalYear:undefined};render();});if(id==='reportPrint')window.print();if(id==='reportWord')run(async()=>{const m=reportModel();X.download(await AuditWord.report(m),'综合分析报告_'+m.from+'_'+m.to+'_'+(m.originalCurrency||'CNY')+'.docx');toast('已导出当前报告期间的 Word 报告。');});if(id==='reportExport')run(async()=>{const m=reportModel();X.download(new Blob([await X.workbook(AuditReport.workbook(m))]),'综合分析报告核验_'+m.from+'_'+m.to+'_'+(m.originalCurrency||'CNY')+'.xlsx');});if(id==='exportZip')run(exportZip);if(id==='exportSingle')run(async()=>{const name=page==='master'?master:preview;X.download(new Blob([await X.workbook({[name]:data[name]})]),name+'.xlsx');});if(id==='undo'||id==='undoTop'){if(lastData){const next=lastData;lastData=snapshot();restoreRegistryDateState(next);data=next.data;generationSource=next.source;config.companyFlow=next.companyFlow;config.sampleNonMerchants=next.sampleNonMerchants;config.sampleAccountPlans=next.sampleAccountPlans;config.registryRecords=next.registryRecords;config.registryBounds=next.registryBounds;config.reportCriteria=next.reportCriteria;persist();sourceLabel=next.label;recalc();render();toast('已恢复到上次修改前的数据。');}}if(id==='reset'){if(confirm('恢复内置可优比版数据？建议先保存当前项目。')){lastData=snapshot();const fresh=defaultReportProject();data=fresh.data;generationSource=fresh.source;for(const key of Object.keys(config))delete config[key];Object.assign(config,fresh.config);reportPeriod={};persist();sourceLabel=defaultSourceLabel;recalc();render();toast('已恢复内置数据。');}}if(id==='addCompany'||id==='addRow'&&master===K.company)$('#companyModal').showModal();else if(id==='addRow')editRow(null);if(id==='closeCompany')$('#companyModal').close();if(id==='closeModal')$('#rowModal').close();});
 document.addEventListener('change',e=>{if(e.target.form?.id==='registryFilter'&&e.target.name==='metric'){registryFilter={...Object.fromEntries(new FormData(e.target.form)),range:''};pageNo=1;render();return;}if(e.target.name==='currencyMode'){config.includeForeign=e.target.value==='all';persist();render();document.querySelector('input[name=currencyMode]:checked')?.focus({preventScroll:true});return;}if(e.target.dataset.config)updateSetting(e.target);if(e.target.dataset.config==='bigThreshold')recalc();if(e.target.dataset.companyMode!==undefined){const name=data[K.company].rows[Number(e.target.dataset.companyMode)][0];const modes={...(config.companyFlow||{})};if(e.target.value==='auto')delete modes[name];else Object.defineProperty(modes,name,{value:e.target.value==='true',enumerable:true,configurable:true});config.companyFlow=modes;persist();toast('已保存，下次生成流水时生效。');}if(e.target.id==='reportCurrency'){reportPeriod={...reportPeriod,originalCurrency:e.target.value};render();}if(e.target.id==='reportCut'){const cut=e.target.value;reportPeriod={...reportPeriod,cut,...(reportPeriod.fiscalYear?AuditReport.fiscalPeriod(reportPeriod.fiscalYear,cut):{})};render();}if(e.target.id==='reportPreset'&&e.target.value){const [from,to]=e.target.value.split('|');reportPeriod={...reportPeriod,from,to,fiscalYear:Number(e.target.selectedOptions[0].dataset.year)||undefined};render();}if(e.target.id==='previewSelect'){preview=e.target.value;pageNo=1;search='';render();}if(e.target.id==='fileInput'){const fs=[...e.target.files];run(()=>importFiles(fs));e.target.value='';}});
 document.addEventListener('input',e=>{if(e.target.dataset.annual){const {annual,year}=e.target.dataset;config.annualCounts??={};const counts=config.annualCounts[year]??={};if(e.target.value==='')delete counts[annual];else counts[annual]=Number(e.target.value);persist();}if(e.target.dataset.config)updateSetting(e.target);if(e.target.id==='search'){search=e.target.value;pageNo=1;const start=e.target.selectionStart;render();$('#search').focus();$('#search').setSelectionRange(start,start);}});
 recalc();render();
