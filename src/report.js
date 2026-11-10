@@ -182,11 +182,11 @@ function compute(data,settings={}){
  const background=section('background','1 被审计单位企业背景','工商、诉讼、执行和董监高变更资料需另行核验。当前预览可查看主档中的单位、上级公司和行业。');
  table(background,'1.1 被审计单位合并范围分析',['公司名称','上级公司名称','公司职能','所属行业','天眼查清单','被审计单位主档'],periodSources.company.map(r=>[r[0],r[2],r[3],r[4],missingValue,'已上传']));
  for(const [name,label] of [['1.2 重大法律诉讼清单','法律诉讼'],['1.3 失信被执行案件清单','失信被执行案件']])table(background,name,['项目','状态'],[[label,missingValue]]);
- const coverage=section('scope','1.1 资金流水 – 企业及账号范围分析','已上传账号按银行账号主档统计。缺失账号与整个工作簿的本方流水对比，按公司及账号去重。多个来源按流水识别、银行账号清单、科目余额表的顺序归类。账号排名及同名付款金额使用所选金额口径。测试余额表来源时，可在主档组合选「只有分账号余额表」；若同一账号也在银行账号清单，将优先归入银行账号清单。');
+ const coverage=section('scope','1.1 资金流水 – 企业及账号范围分析','已上传账号个数为本期已上传流水中，本方名称属于被审计单位主档的公司及账号去重数，包含未列入银行账号清单的流水账号；不按公司家数或账号主档行数计算，也不因原币筛选减少。缺失账号与整个工作簿的本方流水对比，按公司及账号去重。三个来源依次为流水中识别的缺失同名账户、银行账号清单、科目余额表；同一账号出现多个来源时按此顺序归类，并保留全部来源。账号排名及同名付款金额使用所选金额口径。');
  const accountKey=(company,account)=>key(clean(company),clean(account));
  const uploaded=new Set(all.filter(r=>clean(r[0])&&clean(r[1])).map(r=>accountKey(r[0],r[1])));
- const bankMasterCount=new Set(data[K.bank].rows.filter(r=>own.has(r[2])&&clean(r[0])).map(r=>accountKey(r[2],r[0]))).size;
- const missingSources=['流水识别同名账户','银行账号清单','银行科目余额表'];
+ const uploadedAccountCount=new Set(periodRows.filter(r=>own.has(r[0])&&clean(r[1])).map(r=>accountKey(r[0],r[1]))).size;
+ const missingSources=['流水中识别的缺失同名账户','银行账号清单','科目余额表'];
  const absent=new Map();
  function candidate(company,account,sourceName){
   account=clean(account);
@@ -197,14 +197,14 @@ function compute(data,settings={}){
  }
  for(const r of periodRows){
   if(clean(r[0])===clean(r[3])&&clean(r[1])!==clean(r[4])&&E.cents(r[10])>0){
-   const item=candidate(r[0],r[4],'流水识别同名账户');
+   const item=candidate(r[0],r[4],'流水中识别的缺失同名账户');
    if(item&&matchesCurrency(r)){add(item.pay,r,fx);item.ids.push(r[15]);}
   }
  }
  for(const r of periodSources.bank)candidate(r[2],r[0],'银行账号清单');
- for(const r of periodSources.balance)candidate(r[0],r[1],'银行科目余额表');
+ for(const r of periodSources.balance)candidate(r[0],r[1],'科目余额表');
  const missing=[...absent.values()].map(m=>({...m,primary:missingSources.find(s=>m.sources.has(s))})),missingCompanies=[...own].filter(n=>!present.has(n));
- table(coverage,'企业及账号总览',['指标','数量'],[['主档被审计单位',own.size],['本期有流水的被审计单位',[...own].filter(n=>present.has(n)).length],['本期无流水的被审计单位',missingCompanies.length],['已上传账号主档账号',bankMasterCount],['本期流水本方账号',new Set(periodRows.filter(r=>own.has(r[0])&&clean(r[1])).map(r=>accountKey(r[0],r[1]))).size],['整个工作簿本方账号',uploaded.size],['缺失银行账号（去重）',missing.length],...missingSources.map(s=>[s,missing.filter(m=>m.primary===s).length])]);
+ table(coverage,'企业及账号总览',['指标','数量'],[['主档被审计单位',own.size],['本期有流水的被审计单位',[...own].filter(n=>present.has(n)).length],['本期无流水的被审计单位',missingCompanies.length],['已上传账号个数',uploadedAccountCount],['本期流水本方账号',uploadedAccountCount],['整个工作簿本方账号',uploaded.size],['缺失银行账号（去重）',missing.length],...missingSources.map(s=>[s,missing.filter(m=>m.primary===s).length])]);
  table(coverage,'缺失公司',['被审计单位','核验结果'],missingCompanies.map(n=>[n,all.some(r=>r[0]===n)?'本期无流水，工作簿其他日期有流水':'整个工作簿无流水']));
  table(coverage,'2.1.1 缺失账号明细',['被审计单位','缺失银行账号','归属来源','同名付款笔数','同名付款金额（百万元）','流水号','全部命中来源'],missing.map(m=>[m.company,m.account,m.primary,m.pay.n,amount(m.pay.out),m.ids.join('、'),[...m.sources].join('、')]));
  for(const metric of ['交易额','期末余额']){
@@ -546,7 +546,7 @@ function sectionBody(s,m,continuations){
  if(s.id==='scope'){
   const n=Object.fromEntries(tables[0].rows);
   const company=metricHTML('已上传被审计公司家数',n['主档被审计单位']+' 家')+metricHTML('已上传流水的被审计公司',n['本期有流水的被审计单位']+' 家','本期无流水 '+n['本期无流水的被审计单位']+' 家');
-  const bank=metricHTML('已上传账号个数',n['已上传账号主档账号']+' 个','银行账号主档 · 本期流水本方账号 '+n['本期流水本方账号']+' 个')+metricHTML('缺失银行账号个数',n['缺失银行账号（去重）']+' 个',n['流水识别同名账户']+' 个流水识别 · '+n['银行账号清单']+' 个银行账号清单 · '+n['银行科目余额表']+' 个科目余额表');
+  const bank=metricHTML('已上传账号个数',n['已上传账号个数']+' 个','被审计单位主档内公司 · 本期已上传流水账号去重')+metricHTML('缺失银行账号个数',n['缺失银行账号（去重）']+' 个',n['流水中识别的缺失同名账户']+' 个流水中识别的缺失同名账户 · '+n['银行账号清单']+' 个银行账号清单 · '+n['科目余额表']+' 个科目余额表');
   return sideBySide([company,bank],'report-scope-panes')+tableHTML({...tables[2],name:'1.1.1 缺失资金记录的被审计单位及账号明细',headers:['序号','对手方名称（被审计单位）','缺失银行账号','来源'],rows:tables[2].rows.map((r,i)=>[i+1,...r.slice(0,3)])})+extra('缺失公司明细',tableHTML(tables[1]));
  }
  if(s.id==='features'){
@@ -632,7 +632,7 @@ function tocHTML(m){
 function reportPages(m){
  const scope=m.sections.find(s=>s.id==='scope');
  const accountSummary=subhead('1.1.2 已上传资金账户分析')+
-  metricHTML('已上传账户个数',Object.fromEntries(scope.tables[0].rows)['已上传账号主档账号']+' 个')+
+  metricHTML('已上传账户个数',Object.fromEntries(scope.tables[0].rows)['已上传账号个数']+' 个')+
   sideBySide(scope.tables.slice(3).map(t=>tableHTML({...t,name:t.name.includes('期末余额')?'按账户余额分析':'按账户交易总额分析'})));
  const pieces=m.sections.filter(s=>s.id!=='background').flatMap(s=>{
   const continuations=[];
