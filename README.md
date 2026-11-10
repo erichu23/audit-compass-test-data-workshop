@@ -16,6 +16,8 @@
 
 ## 更新页面
 
+本地已连接仓库后，使用 Git 命令提交并推送。账号统计按本期流水中的被审计单位公司＋账号去重；缺失资料双向核对流水、银行账号清单和对应财年及币种的科目余额记录。同一账号缺多类资料时分类分别计数，账号总数去重。
+
 源码位于 `src/`。修改后运行：
 
 ```sh
@@ -24,6 +26,12 @@ cp dist/index.html index.html
 ```
 
 提交并推送更新后的源码和根目录 `index.html`；Pages 会重新部署。Node.js 只用于打包，访问者无需安装。
+
+```sh
+git add src/report.js index.html README.md .nojekyll
+git commit -m "Update account completeness checks"
+git push origin main
+```
 
 ## 本地使用
 
