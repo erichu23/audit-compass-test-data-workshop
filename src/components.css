@@ -732,10 +732,4 @@ body .statement-sticky-clone-table thead th.ba-filtered .ba-filter-btn::before{
 .registry-start-tools .registry-controls{border:0;padding:10px 0;background:transparent;display:flex;gap:18px;align-items:end;flex-wrap:wrap}
 .registry-start-tools .registry-sync{display:flex;align-items:center;gap:8px;align-self:center}
 .registry-start-tools input[type=checkbox]{width:16px;height:16px;margin:0}
-#registryStartDateModal{width:min(1180px,94vw);max-width:94vw;max-height:90vh}
-#registryStartDatePreview{padding:0 22px 18px}
-.registry-date-preview{max-height:380px;overflow:auto;border:1px solid #dce5ef;border-radius:8px}
-.registry-date-preview th{position:sticky;top:0;background:#edf4fd;z-index:1}
-.registry-date-preview td{white-space:normal;min-width:100px;max-width:280px;line-height:1.6}
-.registry-date-preview td:last-child{min-width:220px}
 @media(max-width:650px){.registry-start-tools{padding:14px}.registry-start-tools .registry-controls{display:grid;grid-template-columns:1fr}.registry-start-tools input[type=date],.registry-start-tools select{width:100%}}

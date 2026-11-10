@@ -41,7 +41,15 @@ const icons={overview:'◫',master:'▦',rules:'≋',anomaly:'◎',preview:'▤'
 if(!Number.isFinite(config.fx)||config.fx<=0)config.fx=E.DEFAULT_FX;
 let reportPeriod=config.registryStartAnchor?{to:config.registryStartAnchor}:{};
 const exchangeRates=()=>({USD:config.fx,...config.rates});
-const registry=()=>config.registryRecords||[];
+const rawRegistry=()=>config.registryRecords||[];
+let registryProjectionCache=null;
+function registryReportEnd(){return reportPeriod.to||config.registryStartAnchor||data[K.flow].rows.reduce((last,r)=>{const d=String(r[5]??'').slice(0,10);return d>last?d:last;},'')||config.end;}
+function registryProjection(){
+ const records=rawRegistry(),asOf=registryReportEnd(),signature=JSON.stringify(records);
+ if(!registryProjectionCache||registryProjectionCache.asOf!==asOf||registryProjectionCache.signature!==signature)registryProjectionCache={...AuditRegistry.automaticDates(records,asOf),asOf,signature};
+ return registryProjectionCache;
+}
+const registry=()=>registryProjection().records;
 const bounds=()=>config.registryBounds||{};
 const reportModel=()=>AuditReport.compute(data,{registry:registry(),registryBounds:bounds(),criteria:config.reportCriteria,cut:config.cut,...reportPeriod,threshold:config.bigThreshold,rates:exchangeRates()});
 const reportPage=()=>AuditReport.render(reportModel());
@@ -197,7 +205,7 @@ function companyMode(name){
  return Object.hasOwn(config.companyFlow||{},name)?String(config.companyFlow[name]):'auto';
 }
 function snapshot(){
- return {data:E.copy(data),source:E.copy(generationSource),companyFlow:E.copy(config.companyFlow||{}),sampleNonMerchants:E.copy(config.sampleNonMerchants||{}),sampleAccountPlans:E.copy(config.sampleAccountPlans||{}),registryRecords:E.copy(registry()),registryBounds:E.copy(bounds()),reportCriteria:E.copy(config.reportCriteria||{}),registryStartAnchor:config.registryStartAnchor||'',reportPeriod:E.copy(reportPeriod),registryAsOf,label:sourceLabel};
+ return {data:E.copy(data),source:E.copy(generationSource),companyFlow:E.copy(config.companyFlow||{}),sampleNonMerchants:E.copy(config.sampleNonMerchants||{}),sampleAccountPlans:E.copy(config.sampleAccountPlans||{}),registryRecords:E.copy(rawRegistry()),registryBounds:E.copy(bounds()),reportCriteria:E.copy(config.reportCriteria||{}),registryStartAnchor:config.registryStartAnchor||'',reportPeriod:E.copy(reportPeriod),registryAsOf,label:sourceLabel};
 }
 function restoreRegistryDateState(next){config.registryStartAnchor=next.registryStartAnchor||'';reportPeriod=E.copy(next.reportPeriod||{});registryAsOf=next.registryAsOf||'';}
 function renameCompanies(d,pairs){
@@ -317,7 +325,7 @@ function previews(){
  <div class="table-tools"><label>数据表 <select id="previewSelect">${Object.keys(data).map(k=>`<option ${preview===k?'selected':''} value="${h(k)}">${h(k)} · ${num(data[k].rows.length)}条</option>`).join('')}</select></label><div class="searchbox">⌕ <input id="search" aria-label="搜索当前表" placeholder="按公司、账号、流水号搜索" value="${h(search)}"></div></div>
  ${flow?`<div class="flow-table-tools"><small>${Object.values(flowFilters).some(Boolean)?'已应用列筛选':'表头漏斗可组合筛选'}</small><button type="button" class="text" id="clearFlowFilters">清空筛选和排序</button></div>`:''}${table(data[preview],{edit:true,flow})}</section>`;
 }
-function exportsPage(){const v=E.validate(data);return `${summary()}<div class="two-col export-grid"><section class="panel"><div class="panel-heading"><h3>上传包检查</h3>${badge(v.errors.length?'需要修正':'可导出',v.errors.length?'red':'green')}</div><div class="file-list">${Object.entries(data).map(([k,t])=>`<div><span class="file-icon">X</span><div><b>${h(k)}.xlsx</b><small>${num(t.rows.length)} 条记录 · ${t.headers.length} 列</small></div><span class="tick">✓</span></div>`).join('')}</div><div class="section-footer"><b>9 个上传文件 + 1 个数据检查文件${registry().length?' + 1 个工商档案 Excel':''}</b></div></section><section class="panel"><div class="panel-heading"><h3>导出前，检查测试数据</h3><button id="refreshAnalysis">重新检查</button></div><div class="check-list">${[['主档无本方流水账号',analysis.noflow.length,'用于验证账号完整性'],['缺失同名账户',analysis.missing.length,'同公司A已付款给B，B未作为本方账号上传；请跟进B流水是否在其他工作簿'],['仅流水有的本方账号',analysis.flowOnly.length,'账号主档和科目表中均不存在'],['余额断点',analysis.exceptions.length,'相邻记录余额不连续的实际数量']].map(([t,n,hint])=>`<div><div><b>${t}</b><small>${hint}</small></div>${badge(n+' 个',n?'amber':'')}</div>`).join('')}</div><details class="validation" ${v.errors.length?'open':''}><summary>${v.errors.length} 项错误 · ${v.warnings.length} 项提醒</summary>${[...v.errors,...v.warnings].slice(0,40).map(t=>`<p>${h(t)}</p>`).join('')||'<p>未发现字段格式问题。</p>'}${v.warnings.length>40?'<p>仅展示前40项，全部记录请在主档检查。</p>':''}</details><p class="muted readable">原数据中的必填字段缺失会保留并提醒，适合上传校验测试；金额或日期格式错误需先修正。已植入的异常不会被自动修复。</p><button class="primary wide big" id="exportZip" ${v.errors.length?'disabled':''}>下载整套测试数据 .zip <span>↓</span></button><div class="actions secondary-actions"><button data-nav="report">前往功能验证</button><button id="exportRegistryFull" ${registry().length?'':'disabled'}>单独下载工商档案 .xlsx</button><button id="saveProject">保存项目 .json</button></div></section></div>`;}
+function exportsPage(){const v=E.validate(data);return `${summary()}<div class="two-col export-grid"><section class="panel"><div class="panel-heading"><h3>上传包检查</h3>${badge(v.errors.length?'需要修正':'可导出',v.errors.length?'red':'green')}</div><div class="file-list">${Object.entries(data).map(([k,t])=>`<div><span class="file-icon">X</span><div><b>${h(k)}.xlsx</b><small>${num(t.rows.length)} 条记录 · ${t.headers.length} 列</small></div><span class="tick">✓</span></div>`).join('')}</div><div class="section-footer"><b>9 个上传文件 + 1 个数据检查文件${registry().length?' + 1 个工商档案 Excel':''}</b></div></section><section class="panel"><div class="panel-heading"><h3>导出前，检查测试数据</h3><button id="refreshAnalysis">重新检查</button></div><div class="check-list">${[['主档无本方流水账号',analysis.noflow.length,'用于验证账号完整性'],['缺失同名账户',analysis.missing.length,'同公司A已付款给B，B未作为本方账号上传；请跟进B流水是否在其他工作簿'],['仅流水有的本方账号',analysis.flowOnly.length,'账号主档和科目表中均不存在'],['余额断点',analysis.exceptions.length,'相邻记录余额不连续的实际数量']].map(([t,n,hint])=>`<div><div><b>${t}</b><small>${hint}</small></div>${badge(n+' 个',n?'amber':'')}</div>`).join('')}</div><details class="validation" ${v.errors.length?'open':''}><summary>${v.errors.length} 项错误 · ${v.warnings.length} 项提醒</summary>${[...v.errors,...v.warnings].slice(0,40).map(t=>`<p>${h(t)}</p>`).join('')||'<p>未发现字段格式问题。</p>'}${v.warnings.length>40?'<p>仅展示前40项，全部记录请在主档检查。</p>':''}</details><p class="muted readable">原数据中的必填字段缺失会保留并提醒，适合上传校验测试；金额或日期格式错误需先修正。已植入的异常不会被自动修复。</p><button class="primary wide big" id="exportZip" ${v.errors.length?'disabled':''}>下载整套测试数据 .zip <span>↓</span></button><div class="actions secondary-actions"><button data-nav="report">前往功能验证</button><button id="exportRegistryFull" ${registry().length?'':'disabled'}>单独下载工商档案 .xlsx</button><button id="exportRegistryAll">下载全部工商及合规数据</button><button id="saveProject">保存项目 .json</button></div></section></div>`;}
 function coverageTable(a){
  const {headers,rows}=E.checksWorkbook(a)['逐年异常覆盖'];
  if(!rows.length)return '<p class="muted">当前没有可检查的流水。请先导入或生成数据。</p>';
@@ -335,8 +343,19 @@ function preflight(){
  $('#preflightContent table')?.classList.add('table');$('#preflightModal').showModal();
 }
 const R=AuditRegistry;
-let registryFilter={},registryAsOf='',editingRegistry=null,registryStartPlan=null;
-function registryDate(){return registryAsOf||reportPeriod.to||data[K.flow].rows.reduce((last,r)=>{const d=String(r[5]??'').slice(0,10);return d>last?d:last;},'')||config.end;}
+let registryFilter={},registryAsOf='',editingRegistry=null;
+function registryDate(){return registryReportEnd();}
+document.addEventListener('change',e=>{
+ if(e.target.id!=='registryReportEnd')return;
+ try{
+  const end=e.target.value;
+  R.planStartDates(rawRegistry(),end);
+  const from=reportPeriod.from||data[K.flow].rows.reduce((first,r)=>{const d=String(r[5]??'').slice(0,10);return d&&(!first||d<first)?d:first;},'')||config.start;
+  if(from&&end<from)throw Error('报告结束日期不能早于报告开始日期，请先调整报告期间。');
+  lastData=snapshot();config.registryStartAnchor=end;reportPeriod={...reportPeriod,to:end,fiscalYear:undefined};registryAsOf=end;
+  persist();render();toast('已自动同步经营开始日期及报告结束日期，原始档案、天数和风险数量未改动。');
+ }catch(error){e.target.value=registryDate();toast(error.message,true);}
+});
 function registryNames(){
  const names=new Set(),own=new Set(data[K.company].rows.map(r=>r[0]));
  for(const r of data[K.flow].rows){
@@ -353,62 +372,42 @@ function registryFiltered(){
 }
 function registryPage(){
  const asOf=registryDate(),names=registryNames(),filtered=registryFiltered();
- const anchor=reportPeriod.to||config.registryStartAnchor||data[K.flow].rows.reduce((last,r)=>String(r[5]??'').slice(0,10)>last?String(r[5]).slice(0,10):last,'')||config.end;
+ const auto=registryProjection(),risks=R.riskCounts(rawRegistry());
  const select=(name,options,chosen)=>`<select name="${name}"><option value="">全部</option>${options.map(([v,label])=>`<option value="${h(v)}" ${String(chosen)===String(v)?'selected':''}>${h(label)}</option>`).join('')}</select>`;
  const metric=registryFilter.metric||'';
  const ranges=metric?R.intervalLabels(R.boundsFor(metric,bounds()),metric).map((s,i)=>[i,s]):[];
  const shown=R.table(filtered,asOf,exchangeRates());
- shown.headers.push('按日期计算经营天数','计算值－原天数');
- shown.rows.forEach((row,i)=>{const calculated=R.value(filtered[i],'days',asOf,exchangeRates()),raw=filtered[i].days;row.push(calculated,calculated!=null&&raw!=null&&String(raw).trim()!==''&&Number.isFinite(Number(raw))?calculated-Number(raw):null);});
- return `<section class="panel"><div class="panel-heading"><h3>工商档案与报告区间</h3><div class="actions"><button id="addRegistry">新增档案</button><button id="exportRegistry">下载筛选结果</button><button data-nav="report">查看报告核验</button></div></div>
+ shown.headers.push('导入原经营开始时间','按日期计算经营天数','计算值－原天数');
+ const originals=new Map(registry().map((r,i)=>[r,rawRegistry()[i]]));
+ shown.rows.forEach((row,i)=>{const calculated=R.value(filtered[i],'days',asOf,exchangeRates()),raw=filtered[i].days;row.push(originals.get(filtered[i])?.start??null,calculated,calculated!=null&&raw!=null&&String(raw).trim()!==''&&Number.isFinite(Number(raw))?calculated-Number(raw):null);});
+ return `<section class="panel"><div class="panel-heading"><h3>工商档案与报告区间</h3><div class="actions"><button id="addRegistry">新增档案</button><button id="exportRegistry">下载筛选结果</button><button id="exportRegistryAll" class="primary">下载全部工商及合规数据</button><button data-nav="report">查看报告核验</button></div></div>
  <form id="registryGenerate" class="registry-controls"><label>样本基准日 <input type="date" name="asOf" value="${h(asOf)}" required></label><label>生成范围（可选） <input name="nameFilter" placeholder="按对手方名称包含文字"></label><label>最多生成（可选） <input name="maxRows" type="number" min="1" step="1" placeholder="不限"></label><button type="submit" class="primary">为当前流水补齐工商档案</button><span>按对手方全称匹配；现有档案保留。当前流水识别到 ${names.length} 家企业候选。</span></form>
- <section class="registry-start-tools" aria-labelledby="registryStartHeading"><h4 id="registryStartHeading">保留经营天数，反推经营开始时间</h4><p>适用于已生成的数据和导入的旧项目。计算公式：经营开始时间＝报告结束日期－原经营天数，不额外加一天。只修改经营开始时间，原经营天数、成立日期、经营结束时间和其他工商信息均保留。</p><form id="registryStartDateForm" class="registry-controls"><label>报告结束日期 <input type="date" name="asOf" value="${h(anchor)}" required></label><label>修正范围 <select name="scope"><option value="all">全部工商档案</option><option value="filtered">当前筛选结果</option></select></label><label class="registry-sync"><input type="checkbox" name="syncReport" checked> 同步报告核验结束日期</label><button type="submit" class="btn btn-primary" ${registry().length?'':'disabled'}>预览日期修正</button></form><p class="muted">例如：2025-12-31结束、原经营天数365天，推算开始时间为2024-12-31。空白或无效天数会跳过；先预览，再应用，可用顶部“撤销”恢复。修改后请保存项目JSON或导出工商Excel。</p></section>
+ <section class="registry-start-tools" aria-labelledby="registryStartHeading"><h4 id="registryStartHeading">经营天数规则：自动同步</h4><div class="registry-controls"><label>报告结束日期 <input type="date" id="registryReportEnd" value="${h(asOf)}" required></label><span>修改后自动同步报告核验，导入旧数据也立即适用。</span></div><p>保留原经营天数，自动推算经营开始时间＝报告结束日期－原经营天数，不额外加一天。列表、报告和导出使用推算日期；导入原日期保留在“导入原经营开始时间”列，保存项目JSON也保留原始记录。</p><p class="muted">自动推算 ${num(auto.plan.changed+auto.plan.unchanged)} 条；${num(auto.plan.skipped)} 条因天数缺失、无效或日期冲突保持原日期。<button type="button" class="text" id="exportRegistryDates">下载日期核验明细</button> 其他工商字段、流水及主档不变。</p></section>
+ <section class="registry-start-tools"><h4>合规明细：按原数量自动补生成</h4><p>诉讼 ${num(risks.cases)} 条，失信被执行人 ${num(risks.dishonest)} 条，行政处罚 ${num(risks.penalties)} 条。失信标记“是”生成1条，“否”生成0条；诉讼、处罚按原数量逐条生成，不改原数量。${risks.missing?'有 '+num(risks.missing)+' 份档案的数量或标记未提供／无效，保留缺失，不自动填0。':''}</p><div class="actions"><button id="exportRegistryLawsuits">下载全部诉讼明细</button><button id="exportRegistryDishonest">下载全部失信明细</button><button id="exportRegistryPenalties">下载全部行政处罚</button><button id="exportRegistryRaw">下载导入原始工商档案</button></div><p class="muted">这些下载包含全部档案，不受列表筛选影响。明细为按已有标记与条数补充的测试数据；可在“合规数量核验”中逐家比对。</p></section>
  <form id="registryBounds" class="registry-controls"><div class="registry-grid">${R.metrics.map(([id,label,unit])=>`<label>${label}分界值（${unit}）<input name="${id}" value="${h(R.boundsFor(id,bounds()).join(', '))}" required></label>`).join('')}</div><button type="submit">应用报告区间</button><button id="registryDefaultIntervals" type="button">恢复新版三项区间</button><span>逗号分隔；一般等于分界值归入右侧区间；经营天数、社保人数和注册资本的最后一个分界值计入前一档。默认按 365 天为 1 年；3 年、100 人、1M 均计入第三档。</span></form>
  <form id="registryFilter" class="registry-controls"><label>搜索 <input name="q" value="${h(registryFilter.q||'')}" placeholder="名称、行业、信用代码等"></label><label>经营状态 ${select('status',[...new Set(registry().map(r=>r.status).filter(Boolean))].map(x=>[x,x]),registryFilter.status)}</label><label>失信被执行人 ${select('dishonest',[['是','是'],['否','否']],registryFilter.dishonest)}</label><label>区间指标 ${select('metric',R.metrics.map(([id,label])=>[id,label]),metric)}</label><label>筛选区间 ${select('range',ranges,registryFilter.range)}</label><button type="submit">筛选</button><button type="button" id="clearRegistryFilter">清空筛选</button></form>
- <p class="muted">显示 ${filtered.length} / ${registry().length} 条。原经营天数在导出时保留；右侧计算天数以 ${h(asOf)} 为截止日按经营开始时间重新计算，差值为0表示一致。报告使用自身所选结束日期。此处筛选只影响列表、下载及选择“当前筛选结果”的修正范围。</p>${table(shown,{registry:true})}</section>`;
-}
-function previewRegistryStartDates(fields){
- const filtered=new Set(registryFiltered()),indices=fields.scope==='filtered'?registry().flatMap((r,i)=>filtered.has(r)?[i]:[]):null;
- const plan=R.planStartDates(registry(),fields.asOf,indices);
- if(!plan.rows.length)throw Error('所选范围没有工商档案。');
- plan.syncReport=fields.syncReport==='on';
- if(plan.syncReport&&plan.asOf<reportModel().from)throw Error('报告结束日期不能早于当前报告开始日期；请先调整报告期间，或取消同步。');
- registryStartPlan=plan;
- const t=R.startDatePreviewTable(plan),labels=t.headers;
- $('#registryStartDatePreview').innerHTML=`<p>报告结束日期：<b>${h(plan.asOf)}</b>；共 ${num(plan.rows.length)} 条，待修改 <b>${num(plan.changed)}</b> 条，无需修改 ${num(plan.unchanged)} 条，跳过 ${num(plan.skipped)} 条。</p><p class="muted">原经营天数保持不变。${plan.syncReport?'应用后同步报告核验结束日期。':'报告核验日期不变；核对时请选择相同结束日期。'}下表展示前20条，下载预览可查看全部记录。</p><div class="table-scroll registry-date-preview"><table class="table"><thead><tr>${labels.map(label=>`<th>${h(label)}</th>`).join('')}</tr></thead><tbody>${t.rows.slice(0,20).map(row=>`<tr>${row.map(v=>`<td>${h(v??'—')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
- $('#applyRegistryStartDates').disabled=!plan.changed;
- $('#registryStartDateModal').showModal();
-}
-function applyRegistryStartDates(){
- const plan=registryStartPlan,next=R.applyStartDates(registry(),plan);
- lastData=snapshot();config.registryRecords=next;config.registryStartAnchor=plan.asOf;registryAsOf=plan.asOf;
- if(plan.syncReport)reportPeriod={...reportPeriod,to:plan.asOf,fiscalYear:undefined};
- persist();$('#registryStartDateModal').close();render();
- toast('已修正 '+num(plan.changed)+' 条经营开始时间，原经营天数未修改；跳过 '+num(plan.skipped)+' 条。可撤销或保存项目。');
- registryStartPlan=null;
+ <p class="muted">显示 ${filtered.length} / ${registry().length} 条。经营天数原值保留；计算天数以 ${h(asOf)} 为截止日重新核对，差值为0表示一致。列表筛选只影响列表和“下载筛选结果”，不影响全部下载。</p>${table(shown,{registry:true})}</section>`;
 }
 function openRegistry(name=null){
- const record=registry().find(r=>r.name===name)||{};
+ const record=rawRegistry().find(r=>r.name===name)||{};
  editingRegistry=name;
  $('#registryFields').innerHTML=R.fields.map(([key,label,type])=>`<label class="field"><span>${label}${key==='days'?'（留空自动计算）':''}</span>${type==='flag'?`<select name="${key}"><option value="">未提供</option>${['是','否'].map(v=>`<option ${record[key]===v?'selected':''}>${v}</option>`).join('')}</select>`:`<input name="${key}" type="${type==='date'?'date':type==='integer'||type==='number'?'number':'text'}" ${type==='integer'||type==='number'?`min="0" step="${type==='integer'?'1':'any'}"`:''} ${key==='name'?'required':''} value="${h(record[key]??'')}">`}</label>`).join('');
  $('#registryModal').showModal();
 }
 document.addEventListener('submit',e=>{
  const id=e.target.id;
- if(!['registryGenerate','registryBounds','registryFilter','registryRecord','registryStartDateForm'].includes(id))return;
+ if(!['registryGenerate','registryBounds','registryFilter','registryRecord'].includes(id))return;
  e.preventDefault();
  const f=Object.fromEntries(new FormData(e.target));
  try{
-  if(id==='registryStartDateForm'){previewRegistryStartDates(f);return;}
   if(id==='registryGenerate'){
    const q=String(f.nameFilter||'').trim().toLowerCase();
    const existing=new Set(registry().map(r=>r.name));
    const names=registryNames().filter(n=>!existing.has(n)&&(!q||n.toLowerCase().includes(q))).slice(0,Number(f.maxRows)||Infinity);
-   const old=registry().filter(r=>r.penalties==null&&(!q||r.name.toLowerCase().includes(q)));
-   if(!names.length&&!old.length){toast('当前没有需要补齐的企业。');return;}
+   if(!names.length){toast('当前没有需要补齐的企业，已有档案及风险数量保持不变。');return;}
    const rows=R.generate(names,f.asOf,bounds(),registry().length);
-   lastData=snapshot();const fill=new Map(old.map((r,i)=>[r.name,i%8===0?1:i%13===0?2:0]));config.registryRecords=[...registry().map(r=>fill.has(r.name)?{...r,penalties:fill.get(r.name)}:r),...rows];registryAsOf=f.asOf;
-   toast('已新增 '+rows.length+' 份工商档案，补齐 '+old.length+' 份行政处罚数据。');
+   lastData=snapshot();config.registryRecords=[...rawRegistry(),...rows];registryAsOf=f.asOf;
+   toast('已新增 '+rows.length+' 份工商档案；原档案、原天数和风险数量保持不变。');
   }else if(id==='registryBounds'){
    const next=Object.fromEntries(R.metrics.map(([key,,unit])=>[key,R.parseBounds(f[key],unit)]));
    lastData=snapshot();config.registryBounds=next;config.registryIntervalVersion=R.INTERVAL_VERSION;registryFilter.range='';
@@ -416,7 +415,7 @@ document.addEventListener('submit',e=>{
   else{
    const r=R.readRecord(f);
    if(registry().some(x=>x.name===r.name&&x.name!==editingRegistry))throw Error('该对手方已有工商档案。');
-   lastData=snapshot();config.registryRecords=[...registry().filter(x=>x.name!==editingRegistry),r];
+   lastData=snapshot();config.registryRecords=[...rawRegistry().filter(x=>x.name!==editingRegistry),r];
    $('#registryModal').close();
   }
   pageNo=1;render();
@@ -472,11 +471,17 @@ function navigate(p){closeFlyout();if(narrowScreen.matches&&!sidebarCollapsed())
 function updateSetting(el){const id=el.dataset.config;if(!id)return;if(id==='fx'&&(!Number.isFinite(Number(el.value))||Number(el.value)<=0)){el.value=config.fx;toast('美元汇率必须大于 0。',true);return;}config[id]=el.type==='checkbox'?el.checked:el.type==='number'?Number(el.value):el.value;if(id==='fx')recalc();if(id==='missingCompany'&&$('#generationScope'))$('#generationScope').textContent=generationScope();if(id==='count'&&$('[data-planned-count]'))$('[data-planned-count]').textContent=num(config.count);persist();}
 async function run(fn){if(busy)return;busy=true;$('#busy').hidden=false;try{await new Promise(r=>setTimeout(r,35));await fn();}catch(e){console.error(e);toast(e.message||String(e),true);}finally{busy=false;$('#busy').hidden=true;}}
 function analyzeConfig(){if(config.first>config.last||config.last-config.first>10)throw Error('核验开始财年不能晚于结束财年，范围最多10年。');recalc();}
-const registryWorkbook=records=>X.workbook({'对手方工商档案':R.table(records,registryDate(),exchangeRates())});
-async function exportZip(){const v=E.validate(data);if(v.errors.length)throw Error('请先修正导出检查中的错误。');analyzeConfig();const z=new JSZip();for(const [name,t]of Object.entries(data))z.file('上传数据/'+name+'.xlsx',await X.workbook({[name]:t}));z.file('核验资料/综合分析报告_核验预期值.xlsx',await X.workbook(E.checksWorkbook(analysis)));if(registry().length)z.file('工商数据/对手方工商档案.xlsx',await registryWorkbook(registry()));z.file('生成配置.json',JSON.stringify({version:2,label:sourceLabel,config,data,template:generationSource},null,2));z.file('使用说明.txt','Audit Compass 测试数据工作坊\n数据为模拟测试用途。\n9个上传Excel位于上传数据目录；工商数据目录包含完整的对手方工商档案 Excel，核验资料另存。\n账号及流水号为文本，日期无ISO后缀，金额千分符两位，数量整数。\n集中度按客商分类统一排名，再拆关联方/第三方，分母为同客商分类方向总额。\n余额断点不检查每个账号的第一笔期初；科目余额仍按自然年。\n核验报告为当前数据实际计算结果，不是平台已经通过测试的证明。\n');X.download(await z.generateAsync({type:'blob',compression:'DEFLATE'}),'AuditCompass_测试数据_'+config.seed.replace(/[^\w\u4e00-\u9fff-]/g,'_')+'.zip');toast(registry().length?'已导出9个上传文件、工商档案 Excel 和核验结果。':'已导出9个上传文件及核验结果。');}
+function originalRegistryFor(records){const indices=new Map(registry().map((r,i)=>[r,i]));return records.map(r=>rawRegistry()[indices.get(r)]||r);}
+const registryWorkbook=records=>X.workbook({'对手方工商档案':R.table(records,registryDate(),exchangeRates()),'导入原始工商档案':R.table(originalRegistryFor(records),registryDate(),exchangeRates())});
+function registryDateAuditTable(){const t=R.startDatePreviewTable(registryProjection().plan);t.rows.forEach(r=>{if(r[6]==='待修改')r[6]='自动推算，原始日期保留';});return t;}
+function allRegistryTables(){
+ const asOf=registryDate();
+ return {'对手方工商档案':R.table(registry(),asOf,exchangeRates()),'导入原始工商档案':R.table(rawRegistry(),asOf,exchangeRates()),...R.riskTables(rawRegistry(),asOf),'经营日期自动核验':registryDateAuditTable(),'数据说明':{headers:['项目','说明'],rows:[['报告结束日期',asOf],['经营日期规则','原经营天数保留，开始时间＝报告结束日期－原天数；不额外加一天。导入原始记录未改写。'],['风险明细规则','诉讼、行政处罚按已有数量生成；失信标记是为1条、否为0条。缺失值保留，不补0。'],['资料性质','案号、处罚文书及明细内容均为按条数生成的测试资料，不代表企业真实风险，不来自实时工商查询。'],['下载范围','包含全部工商档案及其全部合规明细，不受页面筛选影响。']]}};
+}
+async function exportZip(){const v=E.validate(data);if(v.errors.length)throw Error('请先修正导出检查中的错误。');analyzeConfig();const z=new JSZip();for(const [name,t]of Object.entries(data))z.file('上传数据/'+name+'.xlsx',await X.workbook({[name]:t}));z.file('核验资料/综合分析报告_核验预期值.xlsx',await X.workbook(E.checksWorkbook(analysis)));if(registry().length){z.file('工商数据/对手方工商档案.xlsx',await registryWorkbook(registry()));z.file('工商数据/工商及合规全部数据.xlsx',await X.workbook(allRegistryTables()));}z.file('生成配置.json',JSON.stringify({version:2,label:sourceLabel,config:{...config,registryStartAnchor:registryReportEnd()},data,template:generationSource},null,2));z.file('使用说明.txt','Audit Compass 测试数据工作坊\n数据为模拟测试用途。\n9个上传Excel位于上传数据目录；工商数据目录包含工商档案、导入原始值、诉讼／失信／处罚明细及数量和日期核验，核验资料另存。\n账号及流水号为文本，日期无ISO后缀，金额千分符两位，数量整数。\n集中度按客商分类统一排名，再拆关联方/第三方，分母为同客商分类方向总额。\n余额断点不检查每个账号的第一笔期初；科目余额仍按自然年。\n核验报告为当前数据实际计算结果，不是平台已经通过测试的证明。\n');X.download(await z.generateAsync({type:'blob',compression:'DEFLATE'}),'AuditCompass_测试数据_'+config.seed.replace(/[^\w\u4e00-\u9fff-]/g,'_')+'.zip');toast(registry().length?'已导出9个上传文件、工商档案 Excel 和核验结果。':'已导出9个上传文件及核验结果。');}
 async function importFiles(files){
  const staged=E.copy(data);
- let n=0,project=null,importedRegistry=null;
+ let n=0,project=null,importedRegistry=null,importedRawRegistry=null;
  const readProject=text=>{
   const saved=JSON.parse(text);
   if(!saved.data)throw Error('请选择本工具保存的项目JSON。');
@@ -495,10 +500,11 @@ async function importFiles(files){
   for(const entry of entries){
    const tables=await X.read(await entry.read());
    for(const [name,t] of Object.entries(tables)){
-    if(name==='对手方工商档案'){
+    if(name==='对手方工商档案'||name==='导入原始工商档案'){
      const columns=new Map(t.headers.map((value,i)=>[value.trim(),i]));
      if(!columns.has('对手方名称'))throw Error('工商档案缺少对手方名称列。');
-     importedRegistry=t.rows.map(row=>R.readRecord(Object.fromEntries(R.fields.map(([id,label])=>[id,row[columns.get(label)]]))));
+     const records=t.rows.map(row=>R.readRecord(Object.fromEntries(R.fields.map(([id,label])=>[id,row[columns.get(label)]]))));
+     if(name==='导入原始工商档案')importedRawRegistry=records;else importedRegistry=records;
      continue;
     }
     const recognized=Object.keys(BASELINE).find(k=>k===name||entry.name.split('/').at(-1)===k+'.xlsx');
@@ -509,6 +515,7 @@ async function importFiles(files){
    }
   }
  }
+ if(importedRawRegistry!==null)importedRegistry=importedRawRegistry;
  if(!n&&!project&&importedRegistry===null)throw Error('未找到可识别的上传模板、工商档案或项目文件。');
  const next=project?.data||staged,v=E.validate(next);
  if(v.errors.length)throw Error(v.errors.slice(0,3).join('；'));
@@ -576,10 +583,11 @@ if(el.dataset.registryEdit!==undefined){openRegistry(el.dataset.registryEdit);re
 if(id==='addRegistry')openRegistry();
 if(id==='closeRegistry')$('#registryModal').close();
 if(id==='clearRegistryFilter'){registryFilter={};pageNo=1;render();}
-if(id==='closeRegistryStartDates'){$('#registryStartDateModal').close();registryStartPlan=null;}
-if(id==='applyRegistryStartDates')run(async()=>applyRegistryStartDates());
-if(id==='exportRegistryStartDates')run(async()=>{if(!registryStartPlan)throw Error('请先预览日期修正。');X.download(new Blob([await X.workbook({'经营开始时间修正预览':R.startDatePreviewTable(registryStartPlan)})]),'经营开始时间修正预览_'+registryStartPlan.asOf+'.xlsx');});
 if(id==='exportRegistry'||id==='exportRegistryFull')run(async()=>X.download(new Blob([await registryWorkbook(id==='exportRegistryFull'?registry():registryFiltered())]),'对手方工商档案.xlsx'));
+if(id==='exportRegistryAll')run(async()=>X.download(new Blob([await X.workbook(allRegistryTables())]),'工商及合规全部数据_'+registryDate()+'.xlsx'));
+if(id==='exportRegistryDates')run(async()=>X.download(new Blob([await X.workbook({'经营日期自动核验':registryDateAuditTable()})]),'经营日期自动核验_'+registryDate()+'.xlsx'));
+if(id==='exportRegistryRaw')run(async()=>X.download(new Blob([await X.workbook({'导入原始工商档案':R.table(rawRegistry(),registryDate(),exchangeRates())})]),'导入原始工商档案.xlsx'));
+if(['exportRegistryLawsuits','exportRegistryDishonest','exportRegistryPenalties'].includes(id))run(async()=>{const key={exportRegistryLawsuits:'诉讼明细',exportRegistryDishonest:'失信被执行人明细',exportRegistryPenalties:'行政处罚明细'}[id],tables=R.riskTables(rawRegistry(),registryDate());X.download(new Blob([await X.workbook({[key]:tables[key],'合规数量核验':tables['合规数量核验']})]),key+'_'+registryDate()+'.xlsx');});
 if(id==='openMasterSamples')openMasterSamples();
 if(id==='closeMasterSamples')$('#masterSampleModal').close();
 if(id==='openCatalog'){$('#catalogSearch').value='';renderCatalog();$('#catalogModal').showModal();}
@@ -607,7 +615,7 @@ if(id==='clearFlowColumn'){
 if(id==='exportFilteredFlow')run(async()=>{
  const t=data[K.flow],rows=currentFlowRows().map(x=>x.r);
  X.download(new Blob([await X.workbook({[K.flow]:{headers:t.headers,rows}})]),'全量银行流水_筛选结果.xlsx');
-});if(id==='importButton')$('#fileInput').click();if(id==='saveProject'||id==='saveProjectTop'){X.download(new Blob([JSON.stringify({version:2,label:sourceLabel,config,data,template:generationSource})],{type:'application/json'}),'AuditCompass_数据项目.json');toast('已保存项目，可随时导入恢复。');}if(id==='applyNames')run(async()=>{const pairs=[...document.querySelectorAll('[data-rename]')].map(el=>[data[K.company].rows[Number(el.dataset.rename)][0],el.value.trim()]);if(pairs.some(p=>!p[1]))throw Error('公司名称不能为空。');const next=E.copy(data),previous=snapshot();renameCompanies(next,pairs);lastData=previous;data=next;generationSource=E.copy(data);sourceLabel='已修改 · 自定义公司名称';recalc();render();toast('名称已同步替换，交易金额与笔数保持不变。');});if(id==='preflight')run(preflight);if(id==='closePreflight')$('#preflightModal').close();if(id==='newSeed'){
+});if(id==='importButton')$('#fileInput').click();if(id==='saveProject'||id==='saveProjectTop'){X.download(new Blob([JSON.stringify({version:2,label:sourceLabel,config:{...config,registryStartAnchor:registryReportEnd()},data,template:generationSource})],{type:'application/json'}),'AuditCompass_数据项目.json');toast('已保存项目，可随时导入恢复。');}if(id==='applyNames')run(async()=>{const pairs=[...document.querySelectorAll('[data-rename]')].map(el=>[data[K.company].rows[Number(el.dataset.rename)][0],el.value.trim()]);if(pairs.some(p=>!p[1]))throw Error('公司名称不能为空。');const next=E.copy(data),previous=snapshot();renameCompanies(next,pairs);lastData=previous;data=next;generationSource=E.copy(data);sourceLabel='已修改 · 自定义公司名称';recalc();render();toast('名称已同步替换，交易金额与笔数保持不变。');});if(id==='preflight')run(preflight);if(id==='closePreflight')$('#preflightModal').close();if(id==='newSeed'){
  const seed='AC-'+[...crypto.getRandomValues(new Uint8Array(4))].map(n=>n.toString(16).padStart(2,'0')).join('').toUpperCase();
  config.seed=seed;$('[data-config="seed"]').value=seed;persist();toast('已更换种子，下次生成时生效。');
  }if(id==='exportCoverage')run(async()=>{

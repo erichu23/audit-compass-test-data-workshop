@@ -98,6 +98,35 @@ function startDatePreviewTable(plan){
  const labels={change:'待修改',same:'无需修改',skip:'跳过'};
  return {headers:['对手方名称','原经营天数（保留）','原经营开始时间','推算经营开始时间','报告结束日期','按日期计算天数','处理结果','说明'],rows:plan.rows.map(r=>[r.name,r.days??null,r.oldStart,r.newStart,plan.asOf,r.calculated,labels[r.status],r.reason])};
 }
+function automaticDates(records,asOf){
+ const plan=planStartDates(records,asOf);
+ return {records:applyStartDates(records,plan),plan};
+}
+function riskCounts(records){
+ const count=v=>v==null||clean(v)===''?null:Number.isSafeInteger(Number(v))&&Number(v)>=0?Number(v):null;
+ const rows=records.map((record,index)=>({index,name:record.name||'未填写名称',cases:count(record.cases),dishonest:record.dishonest==='是'?1:record.dishonest==='否'?0:null,penalties:count(record.penalties),rawCases:record.cases??null,rawDishonest:record.dishonest??null,rawPenalties:record.penalties??null}));
+ return {rows,cases:rows.reduce((n,r)=>n+(r.cases??0),0),dishonest:rows.reduce((n,r)=>n+(r.dishonest??0),0),penalties:rows.reduce((n,r)=>n+(r.penalties??0),0),missing:rows.filter(r=>r.cases==null||r.dishonest==null||r.penalties==null).length};
+}
+function riskTables(records,asOf){
+ if(!date(asOf))throw Error('请输入有效的报告结束日期。');
+ const counts=riskCounts(records);
+ if(counts.cases+counts.dishonest+counts.penalties>250000)throw Error('本次合规明细超过250,000条，请分批选择工商档案导出；原数量不会被截断或修改。');
+ const lawsuits={headers:['对手方名称','工商记录序号','诉讼明细编号','案号','案件类型','案由','立案日期','当事人身份','案件状态'],rows:[]};
+ const dishonest={headers:['失信被执行人名称','工商记录序号','失信明细编号','执行案号','立案日期','执行法院','履行情况','失信情形','公布日期'],rows:[]};
+ const penalties={headers:['对手方名称','工商记录序号','行政处罚明细编号','决定文书号','处罚机关','处罚类型','处罚事由','处罚金额','处罚决定日期'],rows:[]};
+ const check={headers:['对手方名称','工商记录序号','原诉讼数量','生成诉讼条数','诉讼校验','原失信标记','生成失信条数','失信校验','原行政处罚数量','生成行政处罚条数','处罚校验'],rows:[]};
+ const year=asOf.slice(0,4),pad=n=>String(n).padStart(6,'0');
+ const ago=n=>{const d=new Date(Date.parse(asOf)-n*oneDay);return d.getUTCFullYear()<1?asOf:d.toISOString().slice(0,10);};
+ const hash=s=>{let n=2166136261;for(const c of s)n=Math.imul(n^c.charCodeAt(0),16777619);return (n>>>0).toString(16).padStart(8,'0');};
+ for(const r of counts.rows){
+  const base=hash(r.name)+'-'+pad(r.index+1);
+  for(let i=0;i<(r.cases??0);i++)lawsuits.rows.push([r.name,r.index+1,'TEST-LIT-'+base+'-'+pad(i+1),'（测试）'+year+'民初'+pad(i+1)+'号',['民事案件','执行案件','行政案件'][i%3],['买卖合同纠纷','服务合同纠纷','租赁合同纠纷'][i%3],ago((i*17+r.index*3)%730),i%2?'原告':'被告',['审理中','已结案','执行中'][i%3]]);
+  if(r.dishonest===1)dishonest.rows.push([r.name,r.index+1,'TEST-DISH-'+base,'（测试）'+year+'执'+pad(r.index+1)+'号',ago(r.index%365),'测试人民法院','全部未履行','有履行能力而拒不履行生效法律文书确定义务',ago(r.index%180)]);
+  for(let i=0;i<(r.penalties??0);i++)penalties.rows.push([r.name,r.index+1,'TEST-PEN-'+base+'-'+pad(i+1),'测试罚字〔'+year+'〕'+pad(i+1)+'号','测试市场监督管理局',['警告','罚款','责令改正'][i%3],['未按规定公示信息','经营信息登记不完整','违反相关经营管理规定'][i%3],i%3===1?1000+((r.index+i)*137)%49000:0,ago((i*23+r.index*5)%365)]);
+  check.rows.push([r.name,r.index+1,r.rawCases,r.cases??0,r.cases==null?'数量缺失或无效，未补值':'一致',r.rawDishonest,r.dishonest??0,r.dishonest==null?'标记缺失，未补值':'一致',r.rawPenalties,r.penalties??0,r.penalties==null?'数量缺失或无效，未补值':'一致']);
+ }
+ return {'诉讼明细':lawsuits,'失信被执行人明细':dishonest,'行政处罚明细':penalties,'合规数量核验':check};
+}
 function bucket(n,bounds,id){
  if(n==null||!Number.isFinite(n)||n<0)return bounds.length+1;
  const index=bounds.findIndex((edge,i)=>n<edge||(['capital','days','insured'].includes(id)&&i===bounds.length-1&&n===edge));
@@ -151,5 +180,5 @@ function generate(names,asOf,settings={},offset=0){
 function table(records,asOf,rates){
  return {headers:fields.map(x=>x[1]),rows:records.map(r=>fields.map(([k])=>r[k]))};
 }
-g.AuditRegistry={INTERVAL_VERSION,migrateSettings,fields,metrics,boundsFor,intervalLabels,value,bucket,readRecord,parseBounds,generate,table,planStartDates,applyStartDates,startDatePreviewTable};
+g.AuditRegistry={INTERVAL_VERSION,migrateSettings,fields,metrics,boundsFor,intervalLabels,value,bucket,readRecord,parseBounds,generate,table,planStartDates,applyStartDates,startDatePreviewTable,automaticDates,riskCounts,riskTables};
 })(globalThis);
