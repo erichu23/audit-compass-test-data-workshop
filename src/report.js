@@ -66,14 +66,15 @@ function scopeData(data,rows,own,from,to,cut){
   for(const r of sources.bank)if(own.has(r[2])&&r[0]&&overlaps(r[6],r[8],start,end))requiredBalance.add(balanceKey(r[2],r[0],year,r[4]));
   for(const r of rows)if(own.has(r[0])&&r[1]&&day(r[5])>=start&&day(r[5])<=end)requiredBalance.add(balanceKey(r[0],r[1],year,r[7]));
  }
- const referencedCompanies=new Set();
- for(const [name,list] of Object.entries(sources))if(name!=='company'){
-  const col=name==='bank'?2:0;
-  for(const r of list)if(clean(r[col]))referencedCompanies.add(clean(r[col]));
- }
  const status=Object.entries(sources).map(([k,list])=>{
   const col=k==='bank'?2:0,valid=list.filter(r=>own.has(r[col]));
   const uploaded=data[K[k]].rows.length>0;
+  if(k==='company'){
+   const masterCompanies=new Set(data[K.company].rows.map(r=>clean(r[0])).filter(Boolean));
+   const flowCompanies=new Set(rows.map(r=>clean(r[0])).filter(Boolean));
+   const missingCompanies=[...flowCompanies].filter(n=>!masterCompanies.has(n));
+   return [k,!uploaded?'未上传':missingCompanies.length?'部分缺失':'已上传',masterCompanies.size,missingCompanies.length?'所选期间流水中 '+missingCompanies.length+' 家本方单位未在被审计单位主档：'+missingCompanies.join('、'):'被审计单位主档已覆盖所选期间流水的全部本方单位。'];
+  }
   if(['related','customer','supplier','employee'].includes(k)){
    return [k,uploaded?'已上传':'未上传',valid.length,uploaded?'已上传；本期有效记录 '+valid.length+' 条。':'当前无已上传记录。'];
   }
@@ -83,10 +84,6 @@ function scopeData(data,rows,own,from,to,cut){
   const requiredColumns=data[K[k]].headers.map((h,i)=>h.includes('*')?i:-1).filter(i=>i>=0);
   const invalid=list.filter(r=>requiredColumns.some(i=>!clean(r[i]))).length;
   if(invalid)gaps.push(invalid+' 条记录缺少必填字段');
-  if(k==='company'){
-   const missingCompanies=absent(referencedCompanies,covered);
-   if(missingCompanies)gaps.push(missingCompanies+' 家本期数据中的单位缺少适用的被审计单位主档');
-  }
   if(k==='flow'&&absent(expectedAccounts,actualAccounts))gaps.push(absent(expectedAccounts,actualAccounts)+' 个主档账号本期无流水');
   if(k==='bank'&&absent(detectedAccounts,uploadedBank))gaps.push(absent(detectedAccounts,uploadedBank)+' 个本期流水或余额表识别账号未匹配主档');
   if(k==='balance'){
@@ -153,7 +150,7 @@ function compute(data,settings={}){
   const item={id,title,note,tables:[],charts:[]};
   model.sections.push(item);return item;
  };
- const table=(s,name,headers,rows,limit)=>s.tables.push({name,headers,rows,limit});
+ const table=(s,name,headers,rows,limit)=>s.tables.push({name,headers:headers.map((h,i)=>reportHeader(i===0&&h==='区间'&&/比例|重合/.test(name)?h+'（%）':h)),rows,limit});
  const directionHeaders=['流入金额（百万元）','流入笔数','流入占比','流出金额（百万元）','流出笔数','流出占比'];
  const directions=(x,total)=>[amount(x.in),x.ins,ratio(x.in,total.in),amount(x.out),x.outs,ratio(x.out,total.out)];
  const stacked=(section,name,items,{detail=true,first='区间',countLabel='对手方数量'}={})=>{
@@ -341,7 +338,7 @@ function compute(data,settings={}){
  table(relatedSection,'关联组合明细',['被审计单位公司名称','关联方名称','组合来源'],[...relationPairs.values()]);
 
  const R=g.AuditRegistry;
- const compliance=section('compliance','2.3.1 交易对手方合规事项及工商信息分析','按对手方全称关联工商档案，只统计本期有交易的范围外企业。经营天数＝报告结束日期－导入的经营开始时间，按自然日日期差计算，不额外加一天；不读取导入原经营天数作为计算结果，不反推或修改经营开始时间，也不按经营结束时间截断。原经营天数仅保留供对照。一般分界值归右侧区间，经营时长按 365 天折算 1 年，恰好 3 年归入 2~3 年，恰好 100 人归入 50~100 人；注册资本按人民币归档；恰好 1M 归入 500k–1M，最后一档为 >1M。工商区间图表仅统计对应字段有有效数值的本期范围外对手方，缺失或无效字段不参与该图的金额及占比计算。');
+ const compliance=section('compliance','2.3.1 交易对手方合规事项及工商信息分析','按对手方全称关联工商档案，只统计本期有交易的范围外企业。经营天数＝报告结束日期－导入的经营开始时间，按自然日日期差计算，不额外加一天；不读取导入原经营天数作为计算结果，不反推或修改经营开始时间，也不按经营结束时间截断。原经营天数仅保留供对照。一般分界值归右侧区间，经营时长按 365 天折算 1 年，恰好 3 年归入 2~3 年，恰好 100 人归入 50~100 人；注册资本按人民币归档；恰好 1百万 归入 500k–1百万，最后一档为 >1百万。工商区间图表仅统计对应字段有有效数值的本期范围外对手方，缺失或无效字段不参与该图的金额及占比计算。');
  const profiles=new Map((settings.registry||[]).map(r=>[clean(r.name),r]));
  const originalProfiles=new Map((settings.registryOriginal||settings.registry||[]).map(r=>[clean(r.name),r]));
  const enterprise=cp.filter(x=>[...x.name].length>4&&x.name!=='【对手方为空】'&&!flagByName.has(x.name));
@@ -458,6 +455,8 @@ function cardHTML(card){
 }
 function tableCell(value,header){
  if(header==='状态'&&['已上传','部分缺失','未上传'].includes(value))return '<span class="report-status" data-status="'+esc(value)+'">'+esc(value)+'</span>';
+ if(typeof value==='number'&&/占比|比例/.test(header))return (100*value).toFixed(2);
+ if(typeof value==='string'&&header.includes('%')&&/区间|占比|比例/.test(header))return esc(value.replace(/(\d)%/g,'$1'));
  return display(value,header);
 }
 let reportPagerTables=[],renderAllRows=false;
@@ -468,8 +467,8 @@ function detailRowsHTML(t,rows){
 function tableHTML(t){
  const pageable=!renderAllRows&&!t.limit&&t.rows.length>20,id=pageable?reportPagerTables.push(t)-1:null;
  const visible=t.rows.slice(0,t.limit??(pageable?20:t.rows.length));
- const heading=h=>'<th>'+esc(h)+'</th>';
- const head=t.grouped?'<tr>'+t.headers.slice(0,2).map(h=>'<th rowspan="2">'+esc(h)+'</th>').join('')+'<th colspan="3">流入</th><th colspan="3">流出</th></tr><tr>'+t.headers.slice(2).map(h=>heading(h.slice(2))).join('')+'</tr>':'<tr>'+t.headers.map(heading).join('')+'</tr>';
+ const heading=h=>'<th>'+esc(reportHeader(h))+'</th>';
+ const head=t.grouped?'<tr>'+t.headers.slice(0,2).map(h=>'<th rowspan="2">'+esc(reportHeader(h))+'</th>').join('')+'<th colspan="3">流入</th><th colspan="3">流出</th></tr><tr>'+t.headers.slice(2).map(h=>heading(h.slice(2))).join('')+'</tr>':'<tr>'+t.headers.map(heading).join('')+'</tr>';
  return '<div class="report-table"><h4>'+esc(t.name)+'</h4>'+(t.note?'<p class="muted report-detail-summary">'+esc(t.note).replaceAll('\n','<br>')+'</p>':'')+
   '<div class="table-scroll"><table class="table"><thead>'+head+'</thead><tbody>'+detailRowsHTML(t,visible)+'</tbody></table></div>'+
   (pageable?'<div class="pagination" data-report-pager="'+id+'" aria-label="'+esc(t.name)+'分页"></div>':visible.length<t.rows.length?'<p class="muted">页面显示前 '+visible.length+' 行，共 '+t.rows.length+' 行。完整明细见本期核验 Excel。</p>':'')+'</div>';
@@ -553,8 +552,8 @@ function coverHTML(s){
 }
 function concentrationHTML(s){
  const sections=s.tables.filter(t=>/^(流入|流出)集中度$/.test(t.name));
- const rowspans=sections.map(t=>t.rows.map((r,i)=>'<tr'+(r[0]==='合计'?' class="report-total"':'')+'>'+(i===0?'<th scope="rowgroup" rowspan="'+t.rows.length+'">'+t.name.slice(0,2)+'</th>':'')+(i%2===0?'<th scope="rowgroup" rowspan="2">'+esc(r[0])+'</th>':'')+'<td>'+esc(r[1])+'</td>'+r.slice(2).map((v,j)=>'<td class="report-num">'+display(v,t.headers[j+2])+'</td>').join('')+'</tr>'));
- return '<div class="table-scroll"><table class="report-concentration"><thead><tr><th rowspan="2">方向</th><th rowspan="2">分布</th><th rowspan="2">性质</th>'+categories.map(c=>'<th scope="colgroup" colspan="3">'+esc(c)+'</th>').join('')+'</tr><tr>'+categories.map(()=>'<th>金额<br>（百万元）</th><th>笔数</th><th>占比</th>').join('')+'</tr></thead>'+rowspans.map(rows=>'<tbody>'+rows.join('')+'</tbody>').join('')+'</table></div>';
+ const rowspans=sections.map(t=>t.rows.map((r,i)=>'<tr'+(r[0]==='合计'?' class="report-total"':'')+'>'+(i===0?'<th scope="rowgroup" rowspan="'+t.rows.length+'">'+t.name.slice(0,2)+'</th>':'')+(i%2===0?'<th scope="rowgroup" rowspan="2">'+esc(r[0])+'</th>':'')+'<td>'+esc(r[1])+'</td>'+r.slice(2).map((v,j)=>'<td class="report-num">'+tableCell(v,t.headers[j+2])+'</td>').join('')+'</tr>'));
+ return '<div class="table-scroll"><table class="report-concentration"><thead><tr><th rowspan="2">方向</th><th rowspan="2">分布</th><th rowspan="2">性质</th>'+categories.map(c=>'<th scope="colgroup" colspan="3">'+esc(c)+'</th>').join('')+'</tr><tr>'+categories.map(()=>'<th>金额（百万）</th><th>笔数（笔）</th><th>占比（%）</th>').join('')+'</tr></thead>'+rowspans.map(rows=>'<tbody>'+rows.join('')+'</tbody>').join('')+'</table></div>';
 }
 function criteriaForm(group,criteria,bounds){
  return '<form class="report-criteria" data-report-criteria><b>设置筛选条件</b><div>'+criteriaFields[group].map(([id,label])=>'<label>'+esc(label)+'<input type="number" min="0" step="'+(['daysMin','daysMax','insuredMax'].includes(id)?'1':'any')+'" name="'+id+'" value="'+esc(criteria[id])+'" required></label>').join('')+(group==='registry'?'<label>经营天数统计分界值（天）<input name="daysBounds" value="'+esc(g.AuditRegistry.boundsFor('days',bounds).join(', '))+'" required></label>':'')+'</div><button type="submit" class="btn btn-primary">应用筛选</button></form>';
@@ -642,9 +641,20 @@ function reportSection(s,m,continuations){
  return (chapterTitles[s.id]?'<h2 class="report-chapter">'+esc(chapterTitles[s.id])+'</h2>':'')+'<section class="report-section" id="report-'+s.id+'">'+(s.id==='cover'?'<div class="report-masthead"><span>毕马威审计罗盘</span></div>':'')+'<'+tag+'>'+esc(s.title)+'</'+tag+'><p class="report-note">'+esc(s.note)+'</p>'+sectionBody(s,m,continuations)+'</section>';
 }
 function amountLabels(text,code){
- const converted=text.replaceAll('百万元',code?'M '+code:'M');
+ const converted=text.replaceAll('百万元','百万');
  return code?converted.replaceAll('等值人民币','原币 '+code).replace(/金额（元）/g,'金额（'+code+'）'):converted;
 }
+
+function reportHeader(header){
+ let h=amountLabels(header).replace(/^交易金额占比$/,'占比').replace(/^金额占比$/,'占比').replace(/^交易金额（百万）$/,'金额（百万）').replace(/^交易笔数$/,'笔数');
+ if(/笔数$/.test(h))h+='（笔）';
+ if(/占比|比例/.test(h)&&!h.includes('%'))h+='（%）';
+ return h;
+}
+function exportReportTable(t,code){
+ return {headers:t.headers.map(h=>amountLabels(reportHeader(h),code)),rows:t.rows.map(row=>row.map((v,i)=>typeof v==='number'&&/占比|比例/.test(t.headers[i])?v*100:typeof v==='string'?amountLabels(t.headers[i]?.includes('%')&&/区间|占比|比例/.test(t.headers[i])?v.replace(/(\d)%/g,'$1'):v,code):v))};
+}
+function formatTables(tables,code){return Object.fromEntries(Object.entries(tables).map(([name,t])=>[name,exportReportTable(t,code)]));}
 
 function tocHTML(m){
  return '<nav class="report-toc" aria-label="报告目录"><h2>报告目录</h2><p>Table of Contents</p><ol>'+m.sections.filter(s=>!['cover','background'].includes(s.id)).map(s=>(chapterTitles[s.id]?'<li class="toc-chapter"><a href="#report-'+s.id+'">'+esc(chapterTitles[s.id])+'</a></li>':'')+'<li><a href="#report-'+s.id+'">'+esc(s.title)+'</a></li>').join('')+'</ol></nav>';
@@ -682,12 +692,12 @@ function render(m,{allRows=false}={}){
 function workbook(m){
  const tables={};
  for(const s of m.sections){
-  for(const t of s.tables)tables[t.name]={headers:t.headers.map(h=>amountLabels(h,m.originalCurrency)),rows:t.rows.map(r=>r.map(v=>typeof v==='string'?amountLabels(v,m.originalCurrency):v))};
+  for(const t of s.tables)tables[t.name]=exportReportTable(t,m.originalCurrency);
   for(const c of s.charts){
-   if(!tables[c.name])tables[c.name]={headers:['类别','对手方数量',...['流入金额（百万元）','流入笔数','流入占比','流出金额（百万元）','流出笔数','流出占比'].map(h=>amountLabels(h,m.originalCurrency))],rows:c.rows};
+   if(!tables[c.name])tables[c.name]=exportReportTable({headers:['类别','对手方数量','流入金额（百万元）','流入笔数','流入占比','流出金额（百万元）','流出笔数','流出占比'],rows:c.rows},m.originalCurrency);
   }
  }
  return {...tables,'核验口径':{headers:['章节','口径'],rows:[...m.sections.map(s=>[s.title,amountLabels(s.note,m.originalCurrency)]),...m.sections.flatMap(s=>s.tables.filter(t=>t.note).map(t=>[t.name,amountLabels(t.note,m.originalCurrency)])),['分析期间',rangeLabel(m.from,m.to)],['金额口径',m.originalCurrency?'原币 '+m.originalCurrency:'折算人民币'],['测试汇率',m.fxLabel],['大额判断阈值（CNY）',currency.format(m.threshold)]]},'本期流水明细':m.flow};
 }
-g.AuditReport={theme,compute,render,workbook,fiscalPeriod,mountPagers,parseCriteria};
+g.AuditReport={theme,compute,render,workbook,fiscalPeriod,mountPagers,parseCriteria,formatTables};
 })(globalThis);

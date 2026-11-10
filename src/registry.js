@@ -40,7 +40,7 @@ function intervalLabels(bounds,id){
  if(id==='days'&&equalBounds(bounds,[365,730,1095]))return ['<1年','1~2年','2~3年','>3年','未提供'];
  if(id==='insured'&&equalBounds(bounds,[10,50,100]))return ['<10人','10~50人','50~100人','>100人','未提供'];
  if(id==='capital'){
-  const unit=n=>n>=1000000?n/1000000+'M':n>=1000?n/1000+'k':String(n);
+  const unit=n=>n>=1000000?n/1000000+'百万':n>=1000?n/1000+'k':String(n);
   if(bounds.length===1)return ['≤'+unit(bounds[0]),'>'+unit(bounds[0]),'未提供'];
   return ['<'+unit(bounds[0]),...bounds.slice(1).map((n,i)=>unit(bounds[i])+'–'+unit(n)),'>'+unit(bounds.at(-1)),'未提供'];
  }

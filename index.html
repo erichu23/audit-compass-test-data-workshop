@@ -1846,7 +1846,7 @@ g.AuditEngine={KEYS,copy,rename,annotate,validate,generate,generationAccounts,ad
 })(globalThis);
 </script><script>(function(g){'use strict';const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
 const col=n=>{let s='';for(n++;n;n=Math.floor((n-1)/26))s=String.fromCharCode(65+(n-1)%26)+s;return s;};
-function numericStyle(h,name){if(/笔数|总交易行数/.test(h))return 5;if(/笔数|行数|个数|人数|数量|排名|年份|年度|源.*行/.test(h))return 3;if(/占比|比例/.test(h))return 4;if(/金额|余额|资本|发生额|限额|_PM|_AMPT/.test(h))return 2;return 3;}
+function numericStyle(h,name){if(/笔数|总交易行数/.test(h))return 5;if(/笔数|行数|个数|人数|数量|排名|年份|年度|源.*行/.test(h))return 3;if(/占比|比例/.test(h))return h.includes('%')?2:4;if(/金额|余额|资本|发生额|限额|_PM|_AMPT/.test(h))return 2;return 3;}
 async function workbook(tables){const z=new JSZip();let types='',rels='',sheets='';const ns='http://schemas.openxmlformats.org/spreadsheetml/2006/main';let index=0;for(const [name,t]of Object.entries(tables)){index++;const sheetName=name.slice(0,31),headers=t.headers;let body='';for(const [i,r]of [headers,...t.rows].entries()){let cells='';for(let j=0;j<headers.length;j++){const v=r[j];if(v===null||v===undefined||v==='')continue;const address=col(j)+(i+1),style=i===0?1:typeof v==='number'?numericStyle(headers[j],name):0;cells+=typeof v==='number'&&Number.isFinite(v)?`<c r="${address}" s="${style}"><v>${v}</v></c>`:`<c r="${address}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${esc(v)}</t></is></c>`;}body+=`<row r="${i+1}" ht="${i===0?38:24}" customHeight="1">${cells}</row>`;}
 let cols='';for(let j=0;j<headers.length;j++)cols+=`<col min="${j+1}" max="${j+1}" width="${/名称|公司|关联方|摘要|说明|备注/.test(headers[j])?42:/账号|流水.*号|员工ID/.test(headers[j])?25:/日期|时间/.test(headers[j])?15:21}" customWidth="1"/>`;
 z.file(`xl/worksheets/sheet${index}.xml`,`<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="${ns}"><dimension ref="A1:${col(headers.length-1)}${t.rows.length+1}"/><sheetViews><sheetView workbookViewId="0" showGridLines="1"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${cols}</cols><sheetData>${body}</sheetData><autoFilter ref="A1:${col(headers.length-1)}${t.rows.length+1}"/></worksheet>`);
@@ -1963,7 +1963,7 @@ function intervalLabels(bounds,id){
  if(id==='days'&&equalBounds(bounds,[365,730,1095]))return ['<1年','1~2年','2~3年','>3年','未提供'];
  if(id==='insured'&&equalBounds(bounds,[10,50,100]))return ['<10人','10~50人','50~100人','>100人','未提供'];
  if(id==='capital'){
-  const unit=n=>n>=1000000?n/1000000+'M':n>=1000?n/1000+'k':String(n);
+  const unit=n=>n>=1000000?n/1000000+'百万':n>=1000?n/1000+'k':String(n);
   if(bounds.length===1)return ['≤'+unit(bounds[0]),'>'+unit(bounds[0]),'未提供'];
   return ['<'+unit(bounds[0]),...bounds.slice(1).map((n,i)=>unit(bounds[i])+'–'+unit(n)),'>'+unit(bounds.at(-1)),'未提供'];
  }
@@ -2149,14 +2149,15 @@ function scopeData(data,rows,own,from,to,cut){
   for(const r of sources.bank)if(own.has(r[2])&&r[0]&&overlaps(r[6],r[8],start,end))requiredBalance.add(balanceKey(r[2],r[0],year,r[4]));
   for(const r of rows)if(own.has(r[0])&&r[1]&&day(r[5])>=start&&day(r[5])<=end)requiredBalance.add(balanceKey(r[0],r[1],year,r[7]));
  }
- const referencedCompanies=new Set();
- for(const [name,list] of Object.entries(sources))if(name!=='company'){
-  const col=name==='bank'?2:0;
-  for(const r of list)if(clean(r[col]))referencedCompanies.add(clean(r[col]));
- }
  const status=Object.entries(sources).map(([k,list])=>{
   const col=k==='bank'?2:0,valid=list.filter(r=>own.has(r[col]));
   const uploaded=data[K[k]].rows.length>0;
+  if(k==='company'){
+   const masterCompanies=new Set(data[K.company].rows.map(r=>clean(r[0])).filter(Boolean));
+   const flowCompanies=new Set(rows.map(r=>clean(r[0])).filter(Boolean));
+   const missingCompanies=[...flowCompanies].filter(n=>!masterCompanies.has(n));
+   return [k,!uploaded?'未上传':missingCompanies.length?'部分缺失':'已上传',masterCompanies.size,missingCompanies.length?'所选期间流水中 '+missingCompanies.length+' 家本方单位未在被审计单位主档：'+missingCompanies.join('、'):'被审计单位主档已覆盖所选期间流水的全部本方单位。'];
+  }
   if(['related','customer','supplier','employee'].includes(k)){
    return [k,uploaded?'已上传':'未上传',valid.length,uploaded?'已上传；本期有效记录 '+valid.length+' 条。':'当前无已上传记录。'];
   }
@@ -2166,10 +2167,6 @@ function scopeData(data,rows,own,from,to,cut){
   const requiredColumns=data[K[k]].headers.map((h,i)=>h.includes('*')?i:-1).filter(i=>i>=0);
   const invalid=list.filter(r=>requiredColumns.some(i=>!clean(r[i]))).length;
   if(invalid)gaps.push(invalid+' 条记录缺少必填字段');
-  if(k==='company'){
-   const missingCompanies=absent(referencedCompanies,covered);
-   if(missingCompanies)gaps.push(missingCompanies+' 家本期数据中的单位缺少适用的被审计单位主档');
-  }
   if(k==='flow'&&absent(expectedAccounts,actualAccounts))gaps.push(absent(expectedAccounts,actualAccounts)+' 个主档账号本期无流水');
   if(k==='bank'&&absent(detectedAccounts,uploadedBank))gaps.push(absent(detectedAccounts,uploadedBank)+' 个本期流水或余额表识别账号未匹配主档');
   if(k==='balance'){
@@ -2236,7 +2233,7 @@ function compute(data,settings={}){
   const item={id,title,note,tables:[],charts:[]};
   model.sections.push(item);return item;
  };
- const table=(s,name,headers,rows,limit)=>s.tables.push({name,headers,rows,limit});
+ const table=(s,name,headers,rows,limit)=>s.tables.push({name,headers:headers.map((h,i)=>reportHeader(i===0&&h==='区间'&&/比例|重合/.test(name)?h+'（%）':h)),rows,limit});
  const directionHeaders=['流入金额（百万元）','流入笔数','流入占比','流出金额（百万元）','流出笔数','流出占比'];
  const directions=(x,total)=>[amount(x.in),x.ins,ratio(x.in,total.in),amount(x.out),x.outs,ratio(x.out,total.out)];
  const stacked=(section,name,items,{detail=true,first='区间',countLabel='对手方数量'}={})=>{
@@ -2424,7 +2421,7 @@ function compute(data,settings={}){
  table(relatedSection,'关联组合明细',['被审计单位公司名称','关联方名称','组合来源'],[...relationPairs.values()]);
 
  const R=g.AuditRegistry;
- const compliance=section('compliance','2.3.1 交易对手方合规事项及工商信息分析','按对手方全称关联工商档案，只统计本期有交易的范围外企业。经营天数＝报告结束日期－导入的经营开始时间，按自然日日期差计算，不额外加一天；不读取导入原经营天数作为计算结果，不反推或修改经营开始时间，也不按经营结束时间截断。原经营天数仅保留供对照。一般分界值归右侧区间，经营时长按 365 天折算 1 年，恰好 3 年归入 2~3 年，恰好 100 人归入 50~100 人；注册资本按人民币归档；恰好 1M 归入 500k–1M，最后一档为 >1M。工商区间图表仅统计对应字段有有效数值的本期范围外对手方，缺失或无效字段不参与该图的金额及占比计算。');
+ const compliance=section('compliance','2.3.1 交易对手方合规事项及工商信息分析','按对手方全称关联工商档案，只统计本期有交易的范围外企业。经营天数＝报告结束日期－导入的经营开始时间，按自然日日期差计算，不额外加一天；不读取导入原经营天数作为计算结果，不反推或修改经营开始时间，也不按经营结束时间截断。原经营天数仅保留供对照。一般分界值归右侧区间，经营时长按 365 天折算 1 年，恰好 3 年归入 2~3 年，恰好 100 人归入 50~100 人；注册资本按人民币归档；恰好 1百万 归入 500k–1百万，最后一档为 >1百万。工商区间图表仅统计对应字段有有效数值的本期范围外对手方，缺失或无效字段不参与该图的金额及占比计算。');
  const profiles=new Map((settings.registry||[]).map(r=>[clean(r.name),r]));
  const originalProfiles=new Map((settings.registryOriginal||settings.registry||[]).map(r=>[clean(r.name),r]));
  const enterprise=cp.filter(x=>[...x.name].length>4&&x.name!=='【对手方为空】'&&!flagByName.has(x.name));
@@ -2541,6 +2538,8 @@ function cardHTML(card){
 }
 function tableCell(value,header){
  if(header==='状态'&&['已上传','部分缺失','未上传'].includes(value))return '<span class="report-status" data-status="'+esc(value)+'">'+esc(value)+'</span>';
+ if(typeof value==='number'&&/占比|比例/.test(header))return (100*value).toFixed(2);
+ if(typeof value==='string'&&header.includes('%')&&/区间|占比|比例/.test(header))return esc(value.replace(/(\d)%/g,'$1'));
  return display(value,header);
 }
 let reportPagerTables=[],renderAllRows=false;
@@ -2551,8 +2550,8 @@ function detailRowsHTML(t,rows){
 function tableHTML(t){
  const pageable=!renderAllRows&&!t.limit&&t.rows.length>20,id=pageable?reportPagerTables.push(t)-1:null;
  const visible=t.rows.slice(0,t.limit??(pageable?20:t.rows.length));
- const heading=h=>'<th>'+esc(h)+'</th>';
- const head=t.grouped?'<tr>'+t.headers.slice(0,2).map(h=>'<th rowspan="2">'+esc(h)+'</th>').join('')+'<th colspan="3">流入</th><th colspan="3">流出</th></tr><tr>'+t.headers.slice(2).map(h=>heading(h.slice(2))).join('')+'</tr>':'<tr>'+t.headers.map(heading).join('')+'</tr>';
+ const heading=h=>'<th>'+esc(reportHeader(h))+'</th>';
+ const head=t.grouped?'<tr>'+t.headers.slice(0,2).map(h=>'<th rowspan="2">'+esc(reportHeader(h))+'</th>').join('')+'<th colspan="3">流入</th><th colspan="3">流出</th></tr><tr>'+t.headers.slice(2).map(h=>heading(h.slice(2))).join('')+'</tr>':'<tr>'+t.headers.map(heading).join('')+'</tr>';
  return '<div class="report-table"><h4>'+esc(t.name)+'</h4>'+(t.note?'<p class="muted report-detail-summary">'+esc(t.note).replaceAll('\n','<br>')+'</p>':'')+
   '<div class="table-scroll"><table class="table"><thead>'+head+'</thead><tbody>'+detailRowsHTML(t,visible)+'</tbody></table></div>'+
   (pageable?'<div class="pagination" data-report-pager="'+id+'" aria-label="'+esc(t.name)+'分页"></div>':visible.length<t.rows.length?'<p class="muted">页面显示前 '+visible.length+' 行，共 '+t.rows.length+' 行。完整明细见本期核验 Excel。</p>':'')+'</div>';
@@ -2636,8 +2635,8 @@ function coverHTML(s){
 }
 function concentrationHTML(s){
  const sections=s.tables.filter(t=>/^(流入|流出)集中度$/.test(t.name));
- const rowspans=sections.map(t=>t.rows.map((r,i)=>'<tr'+(r[0]==='合计'?' class="report-total"':'')+'>'+(i===0?'<th scope="rowgroup" rowspan="'+t.rows.length+'">'+t.name.slice(0,2)+'</th>':'')+(i%2===0?'<th scope="rowgroup" rowspan="2">'+esc(r[0])+'</th>':'')+'<td>'+esc(r[1])+'</td>'+r.slice(2).map((v,j)=>'<td class="report-num">'+display(v,t.headers[j+2])+'</td>').join('')+'</tr>'));
- return '<div class="table-scroll"><table class="report-concentration"><thead><tr><th rowspan="2">方向</th><th rowspan="2">分布</th><th rowspan="2">性质</th>'+categories.map(c=>'<th scope="colgroup" colspan="3">'+esc(c)+'</th>').join('')+'</tr><tr>'+categories.map(()=>'<th>金额<br>（百万元）</th><th>笔数</th><th>占比</th>').join('')+'</tr></thead>'+rowspans.map(rows=>'<tbody>'+rows.join('')+'</tbody>').join('')+'</table></div>';
+ const rowspans=sections.map(t=>t.rows.map((r,i)=>'<tr'+(r[0]==='合计'?' class="report-total"':'')+'>'+(i===0?'<th scope="rowgroup" rowspan="'+t.rows.length+'">'+t.name.slice(0,2)+'</th>':'')+(i%2===0?'<th scope="rowgroup" rowspan="2">'+esc(r[0])+'</th>':'')+'<td>'+esc(r[1])+'</td>'+r.slice(2).map((v,j)=>'<td class="report-num">'+tableCell(v,t.headers[j+2])+'</td>').join('')+'</tr>'));
+ return '<div class="table-scroll"><table class="report-concentration"><thead><tr><th rowspan="2">方向</th><th rowspan="2">分布</th><th rowspan="2">性质</th>'+categories.map(c=>'<th scope="colgroup" colspan="3">'+esc(c)+'</th>').join('')+'</tr><tr>'+categories.map(()=>'<th>金额（百万）</th><th>笔数（笔）</th><th>占比（%）</th>').join('')+'</tr></thead>'+rowspans.map(rows=>'<tbody>'+rows.join('')+'</tbody>').join('')+'</table></div>';
 }
 function criteriaForm(group,criteria,bounds){
  return '<form class="report-criteria" data-report-criteria><b>设置筛选条件</b><div>'+criteriaFields[group].map(([id,label])=>'<label>'+esc(label)+'<input type="number" min="0" step="'+(['daysMin','daysMax','insuredMax'].includes(id)?'1':'any')+'" name="'+id+'" value="'+esc(criteria[id])+'" required></label>').join('')+(group==='registry'?'<label>经营天数统计分界值（天）<input name="daysBounds" value="'+esc(g.AuditRegistry.boundsFor('days',bounds).join(', '))+'" required></label>':'')+'</div><button type="submit" class="btn btn-primary">应用筛选</button></form>';
@@ -2725,9 +2724,20 @@ function reportSection(s,m,continuations){
  return (chapterTitles[s.id]?'<h2 class="report-chapter">'+esc(chapterTitles[s.id])+'</h2>':'')+'<section class="report-section" id="report-'+s.id+'">'+(s.id==='cover'?'<div class="report-masthead"><span>毕马威审计罗盘</span></div>':'')+'<'+tag+'>'+esc(s.title)+'</'+tag+'><p class="report-note">'+esc(s.note)+'</p>'+sectionBody(s,m,continuations)+'</section>';
 }
 function amountLabels(text,code){
- const converted=text.replaceAll('百万元',code?'M '+code:'M');
+ const converted=text.replaceAll('百万元','百万');
  return code?converted.replaceAll('等值人民币','原币 '+code).replace(/金额（元）/g,'金额（'+code+'）'):converted;
 }
+
+function reportHeader(header){
+ let h=amountLabels(header).replace(/^交易金额占比$/,'占比').replace(/^金额占比$/,'占比').replace(/^交易金额（百万）$/,'金额（百万）').replace(/^交易笔数$/,'笔数');
+ if(/笔数$/.test(h))h+='（笔）';
+ if(/占比|比例/.test(h)&&!h.includes('%'))h+='（%）';
+ return h;
+}
+function exportReportTable(t,code){
+ return {headers:t.headers.map(h=>amountLabels(reportHeader(h),code)),rows:t.rows.map(row=>row.map((v,i)=>typeof v==='number'&&/占比|比例/.test(t.headers[i])?v*100:typeof v==='string'?amountLabels(t.headers[i]?.includes('%')&&/区间|占比|比例/.test(t.headers[i])?v.replace(/(\d)%/g,'$1'):v,code):v))};
+}
+function formatTables(tables,code){return Object.fromEntries(Object.entries(tables).map(([name,t])=>[name,exportReportTable(t,code)]));}
 
 function tocHTML(m){
  return '<nav class="report-toc" aria-label="报告目录"><h2>报告目录</h2><p>Table of Contents</p><ol>'+m.sections.filter(s=>!['cover','background'].includes(s.id)).map(s=>(chapterTitles[s.id]?'<li class="toc-chapter"><a href="#report-'+s.id+'">'+esc(chapterTitles[s.id])+'</a></li>':'')+'<li><a href="#report-'+s.id+'">'+esc(s.title)+'</a></li>').join('')+'</ol></nav>';
@@ -2765,14 +2775,14 @@ function render(m,{allRows=false}={}){
 function workbook(m){
  const tables={};
  for(const s of m.sections){
-  for(const t of s.tables)tables[t.name]={headers:t.headers.map(h=>amountLabels(h,m.originalCurrency)),rows:t.rows.map(r=>r.map(v=>typeof v==='string'?amountLabels(v,m.originalCurrency):v))};
+  for(const t of s.tables)tables[t.name]=exportReportTable(t,m.originalCurrency);
   for(const c of s.charts){
-   if(!tables[c.name])tables[c.name]={headers:['类别','对手方数量',...['流入金额（百万元）','流入笔数','流入占比','流出金额（百万元）','流出笔数','流出占比'].map(h=>amountLabels(h,m.originalCurrency))],rows:c.rows};
+   if(!tables[c.name])tables[c.name]=exportReportTable({headers:['类别','对手方数量','流入金额（百万元）','流入笔数','流入占比','流出金额（百万元）','流出笔数','流出占比'],rows:c.rows},m.originalCurrency);
   }
  }
  return {...tables,'核验口径':{headers:['章节','口径'],rows:[...m.sections.map(s=>[s.title,amountLabels(s.note,m.originalCurrency)]),...m.sections.flatMap(s=>s.tables.filter(t=>t.note).map(t=>[t.name,amountLabels(t.note,m.originalCurrency)])),['分析期间',rangeLabel(m.from,m.to)],['金额口径',m.originalCurrency?'原币 '+m.originalCurrency:'折算人民币'],['测试汇率',m.fxLabel],['大额判断阈值（CNY）',currency.format(m.threshold)]]},'本期流水明细':m.flow};
 }
-g.AuditReport={theme,compute,render,workbook,fiscalPeriod,mountPagers,parseCriteria};
+g.AuditReport={theme,compute,render,workbook,fiscalPeriod,mountPagers,parseCriteria,formatTables};
 })(globalThis);
 </script><script>var docx = (function(exports) {
   "use strict";var __defProp = Object.defineProperty;
@@ -26129,7 +26139,7 @@ function toast(text,error=false){const el=$('#toast');el.textContent=text;el.cla
 function persist(){try{const {sampleNonMerchants,sampleAccountPlans,registryRecords,...settings}=config;localStorage.setItem('ac-forge-settings',JSON.stringify(settings));}catch{}}
 function badge(text,kind=''){return `<span class="badge ${kind}">${h(text)}</span>`;}
 function field(label,id,value,type='number',hint='',attrs=''){return `<label class="field"><span>${label}</span><input type="${type}" data-config="${id}" value="${h(value)}" ${attrs}>${hint?`<small>${hint}</small>`:''}</label>`;}
-function summary(){return `<div class="metrics">${[['流水记录',num(analysis.count),'覆盖 '+analysis.activeCompanies+' 家有流水公司'],['本方银行账号',analysis.accounts,'账号主档 '+data[K.bank].rows.length+' 个'],['等值人民币交易额',fmt(analysis.total/1000000),'M · 等值人民币流入＋流出'],['待核验的余额断点',analysis.exceptions.length,'按相邻交易余额实际计算']].map(([l,v,n],i)=>`<article class="metric"><div>${l}<span class="metric-icon">${['↔','▣','¥','◎'][i]}</span></div><strong>${v}</strong><small>${n}</small></article>`).join('')}</div>`;}
+function summary(){return `<div class="metrics">${[['流水记录',num(analysis.count),'覆盖 '+analysis.activeCompanies+' 家有流水公司'],['本方银行账号',analysis.accounts,'账号主档 '+data[K.bank].rows.length+' 个'],['等值人民币交易额',fmt(analysis.total/1000000),'百万 · 等值人民币流入＋流出'],['待核验的余额断点',analysis.exceptions.length,'按相邻交易余额实际计算']].map(([l,v,n],i)=>`<article class="metric"><div>${l}<span class="metric-icon">${['↔','▣','¥','◎'][i]}</span></div><strong>${v}</strong><small>${n}</small></article>`).join('')}</div>`;}
 function chart(){const rows=analysis.monthly;if(!rows.length)return '<div class="empty">暂无流水，导入数据或生成后再查看。</div>';const max=Math.max(1,...rows.flatMap(r=>[r[1],r[2]])),w=780,ht=170;const points=j=>rows.map((r,i)=>`${20+i*(w-40)/Math.max(1,rows.length-1)},${ht-15-r[j]/max*(ht-30)}`).join(' ');return `<svg viewBox="0 0 ${w} ${ht}" class="trend" role="img" aria-label="月度流入与流出趋势"><defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#10448d" stop-opacity=".12"/><stop offset="1" stop-color="#10448d" stop-opacity="0"/></linearGradient></defs>${[30,70,110,150].map(y=>`<line x1="15" x2="765" y1="${y}" y2="${y}" stroke="#e6eaf0" stroke-dasharray="3 5"/>`).join('')}<polygon points="20,155 ${points(1)} 760,155" fill="url(#area)"/><polyline fill="none" stroke="#194c94" stroke-width="2.5" points="${points(1)}"/><polyline fill="none" stroke="#6c87b3" stroke-width="2" points="${points(2)}"/>${rows.map((r,i)=>`<circle cx="${20+i*(w-40)/Math.max(1,rows.length-1)}" cy="${ht-15-r[1]/max*(ht-30)}" r="3" fill="#194c94"><title>${r[0]} 流入 ${fmt(r[1])}；流出 ${fmt(r[2])}</title></circle>`).join('')}</svg><div class="chart-dates"><span>${h(rows[0][0])}</span><span>${h(rows[Math.floor(rows.length/2)][0])}</span><span>${h(rows.at(-1)[0])}</span></div>`;}
 function overview(){return `<section class="hero"><div><div class="eyebrow">TEST DATA WORKSPACE</div><h2>一套数据，覆盖不同测试。</h2><p>以当前可优比版为起点，修改主档、重新造流水、植入异常，<br>再用自动生成的核验值检查报告。</p><div class="actions"><button class="primary" data-nav="master">开始生成测试数据 <span>→</span></button><button data-nav="report">进入报告核验</button></div></div><div class="hero-art" aria-hidden="true"><div class="art-top">数据方案 <b>AC / 4.0</b></div><div class="art-bars">${[42,74,57,100,66,83,53,91,62,78].map((v,i)=>`<i style="height:${v}%;background:${i%3===0?'#7fa0cf':'#b1c0d5'}"></i>`).join('')}</div><div class="art-bottom"><span>2023—2025</span><span>可配置 · 可复用</span></div></div></section>${summary()}<div class="two-col"><section class="panel"><div class="panel-heading"><h3>资金流入 / 流出趋势</h3><span class="legend"><i></i>流入 <i class="blue"></i>流出</span></div>${chart()}</section><section class="panel"><div class="panel-heading"><h3>这套数据包含什么</h3>${badge('实际检测')}</div><div class="scenario-list">${[['大额单笔交易',analysis.big],['交易对手方为空',analysis.blankCP],['摘要为空',analysis.blankSummary],['缺失同名账户',analysis.missing.length],['仅流水有的本方账号',analysis.flowOnly.length],['账号主档有但无流水',analysis.noflow.length]].map(([n,v])=>`<div><span>${n}</span><b>${v}<small> ${n.includes('账号')||n.includes('账户')?'个':'笔'}</small></b></div>`).join('')}</div></section></div>`;}
 let flowFilters={},flowSort=null;
@@ -26386,7 +26396,7 @@ function registryPage(){
  <form id="registryGenerate" class="registry-controls"><label>样本基准日 <input type="date" name="asOf" value="${h(asOf)}" required></label><label>生成范围（可选） <input name="nameFilter" placeholder="按对手方名称包含文字"></label><label>最多生成（可选） <input name="maxRows" type="number" min="1" step="1" placeholder="不限"></label><button type="submit" class="primary">为当前流水补齐工商档案</button><span>按对手方全称匹配；现有档案保留。当前流水识别到 ${names.length} 家企业候选。</span></form>
  <section class="registry-start-tools" aria-labelledby="registryStartHeading"><h4 id="registryStartHeading">经营天数规则：自动同步</h4><div class="registry-controls"><label>报告结束日期 <input type="date" id="registryReportEnd" value="${h(asOf)}" required></label><span>修改后自动同步报告核验，导入旧数据也立即适用。</span></div><p>保留导入的经营开始时间，新经营天数＝报告结束日期－经营开始时间，不额外加一天。导入旧数据、修改开始时间或报告结束日期后自动重新计算；导入的原经营天数仅供对照，不参与计算。列表、报告和导出统一使用新天数，保存项目JSON保留原始记录。</p><p class="muted">已计算 ${num(auto.plan.changed+auto.plan.unchanged)} 条，其中 ${num(auto.plan.changed)} 条与导入天数不同；${num(auto.plan.skipped)} 条因开始日期缺失、无效或晚于报告结束日而无法计算。<button type="button" class="text" id="exportRegistryDates">下载日期核验明细</button> 其他工商字段、流水及主档不变。</p></section>
  <section class="registry-start-tools"><h4>合规明细：按原数量自动补生成</h4><p>诉讼 ${num(risks.cases)} 条，失信被执行人 ${num(risks.dishonest)} 条，行政处罚 ${num(risks.penalties)} 条。失信标记“是”生成1条，“否”生成0条；诉讼、处罚按原数量逐条生成，不改原数量。${risks.missing?'有 '+num(risks.missing)+' 份档案的数量或标记未提供／无效，保留缺失，不自动填0。':''}</p><div class="actions"><button id="exportRegistryLawsuits">下载全部诉讼明细</button><button id="exportRegistryDishonest">下载全部失信明细</button><button id="exportRegistryPenalties">下载全部行政处罚</button><button id="exportRegistryRaw">下载导入原始工商档案</button></div><p class="muted">这些下载包含全部档案，不受列表筛选影响。明细为按已有标记与条数补充的测试数据；可在“合规数量核验”中逐家比对。</p></section>
- <form id="registryBounds" class="registry-controls"><div class="registry-grid">${R.metrics.map(([id,label,unit])=>`<label>${label}分界值（${unit}）<input name="${id}" value="${h(R.boundsFor(id,bounds()).join(', '))}" required></label>`).join('')}</div><button type="submit">应用报告区间</button><button id="registryDefaultIntervals" type="button">恢复新版三项区间</button><span>逗号分隔；一般等于分界值归入右侧区间；经营天数、社保人数和注册资本的最后一个分界值计入前一档。默认按 365 天为 1 年；3 年、100 人、1M 均计入第三档。</span></form>
+ <form id="registryBounds" class="registry-controls"><div class="registry-grid">${R.metrics.map(([id,label,unit])=>`<label>${label}分界值（${unit}）<input name="${id}" value="${h(R.boundsFor(id,bounds()).join(', '))}" required></label>`).join('')}</div><button type="submit">应用报告区间</button><button id="registryDefaultIntervals" type="button">恢复新版三项区间</button><span>逗号分隔；一般等于分界值归入右侧区间；经营天数、社保人数和注册资本的最后一个分界值计入前一档。默认按 365 天为 1 年；3 年、100 人、1百万 均计入第三档。</span></form>
  <form id="registryFilter" class="registry-controls"><label>搜索 <input name="q" value="${h(registryFilter.q||'')}" placeholder="名称、行业、信用代码等"></label><label>经营状态 ${select('status',[...new Set(registry().map(r=>r.status).filter(Boolean))].map(x=>[x,x]),registryFilter.status)}</label><label>失信被执行人 ${select('dishonest',[['是','是'],['否','否']],registryFilter.dishonest)}</label><label>区间指标 ${select('metric',R.metrics.map(([id,label])=>[id,label]),metric)}</label><label>筛选区间 ${select('range',ranges,registryFilter.range)}</label><button type="submit">筛选</button><button type="button" id="clearRegistryFilter">清空筛选</button></form>
  <p class="muted">显示 ${filtered.length} / ${registry().length} 条。经营天数列显示以 ${h(asOf)} 为截止日新计算的天数；导入原天数单独保留，差值为0表示一致。列表筛选只影响列表和“下载筛选结果”，不影响全部下载。</p>${table(shown,{registry:true})}</section>`;
 }
@@ -26480,7 +26490,7 @@ function allRegistryTables(){
  const asOf=registryDate();
  return {'对手方工商档案':R.table(registry(),asOf,exchangeRates()),'导入原始工商档案':R.table(rawRegistry(),asOf,exchangeRates()),...R.riskTables(rawRegistry(),asOf),'经营日期自动核验':registryDateAuditTable(),'数据说明':{headers:['项目','说明'],rows:[['报告结束日期',asOf],['经营日期规则','经营开始时间保留，新经营天数＝报告结束日期－原经营开始时间；不额外加一天。导入原天数仅供对照，原始记录未改写。'],['风险明细规则','诉讼、行政处罚按已有数量生成；失信标记是为1条、否为0条。缺失值保留，不补0。'],['资料性质','案号、处罚文书及明细内容均为按条数生成的测试资料，不代表企业真实风险，不来自实时工商查询。'],['下载范围','包含全部工商档案及其全部合规明细，不受页面筛选影响。']]}};
 }
-async function exportZip(){const v=E.validate(data);if(v.errors.length)throw Error('请先修正导出检查中的错误。');analyzeConfig();const z=new JSZip();for(const [name,t]of Object.entries(data))z.file('上传数据/'+name+'.xlsx',await X.workbook({[name]:t}));z.file('核验资料/综合分析报告_核验预期值.xlsx',await X.workbook(E.checksWorkbook(analysis)));if(registry().length){z.file('工商数据/对手方工商档案.xlsx',await registryWorkbook(registry()));z.file('工商数据/工商及合规全部数据.xlsx',await X.workbook(allRegistryTables()));}z.file('生成配置.json',JSON.stringify({version:2,label:sourceLabel,config:{...config,registryStartAnchor:registryReportEnd()},data,template:generationSource},null,2));z.file('使用说明.txt','Audit Compass 测试数据工作坊\n数据为模拟测试用途。\n9个上传Excel位于上传数据目录；工商数据目录包含工商档案、导入原始值、诉讼／失信／处罚明细及数量和日期核验，核验资料另存。\n账号及流水号为文本，日期无ISO后缀，金额千分符两位，数量整数。\n集中度按客商分类统一排名，再拆关联方/第三方，分母为同客商分类方向总额。\n余额断点不检查每个账号的第一笔期初；科目余额仍按自然年。\n核验报告为当前数据实际计算结果，不是平台已经通过测试的证明。\n');X.download(await z.generateAsync({type:'blob',compression:'DEFLATE'}),'AuditCompass_测试数据_'+config.seed.replace(/[^\w\u4e00-\u9fff-]/g,'_')+'.zip');toast(registry().length?'已导出9个上传文件、工商档案 Excel 和核验结果。':'已导出9个上传文件及核验结果。');}
+async function exportZip(){const v=E.validate(data);if(v.errors.length)throw Error('请先修正导出检查中的错误。');analyzeConfig();const z=new JSZip();for(const [name,t]of Object.entries(data))z.file('上传数据/'+name+'.xlsx',await X.workbook({[name]:t}));z.file('核验资料/综合分析报告_核验预期值.xlsx',await X.workbook(AuditReport.formatTables(E.checksWorkbook(analysis))));if(registry().length){z.file('工商数据/对手方工商档案.xlsx',await registryWorkbook(registry()));z.file('工商数据/工商及合规全部数据.xlsx',await X.workbook(allRegistryTables()));}z.file('生成配置.json',JSON.stringify({version:2,label:sourceLabel,config:{...config,registryStartAnchor:registryReportEnd()},data,template:generationSource},null,2));z.file('使用说明.txt','Audit Compass 测试数据工作坊\n数据为模拟测试用途。\n9个上传Excel位于上传数据目录；工商数据目录包含工商档案、导入原始值、诉讼／失信／处罚明细及数量和日期核验，核验资料另存。\n账号及流水号为文本，日期无ISO后缀，金额千分符两位，数量整数。\n集中度按客商分类统一排名，再拆关联方/第三方，分母为同客商分类方向总额。\n余额断点不检查每个账号的第一笔期初；科目余额仍按自然年。\n核验报告为当前数据实际计算结果，不是平台已经通过测试的证明。\n');X.download(await z.generateAsync({type:'blob',compression:'DEFLATE'}),'AuditCompass_测试数据_'+config.seed.replace(/[^\w\u4e00-\u9fff-]/g,'_')+'.zip');toast(registry().length?'已导出9个上传文件、工商档案 Excel 和核验结果。':'已导出9个上传文件及核验结果。');}
 async function importFiles(files){
  const staged=E.copy(data);
  let n=0,project=null,importedRegistry=null,importedRawRegistry=null;
