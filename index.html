@@ -2357,11 +2357,26 @@ function compute(data,settings={}){
  ]));
  cpSection.tables.at(-1).grouped=true;
  for(const [dir,metric] of [['流入','in'],['流出','out']])table(cpSection,dir+'前20大对手方',cpHeaders,ranking(sortBy(cp.filter(x=>x[metric]>0),x=>x[metric]),externalTotals,20,cp.filter(x=>x[metric]<=0)));
- const relatedSection=section('related','2.2 关联方资金流水分析','按本方与对手方配对匹配关联方主档，剔除合并范围内往来。');
+ const relatedSection=section('related','2.2 关联方资金流水分析','关联组合按被审计单位公司名称＋关联方名称去重，不按关联关系类型或重复主档行重复计数。在已有主档组合基础上，自动补齐不同被审计单位之间的有向关联组合（X→Y和Y→X分别计一组），不自动增加自身组合，也不扩展第三方关系。组合数量使用“组”，不同关联方名称数量使用“个”。交易统计仍剔除合并范围内往来。');
  const rels=[...related.values()];
- table(relatedSection,'3.2.1 关联方交易汇总',['主档关联方数量','本期交易关联方数量',...cpHeaders.slice(5)],[[new Set(data[K.related].rows.map(r=>r[1]).filter(Boolean)).size,rels.length,...cpAmounts(totals(rels),externalTotals)]]);
+ const masterRelatedNames=new Set(data[K.related].rows.map(r=>clean(r[1])).filter(Boolean));
+ const relationPairs=new Map();
+ for(const r of data[K.related].rows){
+  const company=clean(r[0]),party=clean(r[1]);
+  if(company&&party)relationPairs.set(key(company,party),[company,party,'关联方主档']);
+ }
+ const masterPairCount=relationPairs.size;
+ const auditedNames=[...new Set([...own].map(clean).filter(Boolean))];
+ for(const company of auditedNames)for(const party of auditedNames){
+  const pair=key(company,party);
+  if(company!==party&&!relationPairs.has(pair))relationPairs.set(pair,[company,party,'被审计单位之间自动补齐']);
+ }
+ relatedSection.relationStats={masterNames:masterRelatedNames.size,masterPairs:masterPairCount,addedPairs:relationPairs.size-masterPairCount,effectivePairs:relationPairs.size};
+ table(relatedSection,'3.2.1 关联方交易汇总',['有效关联组合数量（组）','本期交易关联方数量',...cpHeaders.slice(5)],[[relationPairs.size,rels.length,...cpAmounts(totals(rels),externalTotals)]]);
  stacked(relatedSection,'关联关系类型流入流出分布',[...relations].sort(([a],[b])=>a.localeCompare(b,'zh-CN')).map(([n,x])=>[n,relationshipNames.get(n).size,x]),{first:'关联方类型'});
  table(relatedSection,'3.2.2 已知关联方交易清单',cpHeaders,ranking(sortBy(rels,turnover),totals(rels)));
+ table(relatedSection,'关联组合数量核验',['指标','数量'],[['主档不同关联方名称数量（个）',masterRelatedNames.size],['主档去重关联组合数量（组）',masterPairCount],['自动补齐被审计单位间组合（组）',relationPairs.size-masterPairCount],['有效关联组合数量（组）',relationPairs.size]]);
+ table(relatedSection,'关联组合明细',['被审计单位公司名称','关联方名称','组合来源'],[...relationPairs.values()]);
 
  const R=g.AuditRegistry;
  const compliance=section('compliance','2.3.1 交易对手方合规事项及工商信息分析','按对手方全称关联工商档案，只统计本期有交易的范围外企业。经营天数计算到报告期末或较早的经营结束日，手工填写的天数优先。一般分界值归右侧区间，经营时长按 365 天折算 1 年，恰好 3 年归入 2~3 年，恰好 100 人归入 50~100 人；注册资本按人民币归档；恰好 1M 归入 500k–1M，最后一档为 >1M。工商区间图表仅统计对应字段有有效数值的本期范围外对手方，缺失或无效字段不参与该图的金额及占比计算。');
@@ -2630,10 +2645,11 @@ function sectionBody(s,m,continuations){
  }
  if(s.id==='related'){
   const r=tables[0].rows[0];
-  const overview=metricHTML('已上传关联方主档中关联方个数',r[0]+' 家','本期有交易 '+r[1]+' 家')+
+  const stats=s.relationStats;
+  const overview=metricHTML('关联组合数量（含被审计单位之间）',integer(r[0])+' 组','主档 '+integer(stats.masterPairs)+' 组 ＋ 自动补齐 '+integer(stats.addedPairs)+' 组；主档不同关联方名称 '+integer(stats.masterNames)+' 个；本期有交易关联方 '+integer(r[1])+' 个')+
    metricHTML('流入金额 / 笔数 / 占比',currency.format(r[2])+' 百万元 / '+integer(r[3])+' 笔',display(r[4],'占比'))+
    metricHTML('流出金额 / 笔数 / 占比',currency.format(r[5])+' 百万元 / '+integer(r[6])+' 笔',display(r[7],'占比'));
-  return subhead('2.2.1 已知关联方资金交易汇总')+sideBySide([overview,chartAndTable(charts[0],tables)])+tableHTML({...tables[2],name:'2.2.2 已知关联方交易清单'});
+  return subhead('2.2.1 已知关联方资金交易汇总')+sideBySide([overview,chartAndTable(charts[0],tables)])+tableHTML({...tables[2],name:'2.2.2 已知关联方交易清单'})+extra('关联组合数量及补齐明细',tableHTML(tables[3])+tableHTML(tables[4]));
  }
  if(s.id==='compliance'){
   const [summary,details]=tables;
