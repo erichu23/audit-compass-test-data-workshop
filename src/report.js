@@ -341,8 +341,9 @@ function compute(data,settings={}){
  table(relatedSection,'关联组合明细',['被审计单位公司名称','关联方名称','组合来源'],[...relationPairs.values()]);
 
  const R=g.AuditRegistry;
- const compliance=section('compliance','2.3.1 交易对手方合规事项及工商信息分析','按对手方全称关联工商档案，只统计本期有交易的范围外企业。经营天数＝报告结束日期－经营开始时间，按自然日日期差计算，不额外加一天；不读取保存的经营天数作为计算结果，也不按经营结束时间截断。保存的原经营天数可用于反推开始时间和独立核对。一般分界值归右侧区间，经营时长按 365 天折算 1 年，恰好 3 年归入 2~3 年，恰好 100 人归入 50~100 人；注册资本按人民币归档；恰好 1M 归入 500k–1M，最后一档为 >1M。工商区间图表仅统计对应字段有有效数值的本期范围外对手方，缺失或无效字段不参与该图的金额及占比计算。');
+ const compliance=section('compliance','2.3.1 交易对手方合规事项及工商信息分析','按对手方全称关联工商档案，只统计本期有交易的范围外企业。经营天数＝报告结束日期－导入的经营开始时间，按自然日日期差计算，不额外加一天；不读取导入原经营天数作为计算结果，不反推或修改经营开始时间，也不按经营结束时间截断。原经营天数仅保留供对照。一般分界值归右侧区间，经营时长按 365 天折算 1 年，恰好 3 年归入 2~3 年，恰好 100 人归入 50~100 人；注册资本按人民币归档；恰好 1M 归入 500k–1M，最后一档为 >1M。工商区间图表仅统计对应字段有有效数值的本期范围外对手方，缺失或无效字段不参与该图的金额及占比计算。');
  const profiles=new Map((settings.registry||[]).map(r=>[clean(r.name),r]));
+ const originalProfiles=new Map((settings.registryOriginal||settings.registry||[]).map(r=>[clean(r.name),r]));
  const enterprise=cp.filter(x=>[...x.name].length>4&&x.name!=='【对手方为空】'&&!flagByName.has(x.name));
  const matched=enterprise.filter(x=>profiles.has(x.name));
  const flagged=cp.filter(x=>x.black);
@@ -382,8 +383,8 @@ function compute(data,settings={}){
    table(compliance,name+'筛选结果',['筛选条件','识别对手方数量',...moneyHeaders],[[description,hits.length,...financial(totals(hits))]]);
   }
  }
- const fieldTable=R.table(matched.map(x=>profiles.get(x.name)),to,rates);
- table(compliance,'本期工商匹配明细',[...fieldTable.headers,'报告结束日期','按日期计算经营天数','计算值－原天数',...moneyHeaders],fieldTable.rows.map((r,i)=>{const profile=profiles.get(matched[i].name),days=R.value(profile,'days',to,rates),raw=profile.days;return [...r,to,days,days!=null&&raw!=null&&String(raw).trim()!==''&&Number.isFinite(Number(raw))?days-Number(raw):null,...financial(matched[i])];}));
+ const fieldTable=R.table(matched.map(x=>{const profile=profiles.get(x.name);return {...profile,days:R.value(profile,'days',to,rates)};}),to,rates);
+ table(compliance,'本期工商匹配明细',[...fieldTable.headers,'导入原经营天数','报告结束日期','按日期计算经营天数','计算值－原天数',...moneyHeaders],fieldTable.rows.map((r,i)=>{const profile=profiles.get(matched[i].name),days=R.value(profile,'days',to,rates),raw=originalProfiles.get(matched[i].name)?.days;return [...r,raw??null,to,days,days!=null&&raw!=null&&String(raw).trim()!==''&&Number.isFinite(Number(raw))?days-Number(raw):null,...financial(matched[i])];}));
 
  const persons=section('people','2.3.2 交易对手方为个人或疑似个人的分析','按本方公司及姓名匹配。董监高以关联方主档中的人员关系为准，其次匹配员工主档；其余非空且姓名不超过4个字符的对手方归为其他个人。合计按姓名去重。');
  const individuals=[...people.values()];
