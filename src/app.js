@@ -232,25 +232,44 @@ function companyList(){
  return `<section class="panel company-panel"><div class="panel-heading"><div><h3>被审计单位清单 ${badge(data[K.company].rows.length+' 家')}</h3><p class="muted">可添加任意家数。可在新增时自动创建模拟银行账号。</p></div><div class="actions"><button id="showRandomCompanies">一键随机生成</button><button class="primary" id="addCompany">＋ 手动新增</button></div></div>${randomCompanyTools()}<div class="table-scroll"><table class="company-list"><thead><tr><th>公司名称</th><th>公司职能</th><th>银行账号数</th><th>当前流水</th><th>下次生成</th><th>操作</th></tr></thead><tbody>${rows||'<tr><td colspan="6">尚无被审计单位，请先新增。</td></tr>'}</tbody></table></div><div class="section-footer"><span class="muted">「只留主档」用于测试流水缺失；「自动」沿用原项目的生成范围设置。</span><button id="applyNames">保存名称修改</button></div></section>`;
 }
 function randomCompanyTools(){
- return `<details id="randomCompanyTools" class="random-company-tools"><summary>随机生成被审计单位（确认后追加）</summary><p class="muted">真实名称从内置公开企业库抽取，可查看来源；虚构名称带“测试专用”前缀。自动避开当前主档及流水中已出现的名称。不会替换、重命名原公司或改动已有流水。</p><form id="randomCompanyForm"><div class="form-grid"><label class="field"><span>企业名称来源</span><select name="mode"><option value="real">真实企业名称</option><option value="fictional">虚构企业名称</option><option value="mixed">真实＋虚构（各约一半）</option></select></label><label class="field"><span>公司职能（可修改）</span><input name="role" value="子公司" required></label><label class="field"><span>生成公司数</span><input name="count" type="number" min="1" max="20" step="1" value="3" required></label><label class="field"><span>每家公司新增人民币账号</span><input name="accounts" type="number" min="0" max="10" step="1" value="0" required></label><label class="field"><span>下次生成流水</span><select name="flow"><option value="false">暂不参与，只新增主档</option><option value="true">参与（还需有可用账号）</option></select></label><label class="field"><span>生成编号（相同编号可复现候选）</span><input name="seed" value="AC-${Date.now().toString(36)}" required></label></div><div class="actions"><button type="submit" class="primary">随机生成预览</button><button type="button" id="randomCompanyReseed">换一批</button></div></form><div id="randomCompanyPreview" aria-live="polite"></div></details>`;
+ const groups=E.companyGroups(),total=groups.reduce((n,g)=>n+g.members.length,0);
+ return `<details id="randomCompanyTools" class="random-company-tools"><summary>随机生成被审计单位（确认后追加）</summary><p class="muted">新增 ${groups.length} 组、${total} 个集团成员名称，可按母公司、子公司、分公司成组选取，也可散选。每条真实名称都能查看公开来源；虚构名称带“测试专用”前缀。自动避开当前主档及流水中已出现的名称。不会替换、重命名原公司或改动已有流水。</p><form id="randomCompanyForm"><div class="form-grid"><label class="field"><span>企业名称来源</span><select name="mode"><option value="real">真实企业名称</option><option value="fictional">虚构企业名称</option><option value="mixed">真实＋虚构（各约一半）</option></select></label><label class="field"><span>真实企业分组</span><select name="groupId"><option value="auto">随机选一个集团（成组生成）</option><option value="">不分组，从全部名称散选</option>${groups.map(group=>`<option value="${h(group.id)}">${h(group.label)} · ${group.members.length} 家</option>`).join('')}</select><small>分组依据公开资料，代表来源时点，不作为实时股权或合并范围结论。</small></label><label class="field"><span>公司职能（散选／虚构时使用）</span><input name="role" value="子公司" required></label><label class="field"><span>生成公司数</span><input name="count" type="number" min="1" max="100" step="1" value="3" required></label><label class="field"><span>每家公司新增人民币账号</span><input name="accounts" type="number" min="0" max="10" step="1" value="0" required></label><label class="field"><span>下次生成流水</span><select name="flow"><option value="false">暂不参与，只新增主档</option><option value="true">参与（还需有可用账号）</option></select></label><label class="field"><span>生成编号（相同编号可复现候选）</span><input name="seed" value="AC-${Date.now().toString(36)}" required></label></div><div class="actions"><button type="submit" class="primary">随机生成预览</button><button type="button" id="randomCompanyReseed">换一批</button><button type="button" id="randomCompanyWholeGroup" disabled>整组预览</button></div></form><div id="randomCompanyPreview" aria-live="polite"></div></details>`;
 }
 function previewRandomCompanies(){
  const form=$('#randomCompanyForm');if(!form.reportValidity())return;
- const f=new FormData(form),q={mode:f.get('mode'),count:Number(f.get('count')),accounts:Number(f.get('accounts')),seed:String(f.get('seed')).trim(),role:String(f.get('role')).trim(),excludeNames:generationSource[K.company].rows.map(r=>r[0]),reservedAccounts:[...generationSource[K.bank].rows.map(r=>String(r[0])),...Object.values(config.sampleAccountPlans||{}).flat().map(r=>r.account)]};
+ const f=new FormData(form),q={mode:f.get('mode'),groupId:f.get('groupId')||'',count:Number(f.get('count')),accounts:Number(f.get('accounts')),seed:String(f.get('seed')).trim(),role:String(f.get('role')).trim(),excludeNames:generationSource[K.company].rows.map(r=>r[0]),reservedAccounts:[...generationSource[K.bank].rows.map(r=>String(r[0])),...Object.values(config.sampleAccountPlans||{}).flat().map(r=>r.account)]};
  if(!q.seed)throw Error('请输入生成编号。');
  const result=E.randomCompanies(data,q);
  randomCompanyProposal={...result,raw:JSON.stringify(data),source:JSON.stringify({template:generationSource,plans:config.sampleAccountPlans}),flow:f.get('flow')==='true',accounts:q.accounts};
- $('#randomCompanyPreview').innerHTML='<h4>候选清单 · '+result.companies.length+' 家</h4><table class="table"><thead><tr><th>公司名称</th><th>名称类型</th><th>来源</th><th>新增账号数</th></tr></thead><tbody>'+result.companies.map(r=>'<tr><td>'+h(r.name)+'</td><td>'+h(r.type)+'</td><td>'+(r.url?'<a target="_blank" rel="noopener noreferrer" href="'+h(r.url)+'">'+h(r.source)+'</a>':h(r.source))+'</td><td>'+q.accounts+'</td></tr>').join('')+'</tbody></table><p class="muted">确认后会增加被审计单位数量，因此公司覆盖、缺流水等指标可能变化；已有流水、客商和工商记录不会被重写。当前预览尚未保存到项目。</p><button type="button" class="primary" id="applyRandomCompanies">确认追加这 '+result.companies.length+' 家公司</button>';
+ $('#randomCompanyPreview').innerHTML='<h4>候选清单 · '+result.companies.length+' 家（可取消勾选不需要的成员）</h4><div class="table-scroll"><table class="table"><thead><tr><th><input type="checkbox" id="randomCompanyAll" checked aria-label="全选候选公司"></th><th>公司名称</th><th>名称类型／集团</th><th>公司职能</th><th>上级公司</th><th>来源</th><th>新增账号数</th></tr></thead><tbody>'+result.companies.map(r=>'<tr><td><input type="checkbox" class="random-company-select" value="'+h(r.name)+'" checked aria-label="选择'+h(r.name)+'"></td><td>'+h(r.name)+'</td><td>'+h(r.type)+(r.group?'<br>'+h(r.group):'')+'</td><td>'+h(r.role||q.role)+'</td><td>'+h(r.parent||'—')+'</td><td>'+(r.url?'<a target="_blank" rel="noopener noreferrer" href="'+h(r.url)+'">'+h(r.source)+'</a>':h(r.source))+'</td><td>'+q.accounts+'</td></tr>').join('')+'</tbody></table></div><p class="muted">确认后会增加被审计单位数量，因此公司覆盖、缺流水等指标可能变化；已有流水、客商和工商记录不会被重写。当前预览尚未保存到项目。</p><button type="button" class="primary" id="applyRandomCompanies">确认追加这 '+result.companies.length+' 家公司</button>';
+
 }
 function applyRandomCompanies(){
  const proposal=randomCompanyProposal;if(!proposal)throw Error('请先生成候选清单。');
  if(proposal.raw!==JSON.stringify(data)||proposal.source!==JSON.stringify({template:generationSource,plans:config.sampleAccountPlans}))throw Error('项目数据已变化，请重新生成预览后再追加。');
- const names=new Set(proposal.companies.map(r=>r.name)),nextSource=E.copy(generationSource);
+ const names=new Set([...document.querySelectorAll('.random-company-select:checked')].map(el=>el.value));
+ if(!names.size)throw Error('请至少勾选一家候选公司。');
+ const excluded=new Set(proposal.companies.filter(r=>!names.has(r.name)).map(r=>r.name));
+ const next=E.copy(proposal.data);next[K.company].rows=next[K.company].rows.filter(r=>!excluded.has(r[0]));next[K.bank].rows=next[K.bank].rows.filter(r=>!excluded.has(r[2]));
+ const nextSource=E.copy(generationSource);
  nextSource[K.company].rows.push(...E.copy(proposal.data[K.company].rows.filter(r=>names.has(r[0]))));
  nextSource[K.bank].rows.push(...E.copy(proposal.data[K.bank].rows.filter(r=>names.has(r[2]))));
- lastData=snapshot();data=proposal.data;generationSource=nextSource;
+ lastData=snapshot();data=next;generationSource=nextSource;
  config.companyFlow={...config.companyFlow,...Object.fromEntries([...names].map(n=>[n,proposal.flow]))};
  sourceLabel='已追加 · 随机被审计单位';randomCompanyProposal=null;persist();recalc({preserveRows:true});render();toast('已追加 '+names.size+' 家公司，已有流水保持原样，可通过撤销恢复。');
+}
+function updateRandomGroupControls(){
+ const form=$('#randomCompanyForm');if(!form)return;
+ const fictional=form.elements.mode.value==='fictional',group=form.elements.groupId;
+ group.disabled=fictional;form.elements.count.max=!fictional&&group.value?'100':'20';
+ $('#randomCompanyWholeGroup').disabled=fictional||!group.value||group.value==='auto';
+}
+function previewWholeCompanyGroup(){
+ const form=$('#randomCompanyForm'),id=form.elements.groupId.value;
+ const group=E.availableCompanyGroups(data,generationSource[K.company].rows.map(r=>r[0])).find(g=>g.id===id);
+ if(!group)throw Error('请先选择一个具体集团。');
+ if(!group.available.length)throw Error('该集团的成员已在当前数据中，请选择其他集团。');
+ form.elements.mode.value='real';updateRandomGroupControls();form.elements.count.value=group.available.length;previewRandomCompanies();
 }
 function makeProjectCheckpoint(label){
  const point={label,time:new Date().toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'}),raw:JSON.stringify(data),registry:JSON.stringify(rawRegistry()),counts:Object.fromEntries(Object.entries(data).map(([name,t])=>[name,t.rows.length])),context:JSON.stringify({period:reportPeriod,criteria:config.reportCriteria,rates:exchangeRates(),registryEnd:registryReportEnd(),registryBounds:bounds(),threshold:config.bigThreshold,cut:config.cut})};
@@ -391,11 +410,13 @@ function submitMasterSamples(e){
 };
 function renderCatalog(){
  const q=$('#catalogSearch').value.trim().toLowerCase();
- const rows=E.companyCatalog().filter(r=>r.some(v=>String(v).toLowerCase().includes(q)));
+ const groupId=$('#catalogGroup').value,group=E.companyGroups().find(g=>g.id===groupId),members=group?new Set(group.members.map(m=>m.name)):null;
+ const rows=E.companyCatalog().filter(r=>(!members||members.has(r[0]))&&r.some(v=>String(v).toLowerCase().includes(q)));
  $('#catalogCount').textContent='共 '+rows.length+' 家，页面显示前 50 家。';
  $('#catalogRows').innerHTML=rows.slice(0,50).map(([name,source,url])=>`<tr><td>${h(name)}</td><td><a href="${h(url)}" target="_blank" rel="noopener noreferrer">${h(source)}</a></td></tr>`).join('');
 }
 $('#catalogSearch').oninput=renderCatalog;
+$('#catalogGroup').onchange=renderCatalog;
 function masters(){const keys=Object.values(K).filter(k=>k!==K.flow);return `${companyList()}${masterTools()}<section class="panel"><div class="panel-heading"><h3>主档明细</h3><div class="actions"><button id="addRow">＋ 新增记录</button><button id="exportSingle">导出当前表</button></div></div><div class="tabs">${keys.map(k=>`<button class="${master===k?'active':''}" data-master="${k}">${h(k.replace('(必须上传)','').replace('信息',''))}<small>${data[k].rows.length}</small></button>`).join('')}</div><div class="table-tools"><div class="searchbox">⌕ <input id="search" placeholder="搜索名称、账号或任意字段" value="${h(search)}"></div><span class="muted">带 * 的列是平台必填字段</span></div>${table(data[master],{edit:true})}</section>`;}
 function fxSettings(){
  const lines=Object.entries(exchangeRates()).filter(([code])=>!['CNY','RMB'].includes(code)).map(([code,rate])=>code+' = '+rate).join('\n');
@@ -594,7 +615,7 @@ function mountComponents(){
  if(mainQueryTable?.id==='statementFlowTable')mainQueryTable.querySelectorAll('thead th').forEach(th=>{if(!th.querySelector('[data-filter-flow]'))th.querySelector('.ba-th-tools')?.remove();});
  if(mainQueryTable)AuditTableTools.attach(mainQueryTable,currentTableQuery(),()=>{pageNo=1;render();},{skip:[0,...(mainQueryTable.tHead.rows[0].cells[mainQueryTable.tHead.rows[0].cells.length-1].textContent==='操作'?[mainQueryTable.tHead.rows[0].cells.length-1]:[])]});
  if(page!=='report')AuditTableTools.mountStatic(document.querySelector('#content'));
- if(page==='master')openMasterSamples();
+ if(page==='master'){openMasterSamples();updateRandomGroupControls();}
 }
 function render(){captureMasterWizardDraft();if(AuditPopover.isOpen(filterPopover))AuditPopover.hide(filterPopover);if(!analysis)recalc();document.querySelectorAll('.sidebar [data-nav]').forEach(b=>{const active=b.dataset.nav===page;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});document.querySelectorAll('.sb-toggle-head').forEach(b=>b.classList.toggle('group-current',!!b.parentElement.querySelector('[aria-current=page]')));$('#pageTitle').textContent=titles[page][0];$('#pageSubtitle').textContent=titles[page][1];$('#sourceLabel').textContent=sourceLabel;$('#sidebarCount').textContent=num(data[K.flow].rows.length)+' 条流水 · '+data[K.company].rows.length+' 家单位';$('#breadcrumbSection').textContent=['report','coverage'].includes(page)?'功能验证':page==='overview'?'数据总览':'测试数据生成';$('#content').innerHTML=(workflow.some(([id])=>id===page)?workflowNav():'')+({overview,master:()=>masters()+stepActions(null,'','rules','下一步：配置流水'),rules,anomaly:anomalies,preview:()=>previews()+stepActions('anomaly','返回异常设置','registry','下一步：对手方工商数据'),report:reportPage,registry:()=>registryPage()+stepActions('preview','返回数据预览','export','下一步：导出测试数据'),coverage:coveragePage,export:exportsPage}[page])();$('#undoTop').disabled=!lastData;mountComponents();}
 function navigate(p){closeFlyout();if(narrowScreen.matches&&!sidebarCollapsed())setSidebar(true);page=p;search='';pageNo=1;render();window.scrollTo(0,0);}
@@ -719,9 +740,9 @@ if(id==='exportRegistryDates')run(async()=>X.download(new Blob([await X.workbook
 if(id==='exportRegistryRaw')run(async()=>X.download(new Blob([await X.workbook({'导入原始工商档案':R.table(rawRegistry(),registryDate(),exchangeRates())})]),'导入原始工商档案.xlsx'));
 if(['exportRegistryLawsuits','exportRegistryDishonest','exportRegistryPenalties'].includes(id))run(async()=>{const key={exportRegistryLawsuits:'诉讼明细',exportRegistryDishonest:'失信被执行人明细',exportRegistryPenalties:'行政处罚明细'}[id],tables=R.riskTables(rawRegistry(),registryDate());X.download(new Blob([await X.workbook({[key]:tables[key],'合规数量核验':tables['合规数量核验']})]),key+'_'+registryDate()+'.xlsx');});
 if(id==='resetMasterSamples'){masterWizardDraft=null;openMasterSamples();}
-if(id==='openCatalog'){$('#catalogSearch').value='';renderCatalog();$('#catalogModal').showModal();}
+if(id==='openCatalog'){$('#catalogGroup').innerHTML='<option value="">全部企业名称</option>'+E.companyGroups().map(g=>'<option value="'+h(g.id)+'">'+h(g.label)+'</option>').join('');$('#catalogSearch').value='';renderCatalog();$('#catalogModal').showModal();}
 if(id==='closeCatalog')$('#catalogModal').close();
-if(id==='exportCatalog')run(async()=>X.download(new Blob([await X.workbook({'企业名称库':{headers:['企业名称','来源','来源链接'],rows:E.companyCatalog()}})]),'离线企业名称库.xlsx'));
+if(id==='exportCatalog')run(async()=>X.download(new Blob([await X.workbook({'企业名称库':{headers:['企业名称','来源','来源链接'],rows:E.companyCatalog()},'集团成员清单':{headers:['集团名称','企业名称','公司职能','上级公司','来源','来源链接'],rows:E.companyGroups().flatMap(g=>g.members.map(m=>[g.label,m.name,m.role,m.parent,g.source,g.url]))}})]),'离线企业名称库.xlsx'));
 if(id==='registryDefaultIntervals'){
  lastData=snapshot();
  config.registryBounds={...bounds(),...Object.fromEntries(R.metrics.filter(([id])=>['days','insured','capital'].includes(id)).map(([id,,,values])=>[id,[...values]]))};
@@ -762,7 +783,18 @@ document.addEventListener('submit',e=>{if(e.target.id!=='randomCompanyForm')retu
 document.addEventListener('click',e=>{const id=e.target.closest('button')?.id;
  if(id==='showRandomCompanies'){$('#randomCompanyTools').open=true;$('#randomCompanyTools').scrollIntoView({block:'nearest',behavior:'smooth'});}
  if(id==='randomCompanyReseed'){$('#randomCompanyForm [name=seed]').value='AC-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,6);run(previewRandomCompanies);}
+ if(id==='randomCompanyWholeGroup')run(previewWholeCompanyGroup);
  if(id==='applyRandomCompanies')run(applyRandomCompanies);
  if(id==='recordProjectCheckpoint')run(()=>{projectCheckpoint=makeProjectCheckpoint('手动记录的基线');checkpointComparison=null;render();toast('已记录当前基线，项目数据没有修改。');});
  if(id==='compareProjectCheckpoint')run(compareProjectCheckpoint);
+});
+
+document.addEventListener('change',e=>{
+ if(e.target.closest('#randomCompanyForm')){updateRandomGroupControls();randomCompanyProposal=null;$('#randomCompanyPreview').innerHTML='';}
+ if(e.target.id==='randomCompanyAll'||e.target.classList.contains('random-company-select')){
+  const boxes=[...document.querySelectorAll('.random-company-select')],all=$('#randomCompanyAll');
+  if(e.target===all)boxes.forEach(b=>b.checked=all.checked);
+  const count=boxes.filter(b=>b.checked).length;if(all){all.checked=count===boxes.length;all.indeterminate=count>0&&count<boxes.length;}
+  const button=$('#applyRandomCompanies');if(button){button.disabled=count===0;button.textContent='确认追加这 '+count+' 家公司';}
+ }
 });

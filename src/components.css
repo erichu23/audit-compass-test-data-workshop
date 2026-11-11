@@ -926,3 +926,6 @@ body #content table thead th.ba-filtered .ba-filter-btn::before{background-image
 #randomCompanyPreview{margin-top:16px}#randomCompanyPreview table{width:100%;border-collapse:collapse}
 #randomCompanyPreview th,#randomCompanyPreview td{padding:9px;border:1px solid #dce5ef;text-align:left;overflow-wrap:anywhere}
 .checkpoint-results{padding:12px 16px;background:#f1f6fd;border-radius:6px;line-height:1.8;overflow-wrap:anywhere}
+
+#randomCompanyPreview th:first-child,#randomCompanyPreview td:first-child{width:34px;text-align:center}
+#randomCompanyPreview small{display:block}#randomCompanyPreview td{line-height:1.65;vertical-align:top}

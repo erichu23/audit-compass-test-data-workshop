@@ -108,17 +108,41 @@ function addCompany(d,{name,role,count=0}){
  }
  return d;
 }
+function companyGroups(){return copy(g.AuditCompanyGroups||[]);}
+function companyCatalog(){
+ const names=new Map(companySources);
+ for(const group of g.AuditCompanyGroups||[])for(const member of group.members)if(!names.has(member.name))names.set(member.name,[group.source,group.url]);
+ return [...names].map(([name,[source,url]])=>[name,source,url]);
+}
+function availableCompanyGroups(source,excludeNames=[]){
+ const used=new Set([...excludeNames,...blacklist]);
+ for(const [key,columns] of [[KEYS.company,[0]],[KEYS.bank,[2]],[KEYS.related,[0,1]],[KEYS.customer,[0,2]],[KEYS.supplier,[0,2]],[KEYS.employee,[0,2]],[KEYS.flow,[0,3]],[KEYS.gl,[0]],[KEYS.balance,[0]]])for(const row of source[key]?.rows||[])for(const col of columns)if(row[col])used.add(row[col]);
+ return companyGroups().map(group=>({...group,available:group.members.filter(member=>!used.has(member.name))}));
+}
 // Opt-in, append-only company generation; existing project rows are never rewritten.
 function randomCompanies(source,options={}){
- const {count=3,mode='real',seed='AC-COMPANIES',accounts=0,role='子公司',excludeNames=[],reservedAccounts=[]}=options;
- if(!Number.isInteger(count)||count<1||count>20)throw Error('生成公司数须为 1 至 20 的整数。');
+ const {count=3,mode='real',seed='AC-COMPANIES',accounts=0,role='子公司',excludeNames=[],reservedAccounts=[],groupId=''}=options;
+ const maxCount=groupId?100:20;
+ if(!Number.isInteger(count)||count<1||count>maxCount)throw Error('生成公司数须为 1 至 '+maxCount+' 的整数。');
  if(!Number.isInteger(accounts)||accounts<0||accounts>10)throw Error('每家公司账号数须为 0 至 10 的整数。');
  if(!['real','fictional','mixed'].includes(mode))throw Error('请选择企业名称来源。');
  const used=new Set([...Object.values(source).flatMap(t=>t.rows.flat().filter(v=>typeof v==='string')),...excludeNames,...blacklist]);
  const realCount=mode==='real'?count:mode==='mixed'?Math.ceil(count/2):0;
- const real=seededShuffle([...companySources.entries()].filter(([name])=>!used.has(name)),seed+'/real').slice(0,realCount);
- if(real.length<realCount)throw Error('可用真实企业名称不足，请减少数量或切换虚构名称。');
- const picks=real.map(([name,[source,url]])=>({name,type:'真实企业名称',source,url})),random=rng(seed+'/fictional');
+ let picks=[];
+ if(groupId&&realCount){
+  const groups=availableCompanyGroups(source,excludeNames);
+  const group=groupId==='auto'?seededShuffle(groups.filter(group=>group.available.length>=realCount),seed+'/group')[0]:groups.find(group=>group.id===groupId);
+  if(!group)throw Error('没有足够可用成员的集团，请减少公司数或选择其他集团。');
+  if(group.available.length<realCount)throw Error(group.label+' 可新增 '+group.available.length+' 家，本次需要 '+realCount+' 家。请减少数量或点“整组预览”。');
+  const parent=group.available.find(member=>member.name===group.parent);
+  const members=[...(parent?[parent]:[]),...seededShuffle(group.available.filter(member=>member!==parent),seed+'/members')].slice(0,realCount);
+  picks=members.map(member=>({...member,type:'真实企业名称',source:group.source,url:group.url,group:group.label,industry:group.industry}));
+ }else{
+  const real=seededShuffle(companyCatalog().filter(([name])=>!used.has(name)),seed+'/real').slice(0,realCount);
+  if(real.length<realCount)throw Error('可用真实企业名称不足，请减少数量或切换虚构名称。');
+  picks=real.map(([name,source,url])=>({name,type:'真实企业名称',source,url}));
+ }
+ const random=rng(seed+'/fictional');
  const cities=['上海','杭州','宁波','苏州','成都','广州','武汉','南京'],words=['澄岚','云栖','知沐','星禾','锦川','远棠','青屿','沐辰'],industries=['科技','商贸','供应链','电子商务','信息技术','实业'];
  let serial=1;
  while(picks.length<count){const name='测试专用'+cities[Math.floor(random()*cities.length)]+words[Math.floor(random()*words.length)]+industries[Math.floor(random()*industries.length)]+String(serial++)+'有限公司';if(used.has(name)||companySources.has(name))continue;used.add(name);picks.push({name,type:'虚构企业名称',source:'离线生成',url:''});}
@@ -126,7 +150,8 @@ function randomCompanies(source,options={}){
  const banks=['中国工商银行股份有限公司','招商银行股份有限公司','中国建设银行股份有限公司','中国银行股份有限公司','中信银行股份有限公司'];
  const accountRandom=rng(seed+'/accounts');
  for(const item of picks){
-  addCompany(next,{name:item.name,role,count:0});
+  addCompany(next,{name:item.name,role:item.role||role,count:0});
+  const company=next[KEYS.company].rows.at(-1);if(item.parent)company[2]=item.parent;if(item.industry)company[4]=item.industry;
   for(let i=0;i<accounts;i++){let account;do{account='99096'+Array.from({length:14},()=>Math.floor(accountRandom()*10)).join('');}while(occupied.has(account));occupied.add(account);next[KEYS.bank].rows.push([account,banks[Math.floor(accountRandom()*banks.length)],item.name,null,'CNY',null,null,null,null]);}
  }
  return {data:next,companies:picks};
@@ -201,7 +226,8 @@ function masterSamples(source,options){
   if((related[id]??0)>(counts[id]??0))throw Error(label+'中的关联方家数不能超过该类家数。');
  }
  count(employees,'员工人数');count(officers,'董监高人数');
- if(preferredNames.some(n=>!companySources.has(n)))throw Error('指定名称不在离线企业库：'+preferredNames.filter(n=>!companySources.has(n)).slice(0,3).join('、'));
+ const explicitCatalog=new Map(companyCatalog().map(([name,source,url])=>[name,[source,url]]));
+ if(preferredNames.some(n=>!explicitCatalog.has(n)))throw Error('指定名称不在离线企业库：'+preferredNames.filter(n=>!explicitCatalog.has(n)).slice(0,3).join('、'));
  const named=new Set([...d[KEYS.employee].rows.map(r=>r[2]),...d[KEYS.related].rows.map(r=>r[1]),...d[KEYS.flow].rows.map(r=>r[3])]);
  const people=seededShuffle([...'严夏乔陆戴傅顾邵沈孟卫袁周许陶闻纪顾'].flatMap(a=>[...'嘉昕宜景知安悦恺思'].flatMap(b=>[...'宁岚禾远航舒彤辰'].map(c=>a+b+c))),seed+'/master-people');
  const nextPerson=()=>{let n;do{n=people.pop();if(!n)throw Error('可用模拟姓名不足，请减少人员数量。');}while(named.has(n));named.add(n);return n;};
@@ -216,7 +242,7 @@ function masterSamples(source,options){
   for(const r of d[KEYS.related].rows)if(r[0]===company)used.add(r[1]);
   const prior=mode==='replace'?[]:nextPools[company]||[];
   for(const name of prior)used.add(name);
-  const available=[...companySources.keys()].filter(n=>!used.has(n)&&!ix.own.has(n)&&!blacklist.includes(n)&&(sourceMode!=='tyc'||companySources.get(n)[1].includes('tianyancha.com')));
+  const available=[...companySources.keys(),...new Set(preferredNames.filter(n=>!companySources.has(n)))].filter(n=>!used.has(n)&&!ix.own.has(n)&&!blacklist.includes(n)&&(sourceMode!=='tyc'||explicitCatalog.get(n)[1].includes('tianyancha.com')));
   const preferred=[...new Set(preferredNames)].filter(n=>available.includes(n));
   const remaining=seededShuffle(available.filter(n=>!preferred.includes(n)),seed+'/'+company);
   const candidates=[...preferred,...remaining.filter(n=>companySources.get(n)[1].includes('tianyancha.com')),...remaining.filter(n=>!companySources.get(n)[1].includes('tianyancha.com'))];
@@ -461,5 +487,5 @@ function checksWorkbook(a){return{
 '每日趋势':{headers:['交易日期','流入金额','流出金额','流入笔数','流出笔数'],rows:a.daily},
 '月度趋势':{headers:['月份','流入金额','流出金额','流入笔数','流出笔数'],rows:a.monthly},
 '核验口径':{headers:['项目','说明'],rows:[['金额','金额折算为人民币后加总；逐笔折算保留两位小数。'],['折算汇率（CNY/原币）',Object.entries(typeof a.fx==='number'?{USD:a.fx}:a.fx).filter(([k])=>k!=='original').map(([k,v])=>k+' '+v).join('；')],['余额','账户余额取该期间最后一笔交易后等值人民币余额，不加总年度余额。'],['集中度','先按每个客商分类的对手方金额排名，再拆关联方/第三方。占比按该客商分类方向总金额。空白名称金额及笔数归入合计和其他，跳过排名。'],['内部交易','被审计单位之间往来从集中度、对手方前20剔除。'],['个人识别','按员工名单及简短姓名作测试标签，不替代真实个人识别。'],['余额断点','比较同账号上一笔余额＋本笔流入－流出；不验证每账号首笔期初。'],['资料性质','全部银行账户、人员关系和交易为测试资料，不表示真实企业事实。']]}};}
-g.AuditEngine={KEYS,copy,rename,annotate,validate,generate,generationAccounts,addCompany,removeCompany,previewFlowRows,masterSamples,MASTER_GROUPS,ACCOUNT_GROUPS,companyCatalog:()=>[...companySources].map(([n,[source,url]])=>[n,source,url]),analysis,checksWorkbook,periods,accountList,randomCompanies,currencyCode,cents,money,isRelatedOfficer,DEFAULT_FX,rmbCents,convertRow,blacklist:Object.freeze(blacklist)};
+g.AuditEngine={KEYS,copy,rename,annotate,validate,generate,generationAccounts,addCompany,removeCompany,previewFlowRows,masterSamples,MASTER_GROUPS,ACCOUNT_GROUPS,companyCatalog,companyGroups,availableCompanyGroups,analysis,checksWorkbook,periods,accountList,randomCompanies,currencyCode,cents,money,isRelatedOfficer,DEFAULT_FX,rmbCents,convertRow,blacklist:Object.freeze(blacklist)};
 })(globalThis);
