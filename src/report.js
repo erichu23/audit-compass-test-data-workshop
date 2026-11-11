@@ -102,9 +102,9 @@ function scopeData(data,rows,own,from,to,cut){
  });
  return {sources,status};
 }
-const criteriaDefaults={daysMin:0,daysMax:365,insuredMax:50,paidMin:20,paidMax:50,overlapAmount:1000000,overlapPercent:20,unknownAmount:500000};
+const criteriaDefaults={daysMin:0,daysMax:365,insuredMax:50,capitalMinWan:0,capitalMaxWan:50,paidMin:20,paidMax:50,overlapAmount:1000000,overlapPercent:20,unknownAmount:500000};
 const criteriaFields={
- registry:[['daysMin','经营天数下限'],['daysMax','经营天数上限'],['insuredMax','参保人数上限'],['paidMin','实缴比例下限（%）'],['paidMax','实缴比例上限（%）']],
+ registry:[['daysMin','经营天数下限'],['daysMax','经营天数上限'],['insuredMax','参保人数上限'],['capitalMinWan','注册资本下限（万元）'],['capitalMaxWan','注册资本上限（万元）'],['paidMin','实缴比例下限（%）'],['paidMax','实缴比例上限（%）']],
  overlap:[['overlapAmount','交易总额下限（元／原币）'],['overlapPercent','收支重合比例下限（%）']],
  unknown:[['unknownAmount','交易总额下限（元／原币）']]
 };
@@ -117,7 +117,7 @@ function parseCriteria(input,current={}){
   if(String(value).trim()===''||!Number.isFinite(n)||n<0||percent&&n>100||['daysMin','daysMax','insuredMax'].includes(key)&&!Number.isInteger(n))throw Error('请输入有效的非负筛选数值，比例须在 0–100 之间。');
   next[key]=n;
  }
- if(next.daysMin>next.daysMax||next.paidMin>next.paidMax)throw Error('筛选下限不能大于上限。');
+ if(next.daysMin>next.daysMax||next.paidMin>next.paidMax||next.capitalMinWan>next.capitalMaxWan)throw Error('筛选下限不能大于上限。');
  return next;
 }
 // The report template shows disjoint rank bands; the engine exposes cumulative ranks.
@@ -364,6 +364,7 @@ function compute(data,settings={}){
  const registryScreens={
   days:[v=>v>=criteria.daysMin&&v<=criteria.daysMax,'经营天数 '+criteria.daysMin+'–'+criteria.daysMax+' 天（含边界）'],
   insured:[v=>v<=criteria.insuredMax,'参保人数 ≤ '+criteria.insuredMax+' 人'],
+  capital:[v=>v>=criteria.capitalMinWan*10000&&v<=criteria.capitalMaxWan*10000,'注册资本 ['+criteria.capitalMinWan+'–'+criteria.capitalMaxWan+'] 万元（含边界）'],
   paidRatio:[v=>v>=criteria.paidMin&&v<=criteria.paidMax,'实缴占注册资本 '+criteria.paidMin+'%–'+criteria.paidMax+'%（含边界）']
  };
  for(const [id,label,unit]of R.metrics){
@@ -474,7 +475,7 @@ function tableHTML(t){
  const heading=h=>'<th>'+esc(reportHeader(h))+'</th>';
  const head=t.grouped?'<tr>'+t.headers.slice(0,2).map(h=>'<th rowspan="2">'+esc(reportHeader(h))+'</th>').join('')+'<th colspan="3">流入</th><th colspan="3">流出</th></tr><tr>'+t.headers.slice(2).map(h=>heading(h.slice(2))).join('')+'</tr>':'<tr>'+t.headers.map(heading).join('')+'</tr>';
  return '<div class="report-table"><h4>'+esc(t.name)+'</h4>'+(t.note?'<p class="muted report-detail-summary">'+esc(t.note).replaceAll('\n','<br>')+'</p>':'')+
-  '<div class="table-scroll"><table class="table"><thead>'+head+(t.filterHeaders?'<tr class="report-filter-header">'+t.filterHeaders.map(v=>'<th>'+esc(v)+'</th>').join('')+'</tr>':'')+'</thead><tbody>'+detailRowsHTML(t,visible)+'</tbody></table></div>'+
+  '<div class="table-scroll"><table class="table">'+(t.hideHeader?'':'<thead>'+head+(t.filterHeaders?'<tr class="report-filter-header">'+t.filterHeaders.map(v=>'<th>'+esc(v)+'</th>').join('')+'</tr>':'')+'</thead>')+'<tbody>'+detailRowsHTML(t,visible)+'</tbody></table></div>'+
   (pageable?'<div class="pagination" data-report-pager="'+id+'" aria-label="'+esc(t.name)+'分页"></div>':visible.length<t.rows.length?'<p class="muted">页面显示前 '+visible.length+' 行，共 '+t.rows.length+' 行。完整明细见本期核验 Excel。</p>':'')+'</div>';
 }
 const printPagers=[];
@@ -518,7 +519,8 @@ function stackedHTML(c,onlyDirection){
 function chartAndTable(chart,tables){
  const table=tables.find(t=>t.name===chart.name);
  const screen=tables.find(t=>t.name===chart.name+'筛选结果');
- return stackedHTML(chart)+(table?tableHTML(table):'')+(screen?tableHTML(screen):'');
+ const results=screen?(()=>{const r=screen.rows[0];return '<div class="report-registry-screen"><h4>系统设定筛选条件</h4><p class="report-note">'+esc(r[0])+'</p>'+tableHTML({name:'',hideHeader:true,headers:['指标','本期结果'],rows:[['识别对手方数',integer(r[1])],['识别流入金额/笔数',currency.format(r[2])+'百万/'+integer(r[3])+'笔'],['识别流出金额/笔数',currency.format(r[4])+'百万/'+integer(r[5])+'笔']]})+'</div>';})():'';
+ return stackedHTML(chart)+(table?tableHTML(table):'')+results;
 }
 function trendHTML(t){
  const width=Math.max(520,t.rows.length*30),height=185;
@@ -636,7 +638,7 @@ function sectionBody(s,m,continuations){
   const t=tables[0],order=[0,1,2,14,3,4,18,20,19,21,22,23,24,25,26,16,15,5,6,7,8,9,10,11,12,13];
   const [total,...details]=t.rows;
   const rows=[total,...details];
-  const conditions={'诉讼案件数量':'诉讼数量 > 0','失信被执行人':'失信被执行人＝是','行政处罚数量':'行政处罚数量 > 0','经营天数':'经营天数 '+m.criteria.daysMin+'–'+m.criteria.daysMax+' 天（含边界）','社保人数':'参保人数 ≤ '+m.criteria.insuredMax+' 人','实缴资本':'实缴占注册资本 '+m.criteria.paidMin+'%–'+m.criteria.paidMax+'%','收支重合':'交易额 ≥ '+currency.format(m.criteria.overlapAmount)+'；重合比例 ≥ '+m.criteria.overlapPercent+'%','未识别客商关系':'交易额 ≥ '+currency.format(m.criteria.unknownAmount)};
+  const conditions={'诉讼案件数量':'诉讼数量 > 0','失信被执行人':'失信被执行人＝是','行政处罚数量':'行政处罚数量 > 0','经营天数':'经营天数 '+m.criteria.daysMin+'–'+m.criteria.daysMax+' 天（含边界）','社保人数':'参保人数 ≤ '+m.criteria.insuredMax+' 人','注册资本':'注册资本 '+m.criteria.capitalMinWan+'–'+m.criteria.capitalMaxWan+' 万元（含边界）','实缴资本':'实缴占注册资本 '+m.criteria.paidMin+'%–'+m.criteria.paidMax+'%','收支重合':'交易额 ≥ '+currency.format(m.criteria.overlapAmount)+'；重合比例 ≥ '+m.criteria.overlapPercent+'%','未识别客商关系':'交易额 ≥ '+currency.format(m.criteria.unknownAmount)};
   return tableHTML({...t,filterHeaders:[...order.map(i=>conditions[t.headers[i]]||''),''],headers:[...order.map(i=>t.headers[i]),'说明'],rows:rows.map(r=>[...order.map(i=>r[i]),''])});
  }
  return tables.map(tableHTML).join('');
