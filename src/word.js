@@ -85,7 +85,7 @@ async function blocks(node,width,context={}){
   if(child.nodeType!==1)continue;
   const tag=child.tagName.toLowerCase();
   if(['script','style','button','input','select','form','summary'].includes(tag)||child.matches('.pagination,.report-sheet-header,.report-sheet-footer,.report-calculation-note'))continue;
-  if(tag==='details'&&!child.open)continue;
+  if(tag==='details'||child.matches('.report-extra'))continue;
   if(child.matches('.report-toc')){
    out.push(paragraph('报告目录',{bold:true,color:theme.navy,size:32}));
    out.push(new ReportTableOfContents('报告目录',{hyperlink:true,headingStyleRange:'1-2',cachedEntries:reportTocEntries,beginDirty:true}));
@@ -138,7 +138,7 @@ async function blocks(node,width,context={}){
 }
 async function report(model){
  const container=document.createElement('div');
- container.innerHTML=g.AuditReport.render(model,{allRows:true});
+ container.innerHTML=g.AuditReport.render(model,{allRows:true,forExport:true});
  const pages=[...container.querySelectorAll('.report-sheet-content')];
  headingBookmarks=new WeakMap();reportTocEntries=[];
  pages.forEach((page,i)=>page.querySelectorAll('.report-chapter,.report-section > h3').forEach(node=>{

@@ -756,3 +756,5 @@ body .statement-sticky-clone-table thead th.ba-filtered .ba-filter-btn::before{
 .report-sheet .report-cover-status th:first-child,.report-sheet .report-cover-status td:first-child{text-align:left}
 .report-sheet .report-cover-status th:nth-child(n+2),.report-sheet .report-cover-status td:nth-child(n+2){text-align:center;white-space:nowrap}
 .report-sheet .report-cover-status .report-status{min-width:72px;justify-content:center}
+
+@media print{.report-document .report-extra{display:none!important}}

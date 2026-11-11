@@ -470,7 +470,7 @@ function tableCell(value,header){
  if(typeof value==='string'&&header.includes('%')&&/区间|占比|比例/.test(header))return esc(value.replace(/(\d)%/g,'$1'));
  return display(value,header);
 }
-let reportPagerTables=[],renderAllRows=false;
+let reportPagerTables=[],renderAllRows=false,renderForExport=false;
 function detailRowsHTML(t,rows){
  return rows.map(r=>'<tr'+(r.some((v,i)=>i<2&&typeof v==='string'&&/^(合计|前20小计)/.test(v))?' class="report-total"':'')+'>'+t.headers.map((h,i)=>'<td class="'+(typeof r[i]==='number'?'report-num':'')+'">'+tableCell(r[i],h)+'</td>').join('')+'</tr>').join('')||
   '<tr><td colspan="'+t.headers.length+'">本期无记录</td></tr>';
@@ -554,7 +554,7 @@ function sideBySide(items,variant=''){
  return '<div class="report-panes '+variant+'">'+items.map(x=>'<div class="report-pane">'+x+'</div>').join('')+'</div>';
 }
 function subhead(title){return '<h4 class="report-subhead">'+esc(title)+'</h4>';}
-function extra(title,content){return '<details class="report-extra"><summary>'+esc(title)+'</summary>'+content+'</details>';}
+function extra(title,content){if(renderForExport)return '';return '<details class="report-extra"><summary>'+esc(title)+'</summary>'+content+'</details>';}
 function metricHTML(label,main,detail=''){
  return '<div class="report-metric"><span>'+esc(label)+'</span><strong>'+esc(main)+'</strong>'+(detail?'<small>'+esc(detail)+'</small>':'')+'</div>';
 }
@@ -691,8 +691,8 @@ function reportPages(m){
  return pieces.map((content,i)=>'<div class="report-sheet">'+'<div class="report-sheet-header"><span>毕马威审计罗盘</span><span>综合分析报告（年审适用）</span></div>'+
   '<div class="report-sheet-content">'+content+'</div><footer class="report-sheet-footer"><span>审计项目资料</span><span>'+esc(rangeLabel(m.from,m.to))+'</span><span>第 '+(i+1)+' / '+pieces.length+' 页</span></footer></div>').join('');
 }
-function render(m,{allRows=false}={}){
- renderAllRows=allRows;
+function render(m,{allRows=false,forExport=false}={}){
+ renderAllRows=allRows;renderForExport=forExport;
  reportPagerTables=[];
  const full=(m.minimum||m.from)+'|'+(m.maximum||m.to);
  const first=Number((m.minimum||m.from).slice(0,4)),last=Number((m.maximum||m.to).slice(0,4));
@@ -704,7 +704,7 @@ function render(m,{allRows=false}={}){
  const current=m.from+'|'+m.to;
  const output='<section class="panel report-controls"><div class="panel-heading"><h3>选择分析与导出期间</h3><div class="actions"><button id="reportPrint">打印横版报告</button><button id="reportWord">下载 Word 报告</button><button class="primary" id="reportExport">下载本期核验 Excel</button></div></div><div class="report-inputs"><label>金额口径<select id="reportCurrency"><option value="">折算人民币（CNY）</option>'+m.currencies.map(code=>'<option value="'+code+'"'+(code===m.originalCurrency?' selected':'')+'>原币 · '+code+'</option>').join('')+'</select></label><label>财年截止日<select id="reportCut">'+['03-31','06-30','09-30','12-31'].map(c=>'<option'+(c===m.cut?' selected':'')+'>'+c+'</option>').join('')+'</select></label><label>期间快捷选择<select id="reportPreset"><option value="">自定义日期</option>'+presets.map(([label,value,year])=>'<option value="'+esc(value)+'"'+(year?' data-year="'+year+'"':'')+(value===current?' selected':'')+'>'+esc(label)+'</option>').join('')+'</select></label><label>开始日期<input id="reportFrom" type="date" value="'+esc(m.from)+'"></label><label>结束日期<input id="reportTo" type="date" value="'+esc(m.to)+'"></label><button id="reportApply">应用区间</button></div><p class="muted">日期包含首尾两天。财年按结束年份命名；导出使用已应用的期间，含核验表及本期流水。上传整套数据请使用「测试数据生成 → 导出测试数据」。</p><nav class="report-index" aria-label="报告章节">'+m.sections.filter(s=>s.id!=='background').map(s=>'<a href="#report-'+s.id+'">'+esc(s.title.startsWith('综合')?'封面':s.title.split(' ').slice(0,2).join(' '))+'</a>').join('')+'</nav></section>'+
  '<article class="report-document" aria-label="综合分析报告预览">'+amountLabels(reportPages(m),m.originalCurrency)+'</article>';
- renderAllRows=false;
+ renderAllRows=false;renderForExport=false;
  return output;
 }
 function workbook(m){
