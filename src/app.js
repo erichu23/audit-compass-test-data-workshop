@@ -138,6 +138,7 @@ function resetFlowFilters(){
 const flowFilterColumns={0:'company',1:'account',3:'counterparty',5:'date',7:'currency',8:'direction',10:'direction',20:'type'};
 const flowFilterKeys=kind=>kind==='date'?['from','to']:[kind];
 const filterPopover=$('#flowFilterPopover');
+if(typeof filterPopover.showPopover!=='function'){filterPopover.removeAttribute('popover');filterPopover.hidden=true;}
 let pageSize=20,tablePagerState=null;
 function flowHeader(label,column){
  const active=flowSort?.column===column,kind=flowFilterColumns[column];
@@ -147,9 +148,9 @@ function flowHeader(label,column){
 }
 function showFlowFilter(button){
  const column=Number(button.dataset.filterFlow),kind=flowFilterColumns[column];
- if(filterPopover.matches(':popover-open')){
+ if(AuditPopover.isOpen(filterPopover)){
   const same=filterPopover.dataset.column===String(column);
-  filterPopover.hidePopover();
+  AuditPopover.hide(filterPopover);
   if(same)return;
  }
  const t=data[K.flow];
@@ -182,7 +183,7 @@ function showFlowFilter(button){
  };
  sync();
  const rect=button.getBoundingClientRect();
- filterPopover.showPopover();
+ AuditPopover.show(filterPopover);
  const left=Math.max(8,Math.min(rect.left-22,innerWidth-filterPopover.offsetWidth-8));
  const above=rect.bottom+filterPopover.offsetHeight+10>innerHeight&&rect.top-filterPopover.offsetHeight>8;
  filterPopover.classList.toggle('is-above',above);
@@ -470,7 +471,7 @@ function mountComponents(){
  if(mainQueryTable)AuditTableTools.attach(mainQueryTable,currentTableQuery(),()=>{pageNo=1;render();},{skip:[0,...(mainQueryTable.tHead.rows[0].cells[mainQueryTable.tHead.rows[0].cells.length-1].textContent==='操作'?[mainQueryTable.tHead.rows[0].cells.length-1]:[])]});
  if(page!=='report')AuditTableTools.mountStatic(document.querySelector('#content'));
 }
-function render(){if(filterPopover.matches(':popover-open'))filterPopover.hidePopover();if(!analysis)recalc();document.querySelectorAll('.sidebar [data-nav]').forEach(b=>{const active=b.dataset.nav===page;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});document.querySelectorAll('.sb-toggle-head').forEach(b=>b.classList.toggle('group-current',!!b.parentElement.querySelector('[aria-current=page]')));$('#pageTitle').textContent=titles[page][0];$('#pageSubtitle').textContent=titles[page][1];$('#sourceLabel').textContent=sourceLabel;$('#sidebarCount').textContent=num(data[K.flow].rows.length)+' 条流水 · '+data[K.company].rows.length+' 家单位';$('#breadcrumbSection').textContent=['report','coverage'].includes(page)?'功能验证':page==='overview'?'数据总览':'测试数据生成';$('#content').innerHTML=(workflow.some(([id])=>id===page)?workflowNav():'')+({overview,master:()=>masters()+stepActions(null,'','rules','下一步：配置流水'),rules,anomaly:anomalies,preview:()=>previews()+stepActions('anomaly','返回异常设置','registry','下一步：对手方工商数据'),report:reportPage,registry:()=>registryPage()+stepActions('preview','返回数据预览','export','下一步：导出测试数据'),coverage:coveragePage,export:exportsPage}[page])();$('#undoTop').disabled=!lastData;mountComponents();}
+function render(){if(AuditPopover.isOpen(filterPopover))AuditPopover.hide(filterPopover);if(!analysis)recalc();document.querySelectorAll('.sidebar [data-nav]').forEach(b=>{const active=b.dataset.nav===page;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});document.querySelectorAll('.sb-toggle-head').forEach(b=>b.classList.toggle('group-current',!!b.parentElement.querySelector('[aria-current=page]')));$('#pageTitle').textContent=titles[page][0];$('#pageSubtitle').textContent=titles[page][1];$('#sourceLabel').textContent=sourceLabel;$('#sidebarCount').textContent=num(data[K.flow].rows.length)+' 条流水 · '+data[K.company].rows.length+' 家单位';$('#breadcrumbSection').textContent=['report','coverage'].includes(page)?'功能验证':page==='overview'?'数据总览':'测试数据生成';$('#content').innerHTML=(workflow.some(([id])=>id===page)?workflowNav():'')+({overview,master:()=>masters()+stepActions(null,'','rules','下一步：配置流水'),rules,anomaly:anomalies,preview:()=>previews()+stepActions('anomaly','返回异常设置','registry','下一步：对手方工商数据'),report:reportPage,registry:()=>registryPage()+stepActions('preview','返回数据预览','export','下一步：导出测试数据'),coverage:coveragePage,export:exportsPage}[page])();$('#undoTop').disabled=!lastData;mountComponents();}
 function navigate(p){closeFlyout();if(narrowScreen.matches&&!sidebarCollapsed())setSidebar(true);page=p;search='';pageNo=1;render();window.scrollTo(0,0);}
 function updateSetting(el){const id=el.dataset.config;if(!id)return;if(id==='fx'&&(!Number.isFinite(Number(el.value))||Number(el.value)<=0)){el.value=config.fx;toast('美元汇率必须大于 0。',true);return;}config[id]=el.type==='checkbox'?el.checked:el.type==='number'?Number(el.value):el.value;if(id==='fx')recalc();if(id==='missingCompany'&&$('#generationScope'))$('#generationScope').textContent=generationScope();if(id==='count'&&$('[data-planned-count]'))$('[data-planned-count]').textContent=num(config.count);persist();}
 async function run(fn){if(busy)return;busy=true;$('#busy').hidden=false;try{await new Promise(r=>setTimeout(r,35));await fn();}catch(e){console.error(e);toast(e.message||String(e),true);}finally{busy=false;$('#busy').hidden=true;}}

@@ -765,3 +765,117 @@ body .statement-sticky-clone-table thead th.ba-filtered .ba-filter-btn::before{
 .report-document .table-scroll>table{width:100%!important;min-width:0!important;table-layout:fixed}
 .report-document .table-scroll>table th,.report-document .table-scroll>table td{min-width:0!important;white-space:normal!important;overflow-wrap:anywhere}
 .report-document .table-scroll>svg{max-width:100%;height:auto}
+
+/* UI-design-main bank-analysis-compact table tools, shared by all data tables. */
+body #content table thead .ba-th-tools,
+body .statement-sticky-clone-table thead .ba-th-tools{
+  position:absolute !important;
+  right:7px !important;
+  top:50% !important;
+  transform:translateY(-50%) !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:3px !important;
+  width:29px !important;
+  height:18px !important;
+  margin:0 !important;
+  z-index:2 !important;
+}
+
+body #content table thead .ba-sort-icons,
+body .statement-sticky-clone-table thead .ba-sort-icons{
+  display:inline-flex !important;
+  flex:0 0 12px !important;
+  width:12px !important;
+  height:16px !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+}
+
+body #content table thead .ba-sort-icons button,
+body .statement-sticky-clone-table thead .ba-sort-icons button{
+  position:relative !important;
+  display:block !important;
+  flex:0 0 7px !important;
+  width:12px !important;
+  height:7px !important;
+  min-width:12px !important;
+  min-height:7px !important;
+  padding:0 !important;
+  border:0 !important;
+  background:transparent !important;
+}
+
+body #content table thead .ba-sort-icons button::before,
+body .statement-sticky-clone-table thead .ba-sort-icons button::before{
+  content:"" !important;
+  position:absolute !important;
+  left:3px !important;
+  width:0 !important;
+  height:0 !important;
+  border-left:3.5px solid transparent !important;
+  border-right:3.5px solid transparent !important;
+}
+
+body #content table thead .ba-sort-up::before,
+body .statement-sticky-clone-table thead .ba-sort-up::before{
+  top:1px !important;
+  border-bottom:5px solid #9aa9bb !important;
+}
+
+body #content table thead .ba-sort-down::before,
+body .statement-sticky-clone-table thead .ba-sort-down::before{
+  bottom:1px !important;
+  border-top:5px solid #9aa9bb !important;
+}
+
+body #content table thead th.ba-sort-asc .ba-sort-up::before,
+body .statement-sticky-clone-table thead th.ba-sort-asc .ba-sort-up::before{
+  border-bottom-color:#2f6fed !important;
+}
+
+body #content table thead th.ba-sort-desc .ba-sort-down::before,
+body .statement-sticky-clone-table thead th.ba-sort-desc .ba-sort-down::before{
+  border-top-color:#2f6fed !important;
+}
+
+body #content table thead .ba-filter-btn,
+body .statement-sticky-clone-table thead .ba-filter-btn{
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  flex:0 0 13px !important;
+  width:13px !important;
+  height:13px !important;
+  min-width:13px !important;
+  min-height:13px !important;
+  padding:0 !important;
+  border:0 !important;
+  background:transparent !important;
+}
+
+body #content table thead .ba-filter-btn::before,
+body .statement-sticky-clone-table thead .ba-filter-btn::before{
+  content:"" !important;
+  display:block !important;
+  width:10px !important;
+  height:10px !important;
+  background:#9aa9bb !important;
+  clip-path:polygon(8% 14%,92% 14%,60% 52%,60% 88%,40% 88%,40% 52%) !important;
+}
+
+body #content table thead th.ba-filtered .ba-filter-btn::before,
+body .statement-sticky-clone-table thead th.ba-filtered .ba-filter-btn::before{
+  background:#2f6fed !important;
+}
+
+body #content table thead th[data-query-column],body #content #statementFlowTable thead th{position:relative!important;padding-right:42px!important}
+body #content table thead .ba-th-tools{position:absolute!important;right:7px!important;top:50%!important;transform:translateY(-50%)!important}
+body #content table thead .ba-sort-icons button,body #content table thead .ba-filter-btn{appearance:none;-webkit-appearance:none;box-shadow:none!important;margin:0!important;line-height:1!important;font-size:0!important;cursor:pointer;opacity:1!important;visibility:visible!important}
+body #content table thead .ba-filter-btn::before{clip-path:none!important;-webkit-clip-path:none!important;background-color:transparent!important;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%239aa9bb' d='M1 2h14L10 8v5l-4 2V8z'/%3E%3C/svg%3E")!important;background-size:contain!important;background-repeat:no-repeat!important}
+body #content table thead th.ba-filtered .ba-filter-btn::before{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%232f6fed' d='M1 2h14L10 8v5l-4 2V8z'/%3E%3C/svg%3E")!important}
+.table-query-popup,.ba-table-filter-popover{z-index:10000}
+.table-query-popup[hidden],.ba-table-filter-popover[hidden]{display:none!important}
+@media print{body #content table thead .ba-th-tools{display:none!important}}

@@ -1390,6 +1390,120 @@ body .statement-sticky-clone-table thead th.ba-filtered .ba-filter-btn::before{
 .report-document .table-scroll>table{width:100%!important;min-width:0!important;table-layout:fixed}
 .report-document .table-scroll>table th,.report-document .table-scroll>table td{min-width:0!important;white-space:normal!important;overflow-wrap:anywhere}
 .report-document .table-scroll>svg{max-width:100%;height:auto}
+
+/* UI-design-main bank-analysis-compact table tools, shared by all data tables. */
+body #content table thead .ba-th-tools,
+body .statement-sticky-clone-table thead .ba-th-tools{
+  position:absolute !important;
+  right:7px !important;
+  top:50% !important;
+  transform:translateY(-50%) !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:3px !important;
+  width:29px !important;
+  height:18px !important;
+  margin:0 !important;
+  z-index:2 !important;
+}
+
+body #content table thead .ba-sort-icons,
+body .statement-sticky-clone-table thead .ba-sort-icons{
+  display:inline-flex !important;
+  flex:0 0 12px !important;
+  width:12px !important;
+  height:16px !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+}
+
+body #content table thead .ba-sort-icons button,
+body .statement-sticky-clone-table thead .ba-sort-icons button{
+  position:relative !important;
+  display:block !important;
+  flex:0 0 7px !important;
+  width:12px !important;
+  height:7px !important;
+  min-width:12px !important;
+  min-height:7px !important;
+  padding:0 !important;
+  border:0 !important;
+  background:transparent !important;
+}
+
+body #content table thead .ba-sort-icons button::before,
+body .statement-sticky-clone-table thead .ba-sort-icons button::before{
+  content:"" !important;
+  position:absolute !important;
+  left:3px !important;
+  width:0 !important;
+  height:0 !important;
+  border-left:3.5px solid transparent !important;
+  border-right:3.5px solid transparent !important;
+}
+
+body #content table thead .ba-sort-up::before,
+body .statement-sticky-clone-table thead .ba-sort-up::before{
+  top:1px !important;
+  border-bottom:5px solid #9aa9bb !important;
+}
+
+body #content table thead .ba-sort-down::before,
+body .statement-sticky-clone-table thead .ba-sort-down::before{
+  bottom:1px !important;
+  border-top:5px solid #9aa9bb !important;
+}
+
+body #content table thead th.ba-sort-asc .ba-sort-up::before,
+body .statement-sticky-clone-table thead th.ba-sort-asc .ba-sort-up::before{
+  border-bottom-color:#2f6fed !important;
+}
+
+body #content table thead th.ba-sort-desc .ba-sort-down::before,
+body .statement-sticky-clone-table thead th.ba-sort-desc .ba-sort-down::before{
+  border-top-color:#2f6fed !important;
+}
+
+body #content table thead .ba-filter-btn,
+body .statement-sticky-clone-table thead .ba-filter-btn{
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  flex:0 0 13px !important;
+  width:13px !important;
+  height:13px !important;
+  min-width:13px !important;
+  min-height:13px !important;
+  padding:0 !important;
+  border:0 !important;
+  background:transparent !important;
+}
+
+body #content table thead .ba-filter-btn::before,
+body .statement-sticky-clone-table thead .ba-filter-btn::before{
+  content:"" !important;
+  display:block !important;
+  width:10px !important;
+  height:10px !important;
+  background:#9aa9bb !important;
+  clip-path:polygon(8% 14%,92% 14%,60% 52%,60% 88%,40% 88%,40% 52%) !important;
+}
+
+body #content table thead th.ba-filtered .ba-filter-btn::before,
+body .statement-sticky-clone-table thead th.ba-filtered .ba-filter-btn::before{
+  background:#2f6fed !important;
+}
+
+body #content table thead th[data-query-column],body #content #statementFlowTable thead th{position:relative!important;padding-right:42px!important}
+body #content table thead .ba-th-tools{position:absolute!important;right:7px!important;top:50%!important;transform:translateY(-50%)!important}
+body #content table thead .ba-sort-icons button,body #content table thead .ba-filter-btn{appearance:none;-webkit-appearance:none;box-shadow:none!important;margin:0!important;line-height:1!important;font-size:0!important;cursor:pointer;opacity:1!important;visibility:visible!important}
+body #content table thead .ba-filter-btn::before{clip-path:none!important;-webkit-clip-path:none!important;background-color:transparent!important;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%239aa9bb' d='M1 2h14L10 8v5l-4 2V8z'/%3E%3C/svg%3E")!important;background-size:contain!important;background-repeat:no-repeat!important}
+body #content table thead th.ba-filtered .ba-filter-btn::before{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%232f6fed' d='M1 2h14L10 8v5l-4 2V8z'/%3E%3C/svg%3E")!important}
+.table-query-popup,.ba-table-filter-popover{z-index:10000}
+.table-query-popup[hidden],.ba-table-filter-popover[hidden]{display:none!important}
+@media print{body #content table thead .ba-th-tools{display:none!important}}
 </style></head><body>
 <header class="layout-header">
  <div class="layout-header-name">Audit Compass测试数据工作坊 <span class="layout-header-project" id="sourceLabel"></span></div>
@@ -1954,6 +2068,17 @@ g.AuditExcel={workbook,read,download};
   window.renderAuditPager=renderAuditPager;
 })();
 
+/* Popover feature detection and fallback for browsers without the native API. */
+(function(g){
+ const open=new Set();
+ function isOpen(el){if(!el)return false;if(typeof el.showPopover==='function'){try{return el.matches(':popover-open');}catch{}}return el.dataset.auditPopoverOpen==='true';}
+ function hide(el){if(!el)return;if(typeof el.hidePopover==='function'){try{el.hidePopover();}catch{}}else el.hidden=true;delete el.dataset.auditPopoverOpen;open.delete(el);document.querySelectorAll('[aria-controls="'+el.id+'"]').forEach(b=>b.setAttribute('aria-expanded','false'));}
+ function show(el){for(const old of open)if(old!==el)hide(old);if(typeof el.showPopover==='function')el.showPopover();else{el.removeAttribute('popover');el.hidden=false;}el.dataset.auditPopoverOpen='true';open.add(el);}
+ g.AuditPopover={isOpen,show,hide};
+ g.addEventListener?.('keydown',e=>{if(e.key==='Escape')for(const el of open)hide(el);});
+ g.addEventListener?.('pointerdown',e=>{for(const el of open)if(!el.isConnected)open.delete(el);else if(!el.contains(e.target)&&!e.target.closest('.ba-filter-btn'))hide(el);});
+})(globalThis);
+
 /* View-only table queries: numeric sorting, combined column filters and reset. */
 (function(g){
  const clean=v=>String(v??'').trim();
@@ -1987,11 +2112,11 @@ g.AuditExcel={workbook,read,download};
     popup?.remove();popup=document.createElement('div');popup.className='table-query-popup';popup.setAttribute('popover','auto');document.body.append(popup);
     const f=state.filters?.[col]||{};
     popup.innerHTML='<form><b>'+esc(title)+'</b><label>包含文字<input name="text" value="'+esc(f.text)+'" placeholder="输入名称、日期或内容"></label><div class="table-query-range"><label>最小值<input type="number" step="any" name="min" value="'+esc(f.min)+'"></label><label>最大值<input type="number" step="any" name="max" value="'+esc(f.max)+'"></label></div><label><input type="checkbox" name="blank"'+(f.blank?' checked':'')+'> 仅空白值</label><small>多列条件同时生效；数值范围包含上下限。</small><div class="actions"><button type="button" data-clear>重置本列</button><button type="button" data-all>重置全表</button><button class="primary" type="submit">应用</button></div></form>';
-    const close=()=>{popup?.remove();popup=null;};
+    const close=()=>{g.AuditPopover.hide(popup);popup?.remove();popup=null;};
     popup.querySelector('form').onsubmit=e=>{e.preventDefault();const f=Object.fromEntries(new FormData(e.target));if(f.min!==''&&f.max!==''&&Number(f.min)>Number(f.max)){popup.querySelector('[name=max]').setCustomValidity('最大值不能小于最小值');popup.querySelector('[name=max]').oninput=e=>e.target.setCustomValidity('');popup.querySelector('[name=max]').reportValidity();return;}state.filters??={};if(f.text||f.min!==''||f.max!==''||f.blank)state.filters[col]=f;else delete state.filters[col];close();onChange();refresh();};
     popup.querySelector('[data-clear]').onclick=()=>{delete (state.filters||{})[col];if(state.sort?.column===col)state.sort=null;close();onChange();refresh();};
     popup.querySelector('[data-all]').onclick=()=>{state.filters={};state.sort=null;close();onChange();refresh();};
-    popup.showPopover();const rect=th.getBoundingClientRect();popup.style.left=Math.max(8,Math.min(rect.left,innerWidth-340))+'px';popup.style.top=Math.max(8,Math.min(rect.bottom+5,innerHeight-popup.offsetHeight-8))+'px';popup.querySelector('input').focus();
+    g.AuditPopover.show(popup);const rect=th.getBoundingClientRect();popup.style.left=Math.max(8,Math.min(rect.left,innerWidth-340))+'px';popup.style.top=Math.max(8,Math.min(rect.bottom+5,innerHeight-popup.offsetHeight-8))+'px';popup.querySelector('input').focus();
    };
   });});
  }
@@ -26292,6 +26417,7 @@ function resetFlowFilters(){
 const flowFilterColumns={0:'company',1:'account',3:'counterparty',5:'date',7:'currency',8:'direction',10:'direction',20:'type'};
 const flowFilterKeys=kind=>kind==='date'?['from','to']:[kind];
 const filterPopover=$('#flowFilterPopover');
+if(typeof filterPopover.showPopover!=='function'){filterPopover.removeAttribute('popover');filterPopover.hidden=true;}
 let pageSize=20,tablePagerState=null;
 function flowHeader(label,column){
  const active=flowSort?.column===column,kind=flowFilterColumns[column];
@@ -26301,9 +26427,9 @@ function flowHeader(label,column){
 }
 function showFlowFilter(button){
  const column=Number(button.dataset.filterFlow),kind=flowFilterColumns[column];
- if(filterPopover.matches(':popover-open')){
+ if(AuditPopover.isOpen(filterPopover)){
   const same=filterPopover.dataset.column===String(column);
-  filterPopover.hidePopover();
+  AuditPopover.hide(filterPopover);
   if(same)return;
  }
  const t=data[K.flow];
@@ -26336,7 +26462,7 @@ function showFlowFilter(button){
  };
  sync();
  const rect=button.getBoundingClientRect();
- filterPopover.showPopover();
+ AuditPopover.show(filterPopover);
  const left=Math.max(8,Math.min(rect.left-22,innerWidth-filterPopover.offsetWidth-8));
  const above=rect.bottom+filterPopover.offsetHeight+10>innerHeight&&rect.top-filterPopover.offsetHeight>8;
  filterPopover.classList.toggle('is-above',above);
@@ -26624,7 +26750,7 @@ function mountComponents(){
  if(mainQueryTable)AuditTableTools.attach(mainQueryTable,currentTableQuery(),()=>{pageNo=1;render();},{skip:[0,...(mainQueryTable.tHead.rows[0].cells[mainQueryTable.tHead.rows[0].cells.length-1].textContent==='操作'?[mainQueryTable.tHead.rows[0].cells.length-1]:[])]});
  if(page!=='report')AuditTableTools.mountStatic(document.querySelector('#content'));
 }
-function render(){if(filterPopover.matches(':popover-open'))filterPopover.hidePopover();if(!analysis)recalc();document.querySelectorAll('.sidebar [data-nav]').forEach(b=>{const active=b.dataset.nav===page;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});document.querySelectorAll('.sb-toggle-head').forEach(b=>b.classList.toggle('group-current',!!b.parentElement.querySelector('[aria-current=page]')));$('#pageTitle').textContent=titles[page][0];$('#pageSubtitle').textContent=titles[page][1];$('#sourceLabel').textContent=sourceLabel;$('#sidebarCount').textContent=num(data[K.flow].rows.length)+' 条流水 · '+data[K.company].rows.length+' 家单位';$('#breadcrumbSection').textContent=['report','coverage'].includes(page)?'功能验证':page==='overview'?'数据总览':'测试数据生成';$('#content').innerHTML=(workflow.some(([id])=>id===page)?workflowNav():'')+({overview,master:()=>masters()+stepActions(null,'','rules','下一步：配置流水'),rules,anomaly:anomalies,preview:()=>previews()+stepActions('anomaly','返回异常设置','registry','下一步：对手方工商数据'),report:reportPage,registry:()=>registryPage()+stepActions('preview','返回数据预览','export','下一步：导出测试数据'),coverage:coveragePage,export:exportsPage}[page])();$('#undoTop').disabled=!lastData;mountComponents();}
+function render(){if(AuditPopover.isOpen(filterPopover))AuditPopover.hide(filterPopover);if(!analysis)recalc();document.querySelectorAll('.sidebar [data-nav]').forEach(b=>{const active=b.dataset.nav===page;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});document.querySelectorAll('.sb-toggle-head').forEach(b=>b.classList.toggle('group-current',!!b.parentElement.querySelector('[aria-current=page]')));$('#pageTitle').textContent=titles[page][0];$('#pageSubtitle').textContent=titles[page][1];$('#sourceLabel').textContent=sourceLabel;$('#sidebarCount').textContent=num(data[K.flow].rows.length)+' 条流水 · '+data[K.company].rows.length+' 家单位';$('#breadcrumbSection').textContent=['report','coverage'].includes(page)?'功能验证':page==='overview'?'数据总览':'测试数据生成';$('#content').innerHTML=(workflow.some(([id])=>id===page)?workflowNav():'')+({overview,master:()=>masters()+stepActions(null,'','rules','下一步：配置流水'),rules,anomaly:anomalies,preview:()=>previews()+stepActions('anomaly','返回异常设置','registry','下一步：对手方工商数据'),report:reportPage,registry:()=>registryPage()+stepActions('preview','返回数据预览','export','下一步：导出测试数据'),coverage:coveragePage,export:exportsPage}[page])();$('#undoTop').disabled=!lastData;mountComponents();}
 function navigate(p){closeFlyout();if(narrowScreen.matches&&!sidebarCollapsed())setSidebar(true);page=p;search='';pageNo=1;render();window.scrollTo(0,0);}
 function updateSetting(el){const id=el.dataset.config;if(!id)return;if(id==='fx'&&(!Number.isFinite(Number(el.value))||Number(el.value)<=0)){el.value=config.fx;toast('美元汇率必须大于 0。',true);return;}config[id]=el.type==='checkbox'?el.checked:el.type==='number'?Number(el.value):el.value;if(id==='fx')recalc();if(id==='missingCompany'&&$('#generationScope'))$('#generationScope').textContent=generationScope();if(id==='count'&&$('[data-planned-count]'))$('[data-planned-count]').textContent=num(config.count);persist();}
 async function run(fn){if(busy)return;busy=true;$('#busy').hidden=false;try{await new Promise(r=>setTimeout(r,35));await fn();}catch(e){console.error(e);toast(e.message||String(e),true);}finally{busy=false;$('#busy').hidden=true;}}

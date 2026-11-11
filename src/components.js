@@ -62,6 +62,17 @@
   window.renderAuditPager=renderAuditPager;
 })();
 
+/* Popover feature detection and fallback for browsers without the native API. */
+(function(g){
+ const open=new Set();
+ function isOpen(el){if(!el)return false;if(typeof el.showPopover==='function'){try{return el.matches(':popover-open');}catch{}}return el.dataset.auditPopoverOpen==='true';}
+ function hide(el){if(!el)return;if(typeof el.hidePopover==='function'){try{el.hidePopover();}catch{}}else el.hidden=true;delete el.dataset.auditPopoverOpen;open.delete(el);document.querySelectorAll('[aria-controls="'+el.id+'"]').forEach(b=>b.setAttribute('aria-expanded','false'));}
+ function show(el){for(const old of open)if(old!==el)hide(old);if(typeof el.showPopover==='function')el.showPopover();else{el.removeAttribute('popover');el.hidden=false;}el.dataset.auditPopoverOpen='true';open.add(el);}
+ g.AuditPopover={isOpen,show,hide};
+ g.addEventListener?.('keydown',e=>{if(e.key==='Escape')for(const el of open)hide(el);});
+ g.addEventListener?.('pointerdown',e=>{for(const el of open)if(!el.isConnected)open.delete(el);else if(!el.contains(e.target)&&!e.target.closest('.ba-filter-btn'))hide(el);});
+})(globalThis);
+
 /* View-only table queries: numeric sorting, combined column filters and reset. */
 (function(g){
  const clean=v=>String(v??'').trim();
@@ -95,11 +106,11 @@
     popup?.remove();popup=document.createElement('div');popup.className='table-query-popup';popup.setAttribute('popover','auto');document.body.append(popup);
     const f=state.filters?.[col]||{};
     popup.innerHTML='<form><b>'+esc(title)+'</b><label>包含文字<input name="text" value="'+esc(f.text)+'" placeholder="输入名称、日期或内容"></label><div class="table-query-range"><label>最小值<input type="number" step="any" name="min" value="'+esc(f.min)+'"></label><label>最大值<input type="number" step="any" name="max" value="'+esc(f.max)+'"></label></div><label><input type="checkbox" name="blank"'+(f.blank?' checked':'')+'> 仅空白值</label><small>多列条件同时生效；数值范围包含上下限。</small><div class="actions"><button type="button" data-clear>重置本列</button><button type="button" data-all>重置全表</button><button class="primary" type="submit">应用</button></div></form>';
-    const close=()=>{popup?.remove();popup=null;};
+    const close=()=>{g.AuditPopover.hide(popup);popup?.remove();popup=null;};
     popup.querySelector('form').onsubmit=e=>{e.preventDefault();const f=Object.fromEntries(new FormData(e.target));if(f.min!==''&&f.max!==''&&Number(f.min)>Number(f.max)){popup.querySelector('[name=max]').setCustomValidity('最大值不能小于最小值');popup.querySelector('[name=max]').oninput=e=>e.target.setCustomValidity('');popup.querySelector('[name=max]').reportValidity();return;}state.filters??={};if(f.text||f.min!==''||f.max!==''||f.blank)state.filters[col]=f;else delete state.filters[col];close();onChange();refresh();};
     popup.querySelector('[data-clear]').onclick=()=>{delete (state.filters||{})[col];if(state.sort?.column===col)state.sort=null;close();onChange();refresh();};
     popup.querySelector('[data-all]').onclick=()=>{state.filters={};state.sort=null;close();onChange();refresh();};
-    popup.showPopover();const rect=th.getBoundingClientRect();popup.style.left=Math.max(8,Math.min(rect.left,innerWidth-340))+'px';popup.style.top=Math.max(8,Math.min(rect.bottom+5,innerHeight-popup.offsetHeight-8))+'px';popup.querySelector('input').focus();
+    g.AuditPopover.show(popup);const rect=th.getBoundingClientRect();popup.style.left=Math.max(8,Math.min(rect.left,innerWidth-340))+'px';popup.style.top=Math.max(8,Math.min(rect.bottom+5,innerHeight-popup.offsetHeight-8))+'px';popup.querySelector('input').focus();
    };
   });});
  }
