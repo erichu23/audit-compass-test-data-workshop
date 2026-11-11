@@ -51,7 +51,8 @@ function registryProjection(){
 }
 const registry=()=>registryProjection().records;
 const bounds=()=>config.registryBounds||{};
-const reportModel=()=>AuditReport.selectSections(AuditReport.compute(data,{registry:registry(),registryOriginal:rawRegistry(),registryAsOf:registryReportEnd(),registryBounds:bounds(),criteria:config.reportCriteria,cut:config.cut,...reportPeriod,threshold:config.bigThreshold,rates:exchangeRates()}),config.reportSections);
+const fullReportModel=()=>AuditReport.compute(data,{registry:registry(),registryOriginal:rawRegistry(),registryAsOf:registryReportEnd(),registryBounds:bounds(),criteria:config.reportCriteria,cut:config.cut,...reportPeriod,threshold:config.bigThreshold,rates:exchangeRates()});
+const reportModel=()=>AuditReport.selectSections(fullReportModel(),config.reportSections);
 const reportPage=()=>AuditReport.render(reportModel());
 const titles={registry:['对手方工商数据','生成和维护离线工商档案，并配置报告统计区间。'],coverage:['场景覆盖检查','按交易日期的自然年，确认当前数据是否含有预期测试样本。'],report:['报告核验','选择财年或日期区间，对照平台报告与当前测试数据。'],overview:['数据总览','从当前数据开始，按你的测试目标调整。'],master:['主档管理','新增或更换被审计单位，维护账号、员工及其他往来对象。'],rules:['流水生成规则','设定交易日期、笔数、金额和内部往来。'],anomaly:['异常场景','设定每年要植入的样本数。先预检，再正式生成。'],preview:['数据预览','生成前后都能逐行查看，核对真实导出内容。'],export:['导出测试数据','检查文件格式，再下载供平台上传的整套测试数据。']};
 const narrowScreen=matchMedia('(max-width: 760px)');
@@ -122,7 +123,7 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeFlyout();});
 renderSidebar();
-function recalc(){for(const row of data[K.flow].rows)E.convertRow(row,exchangeRates());analysis=E.analysis(data,{cut:config.cut,first:config.first,last:config.last,threshold:config.bigThreshold,rates:exchangeRates()});}
+function recalc({preserveRows=false}={}){if(!preserveRows)for(const row of data[K.flow].rows)E.convertRow(row,exchangeRates());analysis=E.analysis(data,{cut:config.cut,first:config.first,last:config.last,threshold:config.bigThreshold,rates:exchangeRates()});}
 function toast(text,error=false){const el=$('#toast');el.textContent=text;el.className='toast show'+(error?' error':'');clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.className='toast',4200);}
 function persist(){try{const {sampleNonMerchants,sampleAccountPlans,registryRecords,...settings}=config;localStorage.setItem('ac-forge-settings',JSON.stringify(settings));}catch{}}
 function badge(text,kind=''){return `<span class="badge ${kind}">${h(text)}</span>`;}
@@ -219,6 +220,7 @@ function renameCompanies(d,pairs){
  config.sampleNonMerchants=Object.fromEntries(Object.entries(config.sampleNonMerchants||{}).map(([name,list])=>[pairs.find(p=>p[0]===name)?.[1]||name,list]));
  persist();
 }
+let randomCompanyProposal=null,projectCheckpoint=null,checkpointComparison=null;
 function companyList(){
  const bank=new Map(),flow=new Map();
  for(const r of data[K.bank].rows)if(r[0])bank.set(r[2],(bank.get(r[2])||0)+1);
@@ -227,7 +229,47 @@ function companyList(){
   const name=r[0],mode=companyMode(name),n=flow.get(name)||0;
   return `<tr><td><input data-rename="${i}" value="${h(name)}" aria-label="第 ${i+1} 家公司名称"></td><td>${h(r[3])}</td><td>${bank.get(name)||0}</td><td>${n?num(n)+' 笔':badge('当前无流水','amber')}</td><td><select data-company-mode="${i}" aria-label="${h(name)}的生成范围">${[['auto','自动'],['true','生成流水'],['false','只留主档']].map(([v,l])=>`<option value="${v}" ${mode===v?'selected':''}>${l}</option>`).join('')}</select></td><td><button class="text danger" data-remove-company="${i}" aria-label="删除${h(name)}">删除</button></td></tr>`;
  }).join('');
- return `<section class="panel company-panel"><div class="panel-heading"><div><h3>被审计单位清单 ${badge(data[K.company].rows.length+' 家')}</h3><p class="muted">可添加任意家数。可在新增时自动创建模拟银行账号。</p></div><button class="primary" id="addCompany">＋ 新增被审计单位</button></div><div class="table-scroll"><table class="company-list"><thead><tr><th>公司名称</th><th>公司职能</th><th>银行账号数</th><th>当前流水</th><th>下次生成</th><th>操作</th></tr></thead><tbody>${rows||'<tr><td colspan="6">尚无被审计单位，请先新增。</td></tr>'}</tbody></table></div><div class="section-footer"><span class="muted">「只留主档」用于测试流水缺失；「自动」沿用原项目的生成范围设置。</span><button id="applyNames">保存名称修改</button></div></section>`;
+ return `<section class="panel company-panel"><div class="panel-heading"><div><h3>被审计单位清单 ${badge(data[K.company].rows.length+' 家')}</h3><p class="muted">可添加任意家数。可在新增时自动创建模拟银行账号。</p></div><div class="actions"><button id="showRandomCompanies">一键随机生成</button><button class="primary" id="addCompany">＋ 手动新增</button></div></div>${randomCompanyTools()}<div class="table-scroll"><table class="company-list"><thead><tr><th>公司名称</th><th>公司职能</th><th>银行账号数</th><th>当前流水</th><th>下次生成</th><th>操作</th></tr></thead><tbody>${rows||'<tr><td colspan="6">尚无被审计单位，请先新增。</td></tr>'}</tbody></table></div><div class="section-footer"><span class="muted">「只留主档」用于测试流水缺失；「自动」沿用原项目的生成范围设置。</span><button id="applyNames">保存名称修改</button></div></section>`;
+}
+function randomCompanyTools(){
+ return `<details id="randomCompanyTools" class="random-company-tools"><summary>随机生成被审计单位（确认后追加）</summary><p class="muted">真实名称从内置公开企业库抽取，可查看来源；虚构名称带“测试专用”前缀。自动避开当前主档及流水中已出现的名称。不会替换、重命名原公司或改动已有流水。</p><form id="randomCompanyForm"><div class="form-grid"><label class="field"><span>企业名称来源</span><select name="mode"><option value="real">真实企业名称</option><option value="fictional">虚构企业名称</option><option value="mixed">真实＋虚构（各约一半）</option></select></label><label class="field"><span>公司职能（可修改）</span><input name="role" value="子公司" required></label><label class="field"><span>生成公司数</span><input name="count" type="number" min="1" max="20" step="1" value="3" required></label><label class="field"><span>每家公司新增人民币账号</span><input name="accounts" type="number" min="0" max="10" step="1" value="0" required></label><label class="field"><span>下次生成流水</span><select name="flow"><option value="false">暂不参与，只新增主档</option><option value="true">参与（还需有可用账号）</option></select></label><label class="field"><span>生成编号（相同编号可复现候选）</span><input name="seed" value="AC-${Date.now().toString(36)}" required></label></div><div class="actions"><button type="submit" class="primary">随机生成预览</button><button type="button" id="randomCompanyReseed">换一批</button></div></form><div id="randomCompanyPreview" aria-live="polite"></div></details>`;
+}
+function previewRandomCompanies(){
+ const form=$('#randomCompanyForm');if(!form.reportValidity())return;
+ const f=new FormData(form),q={mode:f.get('mode'),count:Number(f.get('count')),accounts:Number(f.get('accounts')),seed:String(f.get('seed')).trim(),role:String(f.get('role')).trim(),excludeNames:generationSource[K.company].rows.map(r=>r[0]),reservedAccounts:[...generationSource[K.bank].rows.map(r=>String(r[0])),...Object.values(config.sampleAccountPlans||{}).flat().map(r=>r.account)]};
+ if(!q.seed)throw Error('请输入生成编号。');
+ const result=E.randomCompanies(data,q);
+ randomCompanyProposal={...result,raw:JSON.stringify(data),source:JSON.stringify({template:generationSource,plans:config.sampleAccountPlans}),flow:f.get('flow')==='true',accounts:q.accounts};
+ $('#randomCompanyPreview').innerHTML='<h4>候选清单 · '+result.companies.length+' 家</h4><table class="table"><thead><tr><th>公司名称</th><th>名称类型</th><th>来源</th><th>新增账号数</th></tr></thead><tbody>'+result.companies.map(r=>'<tr><td>'+h(r.name)+'</td><td>'+h(r.type)+'</td><td>'+(r.url?'<a target="_blank" rel="noopener noreferrer" href="'+h(r.url)+'">'+h(r.source)+'</a>':h(r.source))+'</td><td>'+q.accounts+'</td></tr>').join('')+'</tbody></table><p class="muted">确认后会增加被审计单位数量，因此公司覆盖、缺流水等指标可能变化；已有流水、客商和工商记录不会被重写。当前预览尚未保存到项目。</p><button type="button" class="primary" id="applyRandomCompanies">确认追加这 '+result.companies.length+' 家公司</button>';
+}
+function applyRandomCompanies(){
+ const proposal=randomCompanyProposal;if(!proposal)throw Error('请先生成候选清单。');
+ if(proposal.raw!==JSON.stringify(data)||proposal.source!==JSON.stringify({template:generationSource,plans:config.sampleAccountPlans}))throw Error('项目数据已变化，请重新生成预览后再追加。');
+ const names=new Set(proposal.companies.map(r=>r.name)),nextSource=E.copy(generationSource);
+ nextSource[K.company].rows.push(...E.copy(proposal.data[K.company].rows.filter(r=>names.has(r[0]))));
+ nextSource[K.bank].rows.push(...E.copy(proposal.data[K.bank].rows.filter(r=>names.has(r[2]))));
+ lastData=snapshot();data=proposal.data;generationSource=nextSource;
+ config.companyFlow={...config.companyFlow,...Object.fromEntries([...names].map(n=>[n,proposal.flow]))};
+ sourceLabel='已追加 · 随机被审计单位';randomCompanyProposal=null;persist();recalc({preserveRows:true});render();toast('已追加 '+names.size+' 家公司，已有流水保持原样，可通过撤销恢复。');
+}
+function makeProjectCheckpoint(label){
+ const point={label,time:new Date().toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'}),raw:JSON.stringify(data),registry:JSON.stringify(rawRegistry()),counts:Object.fromEntries(Object.entries(data).map(([name,t])=>[name,t.rows.length])),context:JSON.stringify({period:reportPeriod,criteria:config.reportCriteria,rates:exchangeRates(),registryEnd:registryReportEnd(),registryBounds:bounds(),threshold:config.bigThreshold,cut:config.cut})};
+ try{
+  const tables=AuditReport.workbook(fullReportModel());delete tables['本期流水明细'];
+  const status=tables['分析数据范围'];if(status){const column=status.headers.indexOf('最后更新时间');if(column>=0)status.rows=status.rows.map(r=>r.map((v,i)=>i===column?'':v));}
+  point.tables=Object.fromEntries(Object.entries(tables).map(([key,t])=>[key,JSON.stringify(t)]));
+ }catch(error){point.error=error.message;}
+ return point;
+}
+function compareProjectCheckpoint(){
+ if(!projectCheckpoint)throw Error('请先导入项目，或点击“记录当前基线”。');
+ const current=makeProjectCheckpoint('当前结果'),names=new Set([...Object.keys(projectCheckpoint.tables||{}),...Object.keys(current.tables||{})]);
+ checkpointComparison={dataSame:current.raw===projectCheckpoint.raw,registrySame:current.registry===projectCheckpoint.registry,contextSame:current.context===projectCheckpoint.context,error:current.error||projectCheckpoint.error,changed:[...names].filter(name=>current.tables?.[name]!==projectCheckpoint.tables?.[name]),counts:current.counts};
+ render();
+}
+function checkpointPanel(){
+ const base=projectCheckpoint,result=checkpointComparison;
+ return '<section class="panel"><div class="panel-heading"><div><h3>核验基线对比</h3><p class="muted">只读核对，不修复或重写数据。JSON 导入后自动记录基线；对比全部报告章节，忽略封面模拟更新时间，不受导出章节勾选影响。</p></div><div class="actions"><button id="recordProjectCheckpoint">记录当前基线</button><button class="primary" id="compareProjectCheckpoint" '+(base?'':'disabled')+'>检查与基线是否一致</button></div></div>'+(base?'<p>基线：'+h(base.label)+' · '+h(base.time)+'</p>':'<p class="muted">尚无基线。可先导入保存的项目，或将当前数据记录为基线。</p>')+(result?'<div class="checkpoint-results"><p>原始主档和流水：<b>'+(result.dataSame?'完全一致':'有变化')+'</b>；工商原始记录：<b>'+(result.registrySame?'完全一致':'有变化')+'</b>；期间、汇率和筛选条件：<b>'+(result.contextSame?'一致':'有变化')+'</b>。</p><p>'+(result.error?'统计暂不可比较：'+h(result.error):'变化的核验表：'+(result.changed.length?result.changed.map(h).join('、'):'无，统计结果一致'))+'</p><p class="muted">这是上次点击检查时的结果。修改数据或设置后，请重新检查；只有在期间、汇率、筛选条件一致时，才适合逐项比较金额。</p></div>':'')+'</section>';
 }
 function masterTools(){
  const catalog=E.companyCatalog(),tyc=catalog.filter(r=>r[2].includes('tianyancha.com')).length;
@@ -417,7 +459,7 @@ function coverageTable(a){
  return '<div class="table-scroll"><table class="coverage-table"><thead><tr><th>检查项</th>'+rows.map(r=>'<th>'+r[0]+' 年</th>').join('')+'</tr></thead><tbody>'+headers.slice(1).map((label,i)=>'<tr><th scope="row">'+h(label)+'</th>'+rows.map(r=>'<td class="'+(r[i+1]===0?'coverage-zero':'')+'">'+r[i+1]+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
 }
 function coveragePage(){
- return `<section class="panel"><div class="panel-heading"><div><h3>各年度实际命中的样本</h3><p class="muted">读取当前数据，按自然年统计。0 表示该年没有命中，可结合你的测试计划判断是否需要补样本。</p></div><button id="exportCoverage">下载场景检查 Excel</button></div>${coverageTable(analysis)}<p class="muted">大额按单笔等值人民币达到或超过 ${fmt(config.bigThreshold)} 元判断。余额断点按相邻交易计算；同名账户按整个工作簿是否有本方流水判断。</p></section>${stepActions('preview','查看流水明细','report','按报告期间核验')}`;
+ return checkpointPanel()+`<section class="panel"><div class="panel-heading"><div><h3>各年度实际命中的样本</h3><p class="muted">读取当前数据，按自然年统计。0 表示该年没有命中，可结合你的测试计划判断是否需要补样本。</p></div><button id="exportCoverage">下载场景检查 Excel</button></div>${coverageTable(analysis)}<p class="muted">大额按单笔等值人民币达到或超过 ${fmt(config.bigThreshold)} 元判断。余额断点按相邻交易计算；同名账户按整个工作簿是否有本方流水判断。</p></section>${stepActions('preview','查看流水明细','report','按报告期间核验')}`;
 }
 function preflight(){
  const candidate=E.generate(generationInput(),{...config,rates:exchangeRates()}).data;
@@ -611,12 +653,12 @@ async function importFiles(files){
  generationSource=E.copy(project?.template||data);
  if(project){
   config.companyFlow={};config.sampleNonMerchants={};config.sampleAccountPlans={};
-  config.registryRecords=[];config.registryBounds={};config.reportCriteria={};config.registryStartAnchor='';config.annualCounts={};config.rates=undefined;config.fx=E.DEFAULT_FX;
+  config.registryRecords=[];config.registryBounds={};config.reportCriteria={};config.reportSections=undefined;config.registryStartAnchor='';config.annualCounts={};config.rates=undefined;config.fx=E.DEFAULT_FX;
   Object.assign(config,project.config);reportPeriod=config.registryStartAnchor?{to:config.registryStartAnchor}:{};
  }
  if(importedRegistry!==null&&!project?.config.registryRecords)config.registryRecords=importedRegistry;
  config.registryIntervalVersion=R.INTERVAL_VERSION;registryFilter.range='';
- persist();sourceLabel=project?.label||'已导入 · '+n+'个文件';recalc();render();
+ persist();sourceLabel=project?.label||'已导入 · '+n+'个文件';recalc({preserveRows:!!project});randomCompanyProposal=null;projectCheckpoint=makeProjectCheckpoint(project?'项目导入时基线':'文件导入时基线');checkpointComparison=null;render();
  toast(project?'已打开保存的项目，旧版默认区间已兼容新版报告。':'已导入数据，并按当前区间重新统计。');
 }
 function editRow(index){const tableName=page==='preview'?preview:master;const isNew=index===null,r=isNew?[]:data[tableName].rows[index];$('#modalTitle').textContent=isNew?'新增记录':'编辑第'+(index+1)+'条记录';$('#modalFields').innerHTML=data[tableName].headers.map((hd,j)=>`<label class="field"><span>${h(hd)}</span><input data-cell="${j}" value="${h(r[j]??'')}" ${/日期|期间\d+_[从到]|开立时间|注销时间/.test(hd)?'placeholder="yyyy-mm-dd"':''}></label>`).join('');$('#rowForm').onsubmit=e=>{e.preventDefault();try{const newRow=[...$('#modalFields').querySelectorAll('input')].map((el,j)=>{const val=el.value,head=data[tableName].headers[j];if(!val)return null;if(/金额|余额|发生额|限额|_PM|_AMPT/.test(head)&&!/账号|编号/.test(head)){if(!Number.isFinite(Number(val)))throw Error(head+'必须是数字');return Number(val);}if(/对账年份|总交易行数/.test(head)){if(!/^\d+$/.test(val))throw Error(head+'必须是整数');return Number(val);}return val;});if(tableName===K.company){newRow[0]=String(newRow[0]??'').trim();if(!newRow[0]||!String(newRow[3]??'').trim())throw Error('公司名称和公司职能为必填项。');}lastData=snapshot();if(!isNew&&tableName===K.company&&r[0]!==newRow[0]){renameCompanies(data,[[r[0],newRow[0]]]);}if(isNew)data[tableName].rows.push(newRow);else data[tableName].rows[index]=newRow;E.annotate(data);generationSource=E.copy(data);recalc();$('#rowModal').close();render();toast('已保存记录并更新匹配标签。');}catch(e){toast(e.message,true);}};$('#rowModal').showModal();}
@@ -715,3 +757,12 @@ document.addEventListener('input',e=>{if(e.target.dataset.annual){const {annual,
 recalc();render();
 
 document.addEventListener('click',e=>{const id=e.target.closest('button')?.id;if(!['reportSectionsAll','reportSectionsClear'].includes(id))return;config.reportSections=id==='reportSectionsAll'?undefined:[];const top=window.scrollY;persist();render();window.scrollTo(0,top);});
+
+document.addEventListener('submit',e=>{if(e.target.id!=='randomCompanyForm')return;e.preventDefault();run(previewRandomCompanies);});
+document.addEventListener('click',e=>{const id=e.target.closest('button')?.id;
+ if(id==='showRandomCompanies'){$('#randomCompanyTools').open=true;$('#randomCompanyTools').scrollIntoView({block:'nearest',behavior:'smooth'});}
+ if(id==='randomCompanyReseed'){$('#randomCompanyForm [name=seed]').value='AC-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,6);run(previewRandomCompanies);}
+ if(id==='applyRandomCompanies')run(applyRandomCompanies);
+ if(id==='recordProjectCheckpoint')run(()=>{projectCheckpoint=makeProjectCheckpoint('手动记录的基线');checkpointComparison=null;render();toast('已记录当前基线，项目数据没有修改。');});
+ if(id==='compareProjectCheckpoint')run(compareProjectCheckpoint);
+});

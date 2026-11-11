@@ -919,3 +919,10 @@ body #content table thead th.ba-filtered .ba-filter-btn::before{background-image
 #masterGeneratorPanel .master-wizard-footer{padding:16px 0 0;margin:20px 0 0;background:transparent;display:flex;align-items:center;justify-content:space-between;border-top:1px solid #dce5ef}
 #masterGeneratorPanel .master-wizard-footer p{margin:0;font-size:12px;color:#637c98}
 @media(max-width:650px){#masterGeneratorPanel .master-wizard-footer{align-items:flex-start;gap:12px;flex-direction:column}}
+
+.random-company-tools{border:1px solid #d7e3f3;background:#f7faff;border-radius:8px;padding:14px 16px;margin-bottom:18px}
+.random-company-tools summary{font-weight:600;color:#245a9f;cursor:pointer}
+.random-company-tools form{margin:16px 0}.random-company-tools .actions{margin-top:12px}
+#randomCompanyPreview{margin-top:16px}#randomCompanyPreview table{width:100%;border-collapse:collapse}
+#randomCompanyPreview th,#randomCompanyPreview td{padding:9px;border:1px solid #dce5ef;text-align:left;overflow-wrap:anywhere}
+.checkpoint-results{padding:12px 16px;background:#f1f6fd;border-radius:6px;line-height:1.8;overflow-wrap:anywhere}
