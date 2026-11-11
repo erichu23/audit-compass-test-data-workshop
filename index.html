@@ -1384,6 +1384,12 @@ body .statement-sticky-clone-table thead th.ba-filtered .ba-filter-btn::before{
 
 @media print{.report-document .report-extra{display:none!important}}
 .table-query-tools{margin-left:7px;display:inline-flex;vertical-align:middle;position:static!important}.table-query-popup{position:fixed;inset:auto;margin:0;width:330px;max-height:85vh;overflow:auto;padding:18px;border:1px solid #dce5f1;border-radius:8px;color:#203b5d;box-shadow:0 8px 28px #15376322;background:#fff}.table-query-popup form{display:grid;gap:12px}.table-query-popup label{display:grid;gap:5px;font-size:12px}.table-query-popup label:has([type=checkbox]){display:flex;align-items:center}.table-query-popup input:not([type=checkbox]){width:100%;padding:8px;border:1px solid #ccd8e6;border-radius:5px}.table-query-range{display:grid;grid-template-columns:1fr 1fr;gap:10px}.table-query-popup small{font-size:11px;color:#758498}.table-query-popup .actions{gap:5px}.table-query-popup button{padding:7px 9px;font-size:12px}@media print{.table-query-tools,.table-query-popup{display:none!important}}
+
+/* Report verification tables grow with their content, without internal scrolling. */
+.report-document .table-scroll{max-height:none!important;height:auto!important;overflow:visible!important}
+.report-document .table-scroll>table{width:100%!important;min-width:0!important;table-layout:fixed}
+.report-document .table-scroll>table th,.report-document .table-scroll>table td{min-width:0!important;white-space:normal!important;overflow-wrap:anywhere}
+.report-document .table-scroll>svg{max-width:100%;height:auto}
 </style></head><body>
 <header class="layout-header">
  <div class="layout-header-name">Audit Compass测试数据工作坊 <span class="layout-header-project" id="sourceLabel"></span></div>
@@ -2654,7 +2660,7 @@ function detailRowsHTML(t,rows){
 }
 function tableHTML(t){
  const interactiveId=renderForExport?null:reportInteractiveTables.push(t)-1;
- const pageable=!renderAllRows&&!t.limit&&t.rows.length>20,id=pageable?reportPagerTables.push(t)-1:null;
+ const pageable=false,id=null;
  const visible=t.rows.slice(0,t.limit??(pageable?20:t.rows.length));
  const heading=h=>'<th>'+esc(reportHeader(h))+'</th>';
  const head=t.grouped?'<tr>'+t.headers.slice(0,2).map(h=>'<th rowspan="2">'+esc(reportHeader(h))+'</th>').join('')+'<th colspan="3">流入</th><th colspan="3">流出</th></tr><tr>'+t.headers.slice(2).map(h=>heading(h.slice(2))).join('')+'</tr>':'<tr>'+t.headers.map(heading).join('')+'</tr>';

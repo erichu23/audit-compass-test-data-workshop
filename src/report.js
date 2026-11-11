@@ -477,7 +477,7 @@ function detailRowsHTML(t,rows){
 }
 function tableHTML(t){
  const interactiveId=renderForExport?null:reportInteractiveTables.push(t)-1;
- const pageable=!renderAllRows&&!t.limit&&t.rows.length>20,id=pageable?reportPagerTables.push(t)-1:null;
+ const pageable=false,id=null;
  const visible=t.rows.slice(0,t.limit??(pageable?20:t.rows.length));
  const heading=h=>'<th>'+esc(reportHeader(h))+'</th>';
  const head=t.grouped?'<tr>'+t.headers.slice(0,2).map(h=>'<th rowspan="2">'+esc(reportHeader(h))+'</th>').join('')+'<th colspan="3">流入</th><th colspan="3">流出</th></tr><tr>'+t.headers.slice(2).map(h=>heading(h.slice(2))).join('')+'</tr>':'<tr>'+t.headers.map(heading).join('')+'</tr>';
