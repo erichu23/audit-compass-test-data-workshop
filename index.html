@@ -2203,6 +2203,10 @@ function scopeData(data,rows,own,from,to,cut){
 }
 const criteriaDefaults={daysMin:0,daysMax:365,insuredMax:50,capitalMinWan:0,capitalMaxWan:50,paidMin:20,paidMax:50,overlapAmount:1000000,overlapPercent:20,unknownAmount:500000};
 const criteriaFields={
+ registryDays:[['daysMin','经营天数下限'],['daysMax','经营天数上限']],
+ registryInsured:[['insuredMax','参保人数上限']],
+ registryCapital:[['capitalMinWan','注册资本下限（万元）'],['capitalMaxWan','注册资本上限（万元）']],
+ registryPaid:[['paidMin','实缴比例下限（%）'],['paidMax','实缴比例上限（%）']],
  registry:[['daysMin','经营天数下限'],['daysMax','经营天数上限'],['insuredMax','参保人数上限'],['capitalMinWan','注册资本下限（万元）'],['capitalMaxWan','注册资本上限（万元）'],['paidMin','实缴比例下限（%）'],['paidMax','实缴比例上限（%）']],
  overlap:[['overlapAmount','交易总额下限（元／原币）'],['overlapPercent','收支重合比例下限（%）']],
  unknown:[['unknownAmount','交易总额下限（元／原币）']]
@@ -2615,10 +2619,11 @@ function stackedHTML(c,onlyDirection){
  }).join('');
  return '<figure class="report-chart report-stacked"><figcaption>'+esc(c.name)+'</figcaption><ul class="report-stack-legend">'+c.rows.map((r,i)=>'<li><i style="background:'+fill(i,0)+'"></i><i style="background:'+fill(i,1)+'"></i>'+esc(r[0])+'</li>').join('')+'</ul><svg role="img" aria-label="'+esc(c.name+'，左为流入，右为流出')+'" viewBox="0 0 330 181"><text x="54" y="15">金额（百万元）</text>'+ticks+bars+'</svg>'+(peak?'':'<p class="muted">本期无命中金额</p>')+'</figure>';
 }
-function chartAndTable(chart,tables){
+function chartAndTable(chart,tables,criteria){
  const table=tables.find(t=>t.name===chart.name);
  const screen=tables.find(t=>t.name===chart.name+'筛选结果');
- const results=screen?(()=>{const r=screen.rows[0];return '<div class="report-registry-screen"><h4>系统设定筛选条件</h4><p class="report-note">'+esc(r[0])+'</p>'+tableHTML({name:'',hideHeader:true,headers:['指标','本期结果'],rows:[['识别对手方数',integer(r[1])],['识别流入金额/笔数',currency.format(r[2])+'百万/'+integer(r[3])+'笔'],['识别流出金额/笔数',currency.format(r[4])+'百万/'+integer(r[5])+'笔']]})+'</div>';})():'';
+ const filterGroup=chart.name.startsWith('经营天数')?'registryDays':chart.name.startsWith('参保人数')?'registryInsured':chart.name.startsWith('注册资本')?'registryCapital':'registryPaid';
+ const results=screen?(()=>{const r=screen.rows[0];return '<div class="report-registry-screen"><h4>系统设定筛选条件</h4>'+(criteria?criteriaForm(filterGroup,criteria):'')+'<p class="report-note">'+esc(r[0])+'</p>'+tableHTML({name:'',hideHeader:true,headers:['指标','本期结果'],rows:[['识别对手方数',integer(r[1])],['识别流入金额/笔数',currency.format(r[2])+'百万/'+integer(r[3])+'笔'],['识别流出金额/笔数',currency.format(r[4])+'百万/'+integer(r[5])+'笔']]})+'</div>';})():'';
  return stackedHTML(chart)+(table?tableHTML(table):'')+results;
 }
 function trendHTML(t){
@@ -2724,7 +2729,7 @@ function sectionBody(s,m,continuations){
   const [summary,details]=tables;
   const cards=summary.rows.slice(0,4).map(([label,count,amount])=>metricHTML(label,typeof count==='number'?count+' 家 / '+currency.format(amount)+' 百万元':missingValue));
   const main=charts.slice(0,3),more=charts.filter(c=>!main.includes(c));
-  return sideBySide(cards,'report-four')+sideBySide(main.map(c=>chartAndTable(c,tables)),'report-three')+extra('合规汇总与筛选条件',tableHTML(summary)+criteriaForm('registry',m.criteria,m.registryBounds))+extra('注册资本金额及诉讼数量区间',sideBySide(more.map(c=>chartAndTable(c,tables))))+extra('本期工商匹配明细',tableHTML(tables.at(-1)))+extra('模拟黑名单命中明细',tableHTML(details));
+  return sideBySide(cards,'report-four')+sideBySide(main.map(c=>chartAndTable(c,tables,m.criteria)),'report-three')+extra('合规汇总',tableHTML(summary))+extra('注册资本金额及诉讼数量区间',sideBySide(more.map(c=>chartAndTable(c,tables,m.criteria))))+extra('本期工商匹配明细',tableHTML(tables.at(-1)))+extra('模拟黑名单命中明细',tableHTML(details));
  }
  if(s.id==='people')return sideBySide(tables[0].rows.map(r=>tableHTML({name:r[0],headers:['人数 / 交易额 / 交易笔数','本期结果'],rows:[
   ['识别人数',r[1]+' 人'],['识别流入金额 / 笔数',currency.format(r[2])+' 百万元 / '+integer(r[3])+' 笔'],['识别流出金额 / 笔数',currency.format(r[4])+' 百万元 / '+integer(r[5])+' 笔']
