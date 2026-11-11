@@ -675,17 +675,31 @@ function formatTables(tables,code){return Object.fromEntries(Object.entries(tabl
 function tocHTML(m){
  return '<nav class="report-toc" aria-label="报告目录"><h2>报告目录</h2><p>Table of Contents</p><ol>'+m.sections.filter(s=>!['cover','background'].includes(s.id)).map(s=>(chapterTitles[s.id]?'<li class="toc-chapter"><a href="#report-'+s.id+'">'+esc(chapterTitles[s.id])+'</a></li>':'')+'<li><a href="#report-'+s.id+'">'+esc(s.title)+'</a></li>').join('')+'</ol></nav>';
 }
+function selectSections(model,ids){
+ const allSections=model.allSections||model.sections;
+ const available=allSections.filter(s=>s.id!=='background');
+ const selected=Array.isArray(ids)?ids:available.map(s=>s.id).concat('toc');
+ return {...model,allSections,selectedSectionIds:selected,sections:available.filter(s=>selected.includes(s.id))};
+}
+function sectionPicker(m){
+ const all=(m.allSections||m.sections).filter(s=>s.id!=='background');
+ const selected=m.selectedSectionIds||all.map(s=>s.id).concat('toc');
+ const choices=[...all.slice(0,1),{id:'toc',title:'报告目录'},...all.slice(1)];
+ return '<fieldset class="report-section-picker"><legend>选择导出章节</legend><div class="actions"><button type="button" id="reportSectionsAll">全选</button><button type="button" id="reportSectionsClear">清空选择</button><span>已选 '+selected.filter(id=>choices.some(s=>s.id===id)).length+' / '+choices.length+' 项</span></div><div class="report-section-options">'+choices.map(s=>'<label><input type="checkbox" data-report-section="'+esc(s.id)+'"'+(selected.includes(s.id)?' checked':'')+'> '+esc(s.id==='cover'?'报告封面':s.title)+'</label>').join('')+'</div><p class="muted">所选章节同步显示在下方预览，并用于 Word、打印及本期核验 Excel；目录仅列出所选章节，章节编号保持原报告编号。</p></fieldset>';
+}
 function reportPages(m){
- const scope=m.sections.find(s=>s.id==='scope');
+ const scope=(m.allSections||m.sections).find(s=>s.id==='scope');
  const accountSummary=subhead('1.1.2 已上传资金账户分析')+
   metricHTML('已上传账户个数',Object.fromEntries(scope.tables[0].rows)['已上传账号个数']+' 个')+
   sideBySide(scope.tables.slice(3).map(t=>tableHTML({...t,name:t.name.includes('期末余额')?'按账户余额分析':'按账户交易总额分析'})));
  const pieces=m.sections.filter(s=>s.id!=='background').flatMap(s=>{
   const continuations=[];
   const content=reportSection(s,m,continuations);
-  if(s.id==='cover')return [content,tocHTML(m)];
-  return [s.id==='features'?accountSummary+content:content,...continuations];
+  if(s.id==='cover')return [content];
+  const hasScope=m.sections.some(s=>s.id==='scope'),hasFeatures=m.sections.some(s=>s.id==='features');
+  return [s.id==='features'&&hasScope?accountSummary+content:s.id==='scope'&&!hasFeatures?content+accountSummary:content,...continuations];
  });
+ if(!m.selectedSectionIds||m.selectedSectionIds.includes('toc'))pieces.splice(m.sections.some(s=>s.id==='cover')?1:0,0,tocHTML(m));
  const tocPages=new Map();
  pieces.forEach((content,i)=>{for(const match of content.matchAll(/<(?:h2|h3)[^>]*>([^<]+)<\/(?:h2|h3)>/g))if(!tocPages.has(match[1]))tocPages.set(match[1],i+1);});
  for(let i=0;i<pieces.length;i++)if(pieces[i].includes('class="report-toc"'))pieces[i]=pieces[i].replace(/(<li[^>]*><a[^>]*>)([^<]+)(<\/a>)(<\/li>)/g,(_,open,title,close,end)=>open+title+close+'<span class="report-toc-dots"></span><span class="report-toc-page">'+(tocPages.get(title)||'')+'</span>'+end);
@@ -703,8 +717,8 @@ function render(m,{allRows=false,forExport=false}={}){
   if(end>=(m.minimum||m.from)&&start<=(m.maximum||m.to))presets.push([y+' 财年 · '+start+' ～ '+end,start+'|'+end,y]);
  }
  const current=m.from+'|'+m.to;
- const output='<section class="panel report-controls"><div class="panel-heading"><h3>选择分析与导出期间</h3><div class="actions"><button id="reportPrint">打印横版报告</button><button id="reportWord">下载 Word 报告</button><button class="primary" id="reportExport">下载本期核验 Excel</button></div></div><div class="report-inputs"><label>金额口径<select id="reportCurrency"><option value="">折算人民币（CNY）</option>'+m.currencies.map(code=>'<option value="'+code+'"'+(code===m.originalCurrency?' selected':'')+'>原币 · '+code+'</option>').join('')+'</select></label><label>财年截止日<select id="reportCut">'+['03-31','06-30','09-30','12-31'].map(c=>'<option'+(c===m.cut?' selected':'')+'>'+c+'</option>').join('')+'</select></label><label>期间快捷选择<select id="reportPreset"><option value="">自定义日期</option>'+presets.map(([label,value,year])=>'<option value="'+esc(value)+'"'+(year?' data-year="'+year+'"':'')+(value===current?' selected':'')+'>'+esc(label)+'</option>').join('')+'</select></label><label>开始日期<input id="reportFrom" type="date" value="'+esc(m.from)+'"></label><label>结束日期<input id="reportTo" type="date" value="'+esc(m.to)+'"></label><button id="reportApply">应用区间</button></div><p class="muted">日期包含首尾两天。财年按结束年份命名；导出使用已应用的期间，含核验表及本期流水。上传整套数据请使用「测试数据生成 → 导出测试数据」。</p><nav class="report-index" aria-label="报告章节">'+m.sections.filter(s=>s.id!=='background').map(s=>'<a href="#report-'+s.id+'">'+esc(s.title.startsWith('综合')?'封面':s.title.split(' ').slice(0,2).join(' '))+'</a>').join('')+'</nav></section>'+
- '<article class="report-document" aria-label="综合分析报告预览">'+amountLabels(reportPages(m),m.originalCurrency)+'</article>';
+ const output='<section class="panel report-controls"><div class="panel-heading"><h3>选择分析与导出期间</h3><div class="actions"><button id="reportPrint"'+(m.sections.length?'':' disabled')+'>打印横版报告</button><button id="reportWord"'+(m.sections.length?'':' disabled')+'>下载 Word 报告</button><button class="primary" id="reportExport"'+(m.sections.length?'':' disabled')+'>下载本期核验 Excel</button></div></div><div class="report-inputs"><label>金额口径<select id="reportCurrency"><option value="">折算人民币（CNY）</option>'+m.currencies.map(code=>'<option value="'+code+'"'+(code===m.originalCurrency?' selected':'')+'>原币 · '+code+'</option>').join('')+'</select></label><label>财年截止日<select id="reportCut">'+['03-31','06-30','09-30','12-31'].map(c=>'<option'+(c===m.cut?' selected':'')+'>'+c+'</option>').join('')+'</select></label><label>期间快捷选择<select id="reportPreset"><option value="">自定义日期</option>'+presets.map(([label,value,year])=>'<option value="'+esc(value)+'"'+(year?' data-year="'+year+'"':'')+(value===current?' selected':'')+'>'+esc(label)+'</option>').join('')+'</select></label><label>开始日期<input id="reportFrom" type="date" value="'+esc(m.from)+'"></label><label>结束日期<input id="reportTo" type="date" value="'+esc(m.to)+'"></label><button id="reportApply">应用区间</button></div><p class="muted">日期包含首尾两天。财年按结束年份命名；导出使用已应用的期间，含核验表及本期流水。上传整套数据请使用「测试数据生成 → 导出测试数据」。</p>'+sectionPicker(m)+'<nav class="report-index" aria-label="报告章节">'+m.sections.filter(s=>s.id!=='background').map(s=>'<a href="#report-'+s.id+'">'+esc(s.title.startsWith('综合')?'封面':s.title.split(' ').slice(0,2).join(' '))+'</a>').join('')+'</nav></section>'+
+ '<article class="report-document" aria-label="综合分析报告预览">'+(m.sections.length?amountLabels(reportPages(m),m.originalCurrency):'<p class="empty">请至少勾选一个报告章节，预览和导出将按所选内容生成。</p>')+'</article>';
  renderAllRows=false;renderForExport=false;
  return output;
 }
@@ -718,5 +732,5 @@ function workbook(m){
  }
  return {...tables,'核验口径':{headers:['章节','口径'],rows:[...m.sections.map(s=>[s.title,amountLabels(s.note,m.originalCurrency)]),...m.sections.flatMap(s=>s.tables.filter(t=>t.note).map(t=>[t.name,amountLabels(t.note,m.originalCurrency)])),['分析期间',rangeLabel(m.from,m.to)],['金额口径',m.originalCurrency?'原币 '+m.originalCurrency:'折算人民币'],['测试汇率',m.fxLabel],['大额判断阈值（CNY）',currency.format(m.threshold)]]},'本期流水明细':m.flow};
 }
-g.AuditReport={theme,compute,render,workbook,fiscalPeriod,mountPagers,parseCriteria,formatTables};
+g.AuditReport={theme,compute,render,workbook,selectSections,fiscalPeriod,mountPagers,parseCriteria,formatTables};
 })(globalThis);
