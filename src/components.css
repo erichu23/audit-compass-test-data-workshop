@@ -733,3 +733,19 @@ body .statement-sticky-clone-table thead th.ba-filtered .ba-filter-btn::before{
 .registry-start-tools .registry-sync{display:flex;align-items:center;gap:8px;align-self:center}
 .registry-start-tools input[type=checkbox]{width:16px;height:16px;margin:0}
 @media(max-width:650px){.registry-start-tools{padding:14px}.registry-start-tools .registry-controls{display:grid;grid-template-columns:1fr}.registry-start-tools input[type=date],.registry-start-tools select{width:100%}}
+
+/* Consistent report furniture and page-numbered contents. */
+.report-sheet-header,.report-sheet-footer{font-family:"Microsoft YaHei","微软雅黑",sans-serif;line-height:1.5;flex-shrink:0;white-space:nowrap}
+.report-sheet-header>span:first-child,.report-sheet-footer>span:first-child{flex:1;text-align:left}
+.report-sheet-header>span:last-child,.report-sheet-footer>span:last-child{flex:1;text-align:right}
+.report-sheet-footer>span:nth-child(2){text-align:center}
+.report-toc li::after{display:none}
+.report-toc-dots{flex:1;border-bottom:1px dotted #b5c2d1;min-width:20px}
+.report-toc-page{min-width:24px;text-align:right;font-variant-numeric:tabular-nums}
+
+.report-document .report-toc{margin:18px 0 28px}
+.report-document .report-toc h2{font-size:25px;margin-bottom:18px}
+.report-document .report-toc>p{font-size:15px;margin:12px 0}
+.report-document .report-toc li{font-size:14px;line-height:1.8;padding-top:6px;padding-bottom:6px}
+.report-document .report-toc .toc-chapter{margin-top:8px}
+@media print{.report-sheet-footer>span:first-child{display:none}}

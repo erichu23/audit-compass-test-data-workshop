@@ -676,6 +676,9 @@ function reportPages(m){
   if(s.id==='cover')return [content,tocHTML(m)];
   return [s.id==='features'?accountSummary+content:content,...continuations];
  });
+ const tocPages=new Map();
+ pieces.forEach((content,i)=>{for(const match of content.matchAll(/<(?:h2|h3)[^>]*>([^<]+)<\/(?:h2|h3)>/g))if(!tocPages.has(match[1]))tocPages.set(match[1],i+1);});
+ for(let i=0;i<pieces.length;i++)if(pieces[i].includes('class="report-toc"'))pieces[i]=pieces[i].replace(/(<li[^>]*><a[^>]*>)([^<]+)(<\/a>)(<\/li>)/g,(_,open,title,close,end)=>open+title+close+'<span class="report-toc-dots"></span><span class="report-toc-page">'+(tocPages.get(title)||'')+'</span>'+end);
  return pieces.map((content,i)=>'<div class="report-sheet">'+'<div class="report-sheet-header"><span>毕马威审计罗盘</span><span>综合分析报告（年审适用）</span></div>'+
   '<div class="report-sheet-content">'+content+'</div><footer class="report-sheet-footer"><span>审计项目资料</span><span>'+esc(rangeLabel(m.from,m.to))+'</span><span>第 '+(i+1)+' / '+pieces.length+' 页</span></footer></div>').join('');
 }

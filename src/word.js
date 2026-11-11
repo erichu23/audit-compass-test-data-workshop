@@ -3,13 +3,17 @@
 const D=g.docx,theme=g.AuditReport.theme;
 const pageWidth=15704;
 const font={ascii:'Microsoft YaHei',hAnsi:'Microsoft YaHei',eastAsia:'微软雅黑',cs:'Microsoft YaHei'};
+class ReportTableOfContents extends D.TableOfContents {
+ getTabStopsForLevel(level){return super.getTabStopsForLevel(level,pageWidth);}
+}
+let headingBookmarks=new WeakMap(),reportTocEntries=[];
 const border={style:D.BorderStyle.SINGLE,size:4,color:theme.border};
 const borders={top:border,bottom:border,left:border,right:border,insideHorizontal:border,insideVertical:border};
-function paragraph(text,{heading,align,bold=false,color=theme.ink,size=18}={}){
+function paragraph(text,{heading,align,bold=false,color=theme.ink,size=18,bookmark}={}){
  return new D.Paragraph({
   ...(heading?{heading}:{}),
   alignment:align,spacing:{after:65,line:240},keepNext:!!heading,
-  children:[new D.TextRun({text:String(text??''),font,size,bold,color})]
+  children:bookmark?[new D.Bookmark({id:bookmark,children:[new D.TextRun({text:String(text??''),font,size,bold,color})]})]:[new D.TextRun({text:String(text??''),font,size,bold,color})]
  });
 }
 async function svgImage(svg,width){
@@ -81,6 +85,11 @@ async function blocks(node,width,context={}){
   const tag=child.tagName.toLowerCase();
   if(['script','style','button','input','select','form','summary'].includes(tag)||child.matches('.pagination,.report-sheet-header,.report-sheet-footer,.report-calculation-note'))continue;
   if(tag==='details'&&!child.open)continue;
+  if(child.matches('.report-toc')){
+   out.push(paragraph('报告目录',{bold:true,color:theme.navy,size:32}));
+   out.push(new ReportTableOfContents('报告目录',{hyperlink:true,headingStyleRange:'1-2',cachedEntries:reportTocEntries,beginDirty:true}));
+   continue;
+  }
   if(tag==='svg'){out.push(await svgImage(child,width));continue;}
   if(tag==='table'){out.push(await table(child,width));continue;}
   if(child.matches('.report-panes')){
@@ -97,8 +106,8 @@ async function blocks(node,width,context={}){
   }
   if(/^h[1-4]$/.test(tag)){
    const toc=!!child.closest('.report-toc');
-   const main=tag==='h2',level=main?D.HeadingLevel.HEADING_1:D.HeadingLevel.HEADING_2;
-   out.push(paragraph(text(child),{heading:child.textContent.includes('综合分析报告（年审适用）')?D.HeadingLevel.TITLE:level,bold:true,color:toc?theme.navy:theme.ink,size:main?32:23}));
+   const main=tag==='h2',level=headingBookmarks.has(child)?(main?D.HeadingLevel.HEADING_1:D.HeadingLevel.HEADING_2):undefined;
+   out.push(paragraph(text(child),{heading:child.textContent.includes('综合分析报告（年审适用）')?D.HeadingLevel.TITLE:level,bold:true,color:toc?theme.navy:theme.ink,size:main?32:23,bookmark:headingBookmarks.get(child)}));
    if(toc)out.push(new D.Table({
     layout:D.TableLayoutType.FIXED,width:{size:width,type:D.WidthType.DXA},columnWidths:[Math.floor(width*.12),Math.ceil(width*.88)],
     borders:Object.fromEntries(Object.keys(borders).map(key=>[key,{style:D.BorderStyle.NONE,size:0,color:'FFFFFF'}])),
@@ -130,19 +139,32 @@ async function report(model){
  const container=document.createElement('div');
  container.innerHTML=g.AuditReport.render(model,{allRows:true});
  const pages=[...container.querySelectorAll('.report-sheet-content')];
- const header=new D.Header({children:[paragraph('毕马威审计罗盘                                       综合分析报告（年审适用）',{color:theme.muted,size:15})]});
+ headingBookmarks=new WeakMap();reportTocEntries=[];
+ pages.forEach((page,i)=>page.querySelectorAll('.report-chapter,.report-section > h3').forEach(node=>{
+  const id='ReportHeading'+(reportTocEntries.length+1);headingBookmarks.set(node,id);
+  reportTocEntries.push({title:text(node),level:node.matches('.report-chapter')?1:2,page:i+1,href:id});
+ }));
+ const run=t=>new D.TextRun({text:t,font,size:15,color:theme.muted});
+ const header=new D.Header({children:[new D.Paragraph({
+  spacing:{after:60},tabStops:[{type:D.TabStopType.RIGHT,position:pageWidth}],
+  border:{bottom:{style:D.BorderStyle.SINGLE,size:4,color:theme.border}},
+  children:[run('毕马威审计罗盘'),run('\t综合分析报告（年审适用）')]
+ })]});
  const footer=new D.Footer({children:[new D.Paragraph({
-  alignment:D.AlignmentType.RIGHT,children:[new D.TextRun({text:model.from+' ～ '+model.to+'    第 ',size:15,color:theme.muted}),
-   new D.TextRun({children:[D.PageNumber.CURRENT],size:15,color:theme.muted}),new D.TextRun({text:' 页',size:15,color:theme.muted})]
+  spacing:{before:60},tabStops:[{type:D.TabStopType.CENTER,position:Math.floor(pageWidth/2)},{type:D.TabStopType.RIGHT,position:pageWidth}],
+  border:{top:{style:D.BorderStyle.SINGLE,size:4,color:theme.border}},
+  children:[run('审计项目资料'),run('\t'+model.from+' ～ '+model.to),run('\t第 '),
+   new D.TextRun({children:[D.PageNumber.CURRENT],font,size:15,color:theme.muted}),run(' / '),
+   new D.TextRun({children:[D.PageNumber.TOTAL_PAGES],font,size:15,color:theme.muted}),run(' 页')]
  })]});
  const sections=[];
  for(const page of pages)sections.push({
-  properties:{type:D.SectionType.NEXT_PAGE,page:{size:{width:11906,height:16838,orientation:D.PageOrientation.LANDSCAPE},margin:{top:567,right:567,bottom:567,left:567,header:250,footer:250}}},
+  properties:{type:D.SectionType.NEXT_PAGE,page:{size:{width:11906,height:16838,orientation:D.PageOrientation.LANDSCAPE},margin:{top:850,right:567,bottom:850,left:567,header:300,footer:300}}},
   headers:{default:header},footers:{default:footer},children:[...await blocks(page,pageWidth),new D.Paragraph({spacing:{before:0,after:0,line:20},children:[new D.TextRun({text:'',size:2})]})]
  });
  const wordDocument=new D.Document({
-  creator:'Audit Compass',title:'综合分析报告（年审适用）',
-  styles:{default:{document:{run:{font,size:18},paragraph:{spacing:{after:65}}}}},
+  features:{updateFields:true},creator:'Audit Compass',title:'综合分析报告（年审适用）',
+  styles:{default:{document:{run:{font,size:18},paragraph:{spacing:{after:65}}}},paragraphStyles:[{id:'TOC1',name:'toc 1',basedOn:'Normal',run:{font,size:24,bold:true,color:theme.ink},paragraph:{spacing:{before:100,after:120,line:320}}},{id:'TOC2',name:'toc 2',basedOn:'Normal',run:{font,size:24,color:theme.ink},paragraph:{indent:{left:240},spacing:{after:120,line:320}}}]},
   sections
  });
  return D.Packer.toBlob(wordDocument);
