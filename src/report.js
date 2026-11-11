@@ -477,7 +477,7 @@ function detailRowsHTML(t,rows){
 }
 function tableHTML(t){
  const interactiveId=renderForExport?null:reportInteractiveTables.push(t)-1;
- const pageable=false,id=null;
+ const pageable=!renderAllRows&&!t.limit&&t.rows.length>20,id=pageable?reportPagerTables.push(t)-1:null;
  const visible=t.rows.slice(0,t.limit??(pageable?20:t.rows.length));
  const heading=h=>'<th>'+esc(reportHeader(h))+'</th>';
  const head=t.grouped?'<tr>'+t.headers.slice(0,2).map(h=>'<th rowspan="2">'+esc(reportHeader(h))+'</th>').join('')+'<th colspan="3">流入</th><th colspan="3">流出</th></tr><tr>'+t.headers.slice(2).map(h=>heading(h.slice(2))).join('')+'</tr>':'<tr>'+t.headers.map(heading).join('')+'</tr>';
@@ -488,25 +488,16 @@ function tableHTML(t){
 const printPagers=[];
 function mountPagers(){
  printPagers.length=0;
- for(const element of document.querySelectorAll('[data-report-table]')){
-  const t=reportInteractiveTables[Number(element.dataset.reportTable)],tbody=element.tBodies[0];
-  const el=element.closest('.table-scroll').nextElementSibling;
-  const pager=el?.matches('[data-report-pager]')?el:null;
-  const source=t.limit?t.rows.slice(0,t.limit):t.rows;
-  const isTotal=r=>!r[0]&&/合计|小计|总计|其中|其他/.test(String(r[1]||''));
-  const pinned=source.filter(isTotal),rows=source.filter(r=>!isTotal(r)),state={};
+ for(const el of document.querySelectorAll('[data-report-pager]')){
+  const t=reportPagerTables[Number(el.dataset.reportPager)],tbody=el.previousElementSibling.querySelector('tbody');
   let page=1,pageSize=20;
   const draw=()=>{
-   const hits=g.AuditTableTools.query(rows,state),visible=pager?hits.slice((page-1)*pageSize,page*pageSize):hits;
-   const leading=pinned.filter(r=>/合计|总计/.test(String(r[1]))),trailing=pinned.filter(r=>!leading.includes(r));
-   tbody.innerHTML=detailRowsHTML(t,state.sort||Object.keys(state.filters||{}).length?[...leading,...visible,...trailing]:(pager?source.slice((page-1)*pageSize,page*pageSize):source));
-   if(pager)g.renderAuditPager(pager,{total:hits.length,page,pageSize,onPage:n=>{page=n;draw();},onPageSize:n=>{pageSize=n;page=1;draw();}});
+   tbody.innerHTML=detailRowsHTML(t,t.rows.slice((page-1)*pageSize,page*pageSize));
+   g.renderAuditPager(el,{total:t.rows.length,page,pageSize,onPage:n=>{page=n;draw();},onPageSize:n=>{pageSize=n;page=1;draw();}});
   };
-  g.AuditTableTools.attach(element,state,()=>{page=1;draw();});
   draw();
-  printPagers.push({showAll:()=>{tbody.innerHTML=detailRowsHTML(t,source);},restore:draw});
+  printPagers.push({showAll:()=>{tbody.innerHTML=detailRowsHTML(t,t.rows);},restore:draw});
  }
-
 }
 g.addEventListener?.('beforeprint',()=>printPagers.forEach(p=>p.showAll()));
 g.addEventListener?.('afterprint',()=>printPagers.forEach(p=>p.restore()));
@@ -564,7 +555,7 @@ function sideBySide(items,variant=''){
  return '<div class="report-panes '+variant+'">'+items.map(x=>'<div class="report-pane">'+x+'</div>').join('')+'</div>';
 }
 function subhead(title){return '<h4 class="report-subhead">'+esc(title)+'</h4>';}
-function extra(title,content){if(renderForExport)return '';return '<details open class="report-extra"><summary>'+esc(title)+'</summary>'+content+'</details>';}
+function extra(title,content){if(renderForExport)return '';return '<details class="report-extra"><summary>'+esc(title)+'</summary>'+content+'</details>';}
 function metricHTML(label,main,detail=''){
  return '<div class="report-metric"><span>'+esc(label)+'</span><strong>'+esc(main)+'</strong>'+(detail?'<small>'+esc(detail)+'</small>':'')+'</div>';
 }
