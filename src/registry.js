@@ -105,7 +105,7 @@ function riskTables(records,asOf){
 }
 function bucket(n,bounds,id){
  if(n==null||!Number.isFinite(n)||n<0)return bounds.length+1;
- const index=bounds.findIndex((edge,i)=>n<edge||(['capital','days','insured'].includes(id)&&i===bounds.length-1&&n===edge));
+ const index=bounds.findIndex((edge,i)=>n<edge||(['capital','days','insured'].includes(id)&&i>0&&n===edge));
  return index<0?bounds.length:index;
 }
 function readRecord(input){

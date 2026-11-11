@@ -39,11 +39,11 @@ const config=builtIn.config;
 try{const saved=JSON.parse(localStorage.getItem('ac-forge-settings')||'null');if(saved){if(!saved.annualCounts)for(const [k,v]of Object.entries({big:6,blankCP:15,blankSummary:15,balanceErrors:6,sameTime:6,sameMissing:5}))if(saved[k]===v)delete saved[k];delete saved.sampleNonMerchants;delete saved.sampleAccountPlans;const annual=saved.annualCounts;delete saved.annualCounts;Object.assign(config,AuditRegistry.migrateSettings(saved));for(const [year,counts] of Object.entries(annual||{}))config.annualCounts[year]={...config.annualCounts[year],...counts};}}catch{}
 const icons={overview:'◫',master:'▦',rules:'≋',anomaly:'◎',preview:'▤',export:'↗'};
 if(!Number.isFinite(config.fx)||config.fx<=0)config.fx=E.DEFAULT_FX;
-let reportPeriod=config.registryStartAnchor?{to:config.registryStartAnchor}:{};
+let reportPeriod={};
 const exchangeRates=()=>({USD:config.fx,...config.rates});
 const rawRegistry=()=>config.registryRecords||[];
 let registryProjectionCache=null;
-function registryReportEnd(){return reportPeriod.to||config.registryStartAnchor||data[K.flow].rows.reduce((last,r)=>{const d=String(r[5]??'').slice(0,10);return d>last?d:last;},'')||config.end;}
+function registryReportEnd(){return config.registryStartAnchor||data[K.flow].rows.reduce((last,r)=>{const d=String(r[5]??'').slice(0,10);return d>last?d:last;},'')||config.end;}
 function registryProjection(){
  const records=rawRegistry(),asOf=registryReportEnd(),signature=JSON.stringify(records);
  if(!registryProjectionCache||registryProjectionCache.asOf!==asOf||registryProjectionCache.signature!==signature)registryProjectionCache={...AuditRegistry.automaticDates(records,asOf),asOf,signature};
@@ -51,7 +51,7 @@ function registryProjection(){
 }
 const registry=()=>registryProjection().records;
 const bounds=()=>config.registryBounds||{};
-const reportModel=()=>AuditReport.compute(data,{registry:registry(),registryOriginal:rawRegistry(),registryBounds:bounds(),criteria:config.reportCriteria,cut:config.cut,...reportPeriod,threshold:config.bigThreshold,rates:exchangeRates()});
+const reportModel=()=>AuditReport.compute(data,{registry:registry(),registryOriginal:rawRegistry(),registryAsOf:registryReportEnd(),registryBounds:bounds(),criteria:config.reportCriteria,cut:config.cut,...reportPeriod,threshold:config.bigThreshold,rates:exchangeRates()});
 const reportPage=()=>AuditReport.render(reportModel());
 const titles={registry:['对手方工商数据','生成和维护离线工商档案，并配置报告统计区间。'],coverage:['场景覆盖检查','按交易日期的自然年，确认当前数据是否含有预期测试样本。'],report:['报告核验','选择财年或日期区间，对照平台报告与当前测试数据。'],overview:['数据总览','从当前数据开始，按你的测试目标调整。'],master:['主档管理','新增或更换被审计单位，维护账号、员工及其他往来对象。'],rules:['流水生成规则','设定交易日期、笔数、金额和内部往来。'],anomaly:['异常场景','设定每年要植入的样本数。先预检，再正式生成。'],preview:['数据预览','生成前后都能逐行查看，核对真实导出内容。'],export:['导出测试数据','检查文件格式，再下载供平台上传的整套测试数据。']};
 const narrowScreen=matchMedia('(max-width: 760px)');
@@ -350,9 +350,7 @@ document.addEventListener('change',e=>{
  try{
   const end=e.target.value;
   R.automaticDates(rawRegistry(),end);
-  const from=reportPeriod.from||data[K.flow].rows.reduce((first,r)=>{const d=String(r[5]??'').slice(0,10);return d&&(!first||d<first)?d:first;},'')||config.start;
-  if(from&&end<from)throw Error('报告结束日期不能早于报告开始日期，请先调整报告期间。');
-  lastData=snapshot();config.registryStartAnchor=end;reportPeriod={...reportPeriod,to:end,fiscalYear:undefined};registryAsOf=end;
+  lastData=snapshot();config.registryStartAnchor=end;registryAsOf=end;
   persist();render();toast('已按原经营开始时间重新计算经营天数，报告核验同步；导入原值和风险数量未改动。');
  }catch(error){e.target.value=registryDate();toast(error.message,true);}
 });
@@ -382,9 +380,9 @@ function registryPage(){
  shown.rows.forEach((row,i)=>{const calculated=filtered[i].days,raw=originals.get(filtered[i])?.days;row.push(raw??null,calculated!=null&&raw!=null&&String(raw).trim()!==''&&Number.isFinite(Number(raw))?calculated-Number(raw):null);});
  return `<section class="panel"><div class="panel-heading"><h3>工商档案与报告区间</h3><div class="actions"><button id="addRegistry">新增档案</button><button id="exportRegistry">下载筛选结果</button><button id="exportRegistryAll" class="primary">下载全部工商及合规数据</button><button data-nav="report">查看报告核验</button></div></div>
  <form id="registryGenerate" class="registry-controls"><label>样本基准日 <input type="date" name="asOf" value="${h(asOf)}" required></label><label>生成范围（可选） <input name="nameFilter" placeholder="按对手方名称包含文字"></label><label>最多生成（可选） <input name="maxRows" type="number" min="1" step="1" placeholder="不限"></label><button type="submit" class="primary">为当前流水补齐工商档案</button><span>按对手方全称匹配；现有档案保留。当前流水识别到 ${names.length} 家企业候选。</span></form>
- <section class="registry-start-tools" aria-labelledby="registryStartHeading"><h4 id="registryStartHeading">经营天数规则：自动同步</h4><div class="registry-controls"><label>报告结束日期 <input type="date" id="registryReportEnd" value="${h(asOf)}" required></label><span>修改后自动同步报告核验，导入旧数据也立即适用。</span></div><p>保留导入的经营开始时间，新经营天数＝报告结束日期－经营开始时间，不额外加一天。导入旧数据、修改开始时间或报告结束日期后自动重新计算；导入的原经营天数仅供对照，不参与计算。列表、报告和导出统一使用新天数，保存项目JSON保留原始记录。</p><p class="muted">已计算 ${num(auto.plan.changed+auto.plan.unchanged)} 条，其中 ${num(auto.plan.changed)} 条与导入天数不同；${num(auto.plan.skipped)} 条因开始日期缺失、无效或晚于报告结束日而无法计算。<button type="button" class="text" id="exportRegistryDates">下载日期核验明细</button> 其他工商字段、流水及主档不变。</p></section>
+ <section class="registry-start-tools" aria-labelledby="registryStartHeading"><h4 id="registryStartHeading">经营天数规则：自动同步</h4><div class="registry-controls"><label>报告结束日期 <input type="date" id="registryReportEnd" value="${h(asOf)}" required></label><span>仅用于工商经营天数计算，不修改报告分析与导出期间。</span></div><p>保留导入的经营开始时间，新经营天数＝报告结束日期－经营开始时间，不额外加一天。导入旧数据、修改开始时间或报告结束日期后自动重新计算；导入的原经营天数仅供对照，不参与计算。列表、报告和导出统一使用新天数，保存项目JSON保留原始记录。</p><p class="muted">已计算 ${num(auto.plan.changed+auto.plan.unchanged)} 条，其中 ${num(auto.plan.changed)} 条与导入天数不同；${num(auto.plan.skipped)} 条因开始日期缺失、无效或晚于报告结束日而无法计算。<button type="button" class="text" id="exportRegistryDates">下载日期核验明细</button> 其他工商字段、流水及主档不变。</p></section>
  <section class="registry-start-tools"><h4>合规明细：按原数量自动补生成</h4><p>诉讼 ${num(risks.cases)} 条，失信被执行人 ${num(risks.dishonest)} 条，行政处罚 ${num(risks.penalties)} 条。失信标记“是”生成1条，“否”生成0条；诉讼、处罚按原数量逐条生成，不改原数量。${risks.missing?'有 '+num(risks.missing)+' 份档案的数量或标记未提供／无效，保留缺失，不自动填0。':''}</p><div class="actions"><button id="exportRegistryLawsuits">下载全部诉讼明细</button><button id="exportRegistryDishonest">下载全部失信明细</button><button id="exportRegistryPenalties">下载全部行政处罚</button><button id="exportRegistryRaw">下载导入原始工商档案</button></div><p class="muted">这些下载包含全部档案，不受列表筛选影响。明细为按已有标记与条数补充的测试数据；可在“合规数量核验”中逐家比对。</p></section>
- <form id="registryBounds" class="registry-controls"><div class="registry-grid">${R.metrics.map(([id,label,unit])=>`<label>${label}分界值（${unit}）<input name="${id}" value="${h(R.boundsFor(id,bounds()).join(', '))}" required></label>`).join('')}</div><button type="submit">应用报告区间</button><button id="registryDefaultIntervals" type="button">恢复新版三项区间</button><span>逗号分隔；一般等于分界值归入右侧区间；经营天数、社保人数和注册资本的最后一个分界值计入前一档。默认按 365 天为 1 年；3 年、100 人、1百万 均计入第三档。</span></form>
+ <form id="registryBounds" class="registry-controls"><div class="registry-grid">${R.metrics.map(([id,label,unit])=>`<label>${label}分界值（${unit}）<input name="${id}" value="${h(R.boundsFor(id,bounds()).join(', '))}" required></label>`).join('')}</div><button type="submit">应用报告区间</button><button id="registryDefaultIntervals" type="button">恢复新版三项区间</button><span>逗号分隔；经营天数、参保人数及注册资本首个分界值计入第二档；其余共享端点计入前一档，避免重复统计。默认按 365 天为 1 年；3 年、100 人、1百万 均计入第三档。</span></form>
  <form id="registryFilter" class="registry-controls"><label>搜索 <input name="q" value="${h(registryFilter.q||'')}" placeholder="名称、行业、信用代码等"></label><label>经营状态 ${select('status',[...new Set(registry().map(r=>r.status).filter(Boolean))].map(x=>[x,x]),registryFilter.status)}</label><label>失信被执行人 ${select('dishonest',[['是','是'],['否','否']],registryFilter.dishonest)}</label><label>区间指标 ${select('metric',R.metrics.map(([id,label])=>[id,label]),metric)}</label><label>筛选区间 ${select('range',ranges,registryFilter.range)}</label><button type="submit">筛选</button><button type="button" id="clearRegistryFilter">清空筛选</button></form>
  <p class="muted">显示 ${filtered.length} / ${registry().length} 条。经营天数列显示以 ${h(asOf)} 为截止日新计算的天数；导入原天数单独保留，差值为0表示一致。列表筛选只影响列表和“下载筛选结果”，不影响全部下载。</p>${table(shown,{registry:true})}</section>`;
 }

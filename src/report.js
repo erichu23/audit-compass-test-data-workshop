@@ -220,9 +220,9 @@ function compute(data,settings={}){
  const blankSummary=rows.filter(r=>!clean(r[16]));
  const groups=[['2.2.1 合并范围内大额',big.filter(r=>own.has(r[3]))],['2.2.1 合并范围外大额',big.filter(r=>!own.has(r[3]))],['2.2.2 对手方信息为空',blank],['2.2.3 摘要信息为空',blankSummary]];
  const overview=[['大额单笔交易',big],...groups];
- const involved=(rs,column)=>new Set(rs.map(r=>clean(r[column])).filter(Boolean)).size;
+ const involved=(rs,column)=>new Set(rs.map(r=>clean(r[column])).filter(n=>column===3||n)).size;
  const metrics=rs=>[involved(rs,0),involved(rs,3),...financial(sum(rs))];
- table(features,'流水性质概览',['项目','本方公司数量','有名称对手方数量',...moneyHeaders],overview.map(([name,rs])=>[name,...metrics(rs)]));
+ table(features,'流水性质概览',['项目','本方公司数量','对手方数量（空白计1个）',...moneyHeaders],overview.map(([name,rs])=>[name,...metrics(rs)]));
  features.cards=[overview[0],...groups.slice(2)].map(([name,rs])=>{
   const card={name:name.replace(/^2\.2\.[23] /,''),amount:amount(turnover(sum(rs))),count:rs.length,companies:involved(rs,0),parties:involved(rs,3)};
   if(rs===big){card.condition=thresholdLabel;card.breakdown=groups.slice(0,2).map(([n,r])=>[n.includes('范围内')?'合并范围内':'合并范围外',involved(r,3),amount(turnover(sum(r))),r.length]);}
@@ -338,7 +338,9 @@ function compute(data,settings={}){
  table(relatedSection,'关联组合明细',['被审计单位公司名称','关联方名称','组合来源'],[...relationPairs.values()]);
 
  const R=g.AuditRegistry;
- const compliance=section('compliance','2.3.1 交易对手方合规事项及工商信息分析','按对手方全称关联工商档案，只统计本期有交易的范围外企业。经营天数＝报告结束日期－导入的经营开始时间，按自然日日期差计算，不额外加一天；不读取导入原经营天数作为计算结果，不反推或修改经营开始时间，也不按经营结束时间截断。原经营天数仅保留供对照。一般分界值归右侧区间，经营时长按 365 天折算 1 年，恰好 3 年归入 2~3 年，恰好 100 人归入 50~100 人；注册资本按人民币归档；恰好 1百万 归入 500k–1百万，最后一档为 >1百万。工商区间图表仅统计对应字段有有效数值的本期范围外对手方，缺失或无效字段不参与该图的金额及占比计算。');
+ const compliance=section('compliance','2.3.1 交易对手方合规事项及工商信息分析','按对手方全称关联工商档案，只统计本期有交易的范围外企业。经营天数＝报告结束日期－导入的经营开始时间，按自然日日期差计算，不额外加一天；不读取导入原经营天数作为计算结果，不反推或修改经营开始时间，也不按经营结束时间截断。原经营天数仅保留供对照。经营日期独立于报告导出期间；共享端点归入前一档，首个端点归入第二档，经营时长按 365 天折算 1 年，恰好 3 年归入 2~3 年，恰好 100 人归入 50~100 人；注册资本按人民币归档；恰好 1百万 归入 500k–1百万，最后一档为 >1百万。工商区间图表仅统计对应字段有有效数值的本期范围外对手方，缺失或无效字段不参与该图的金额及占比计算。');
+ const registryEnd=settings.registryAsOf||to;
+ const registryHitGroups=[];
  const profiles=new Map((settings.registry||[]).map(r=>[clean(r.name),r]));
  const originalProfiles=new Map((settings.registryOriginal||settings.registry||[]).map(r=>[clean(r.name),r]));
  const enterprise=cp.filter(x=>[...x.name].length>4&&x.name!=='【对手方为空】'&&!flagByName.has(x.name));
@@ -369,19 +371,20 @@ function compute(data,settings={}){
   const labels=R.intervalLabels(bounds,id).slice(0,-1).map(x=>id==='paidRatio'?x.replace(/\d+(?:\.\d+)?/g,n=>n+'%'):x);
   const groups=labels.map(()=>[]);
   for(const x of enterprise){
-   const bucket=R.bucket(R.value(profiles.get(x.name),id,to,rates),bounds,id);
+   const bucket=R.bucket(R.value(profiles.get(x.name),id,registryEnd,rates),bounds,id);
    if(bucket<groups.length)groups[bucket].push(x);
   }
   const name=label+'区间（'+unit+'）';
   stacked(compliance,name,labels.map((l,i)=>[l,groups[i].length,totals(groups[i])]));
   if(registryScreens[id]){
    const [predicate,description]=registryScreens[id];
-   const hits=enterprise.filter(x=>{const v=R.value(profiles.get(x.name),id,to,rates);return v!=null&&predicate(v);});
+   const hits=enterprise.filter(x=>{const v=R.value(profiles.get(x.name),id,registryEnd,rates);return v!=null&&predicate(v);});
+   registryHitGroups.push(hits);
    table(compliance,name+'筛选结果',['筛选条件','识别对手方数量',...moneyHeaders],[[description,hits.length,...financial(totals(hits))]]);
   }
  }
- const fieldTable=R.table(matched.map(x=>{const profile=profiles.get(x.name);return {...profile,days:R.value(profile,'days',to,rates)};}),to,rates);
- table(compliance,'本期工商匹配明细',[...fieldTable.headers,'导入原经营天数','报告结束日期','按日期计算经营天数','计算值－原天数',...moneyHeaders],fieldTable.rows.map((r,i)=>{const profile=profiles.get(matched[i].name),days=R.value(profile,'days',to,rates),raw=originalProfiles.get(matched[i].name)?.days;return [...r,raw??null,to,days,days!=null&&raw!=null&&String(raw).trim()!==''&&Number.isFinite(Number(raw))?days-Number(raw):null,...financial(matched[i])];}));
+ const fieldTable=R.table(matched.map(x=>{const profile=profiles.get(x.name);return {...profile,days:R.value(profile,'days',registryEnd,rates)};}),registryEnd,rates);
+ table(compliance,'本期工商匹配明细',[...fieldTable.headers,'导入原经营天数','报告结束日期','按日期计算经营天数','计算值－原天数',...moneyHeaders],fieldTable.rows.map((r,i)=>{const profile=profiles.get(matched[i].name),days=R.value(profile,'days',registryEnd,rates),raw=originalProfiles.get(matched[i].name)?.days;return [...r,raw??null,registryEnd,days,days!=null&&raw!=null&&String(raw).trim()!==''&&Number.isFinite(Number(raw))?days-Number(raw):null,...financial(matched[i])];}));
 
  const persons=section('people','2.3.2 交易对手方为个人或疑似个人的分析','按本方公司及姓名匹配。董监高以关联方主档中的人员关系为准，其次匹配员工主档；其余非空且姓名不超过4个字符的对手方归为其他个人。合计按姓名去重。');
  const individuals=[...people.values()];
@@ -417,17 +420,18 @@ function compute(data,settings={}){
  distribution('双向交易的收支重合区间',both,['低于20%','20%至低于50%','50%至低于80%','80%及以上'],x=>overlap(x)<.2?0:overlap(x)<.5?1:overlap(x)<.8?2:3);
  distribution('未识别客商的交易金额区间',unidentified,['低于5','5至低于10','10至20','超过20'],x=>{const m=amount(turnover(x));return m<5?0:m<10?1:m<=20?2:3;});
 
- const focus=section('focus','2.4 重点关注对手方清单表','汇总本期模拟名单、个人、收支重合及未识别客商的命中项，按交易额取前20。工商和合规资料缺项统一显示未提供。');
+ const focus=section('focus','2.4 重点关注对手方清单表','分别取2.3.1–2.3.3各识别结果交易总额前20大，再按名称取并集；并集全部展示，可能超过20个对手方。');
  const overlapNames=new Set(overlapList.map(x=>x.name)),unknownNames=new Set(unknownList.map(x=>x.name));
- const focusRows=sortBy(cp.filter(x=>x.black||flagByName.has(x.name)||overlapNames.has(x.name)||unknownNames.has(x.name)||dishonest.includes(x)||lawsuits.includes(x)||penalties.includes(x)),turnover);
- const details=ranking(focusRows,externalTotals);
+ const focusNames=new Set([flagged,dishonest,lawsuits,penalties,...registryHitGroups,...['员工','董监高','其他个人'].map(n=>cp.filter(x=>flagByName.get(x.name)?.has(n))),overlapList,unknownList].flatMap(items=>sortBy(items,turnover).slice(0,20).map(x=>x.name)));
+ const focusRows=sortBy(cp.filter(x=>focusNames.has(x.name)),turnover);
+ const details=ranking(focusRows,externalTotals,Infinity);
  details[0]=['','合计（全部对手方）','','',flagged.length+' 家',...cpAmounts(externalTotals,externalTotals)];
  function focusProfile(r){
   if(!r[0])return Array(10).fill('');
   const profile=profiles.get(r[1]);
-  return [null,profile?.cases,profile?.dishonest,profile?.penalties,profile?.formed,profile?.industry,R.value(profile,'capital',to,rates),R.value(profile,'paidIn',to,rates),profile?.insured,[profile?.directors,profile?.supervisors,profile?.executives].filter(Boolean).join('、')||null].map(x=>x??missingValue);
+  return [null,profile?.cases,profile?.dishonest,profile?.penalties,R.value(profile,'days',registryEnd,rates),profile?.industry,R.value(profile,'capital',registryEnd,rates),R.value(profile,'paidIn',registryEnd,rates),profile?.insured,[profile?.directors,profile?.supervisors,profile?.executives].filter(Boolean).join('、')||null].map(x=>x??missingValue);
  }
- table(focus,'重点关注对手方前20',[...cpHeaders,'个人类型','收支重合','未识别客商关系','疑似关联方','诉讼案件数量','失信被执行人','行政处罚数量','成立日期','所属行业','注册资本','实缴资本','社保人数','董监高信息'],details.filter(r=>r[1]!=='其他').map(r=>[...r,[...(flagByName.get(r[1])||[])].join('、'),overlapNames.has(r[1])?'是':'',unknownNames.has(r[1])?'是':'',...focusProfile(r)]));
+ table(focus,'重点关注对手方并集清单',[...cpHeaders,'个人类型','收支重合','未识别客商关系','疑似关联方','诉讼案件数量','失信被执行人','行政处罚数量','经营天数','所属行业','注册资本','实缴资本','社保人数','董监高信息'],details.filter(r=>r[1]!=='其他').map(r=>[...r,[...(flagByName.get(r[1])||[])].join('、'),overlapNames.has(r[1])?'是':'',unknownNames.has(r[1])?'是':'',...focusProfile(r)]));
  const numbering={scope:['2.1','1.1'],features:['2.2','1.2'],concentration:['2.3','1.3'],counterparties:['3.1','2.1'],related:['3.2','2.2'],compliance:['3.3.1','2.3.1'],people:['3.3.2','2.3.2'],follow:['3.3.3','2.3.3'],focus:['3.4','2.4']};
  for(const s of model.sections){
   const pair=numbering[s.id];
@@ -470,7 +474,7 @@ function tableHTML(t){
  const heading=h=>'<th>'+esc(reportHeader(h))+'</th>';
  const head=t.grouped?'<tr>'+t.headers.slice(0,2).map(h=>'<th rowspan="2">'+esc(reportHeader(h))+'</th>').join('')+'<th colspan="3">流入</th><th colspan="3">流出</th></tr><tr>'+t.headers.slice(2).map(h=>heading(h.slice(2))).join('')+'</tr>':'<tr>'+t.headers.map(heading).join('')+'</tr>';
  return '<div class="report-table"><h4>'+esc(t.name)+'</h4>'+(t.note?'<p class="muted report-detail-summary">'+esc(t.note).replaceAll('\n','<br>')+'</p>':'')+
-  '<div class="table-scroll"><table class="table"><thead>'+head+'</thead><tbody>'+detailRowsHTML(t,visible)+'</tbody></table></div>'+
+  '<div class="table-scroll"><table class="table"><thead>'+head+(t.filterHeaders?'<tr class="report-filter-header">'+t.filterHeaders.map(v=>'<th>'+esc(v)+'</th>').join('')+'</tr>':'')+'</thead><tbody>'+detailRowsHTML(t,visible)+'</tbody></table></div>'+
   (pageable?'<div class="pagination" data-report-pager="'+id+'" aria-label="'+esc(t.name)+'分页"></div>':visible.length<t.rows.length?'<p class="muted">页面显示前 '+visible.length+' 行，共 '+t.rows.length+' 行。完整明细见本期核验 Excel。</p>':'')+'</div>';
 }
 const printPagers=[];
@@ -519,10 +523,12 @@ function chartAndTable(chart,tables){
 function trendHTML(t){
  const width=Math.max(520,t.rows.length*30),height=185;
  const directionTotal=(r,d)=>categories.reduce((s,_,i)=>s+r[1+i*2+d],0);
- const max=Math.max(1,...t.rows.map(r=>Math.max(directionTotal(r,0),directionTotal(r,1))));
- const step=(width-46)/Math.max(1,t.rows.length),labelInterval=Math.max(1,Math.ceil(t.rows.length/12));
+ const rawMax=Math.max(1,...t.rows.map(r=>Math.max(directionTotal(r,0),directionTotal(r,1))));
+ const magnitude=10**Math.floor(Math.log10(rawMax/5)),tickStep=Math.ceil(rawMax/5/magnitude)*magnitude,max=tickStep*5;
+ const ticks=Array.from({length:6},(_,i)=>{const y=158-i*26;return '<line x1="52" y1="'+y+'" x2="'+(width-4)+'" y2="'+y+'" stroke="#e1e7ef"/><text x="48" y="'+(y+3)+'" text-anchor="end">'+esc(currency.format(tickStep*i))+'</text>';}).join('');
+ const step=(width-64)/Math.max(1,t.rows.length),labelInterval=Math.max(1,Math.ceil(t.rows.length/12));
  const bars=t.rows.map((r,i)=>{
-  const x=37+i*step,barWidth=Math.min(12,(step-3)/2);
+  const x=58+i*step,barWidth=Math.min(12,(step-3)/2);
   let html=i%labelInterval===0?'<text x="'+x+'" y="177">'+esc(r[0].slice(2))+'</text>':'';
   for(let d=0;d<2;d++){
    let y=158;
@@ -533,7 +539,7 @@ function trendHTML(t){
   }
   return html;
  }).join('');
- return '<figure class="report-chart"><figcaption>月度资金流水（百万元）</figcaption><p class="muted">每月左柱为流入（蓝色），右柱为流出（红色）；同色系深浅区分客商分类。</p><div class="table-scroll"><svg role="img" aria-label="各月流入与流出金额" width="'+width+'" height="'+height+'" viewBox="0 0 '+width+' '+height+'"><path d="M32 28V158H'+(width-4)+'" stroke="#bacad0" fill="none"/><text x="0" y="22">'+esc(currency.format(max))+'</text>'+bars+'</svg></div><ul class="report-legend">'+categories.flatMap((c,i)=>[0,1].map(d=>'<li><i style="background:'+palette[i+d*4]+'"></i>'+c+(d?'流出':'流入')+'</li>')).join('')+'</ul></figure>';
+ return '<figure class="report-chart"><figcaption>月度资金流水（百万元）</figcaption><p class="muted">每月左柱为流入（蓝色），右柱为流出（红色）；同色系深浅区分客商分类。</p><div class="table-scroll"><svg role="img" aria-label="各月流入与流出金额" width="'+width+'" height="'+height+'" viewBox="0 0 '+width+' '+height+'"><path d="M52 28V158H'+(width-4)+'" stroke="#bacad0" fill="none"/><text x="4" y="18">百万</text>'+ticks+bars+'</svg></div><ul class="report-legend">'+categories.flatMap((c,i)=>[0,1].map(d=>'<li><i style="background:'+palette[i+d*4]+'"></i>'+c+(d?'流出':'流入')+'</li>')).join('')+'</ul></figure>';
 }
 function sideBySide(items,variant=''){
  return '<div class="report-panes '+variant+'">'+items.map(x=>'<div class="report-pane">'+x+'</div>').join('')+'</div>';
@@ -629,9 +635,9 @@ function sectionBody(s,m,continuations){
  if(s.id==='focus'){
   const t=tables[0],order=[0,1,2,14,3,4,18,20,19,21,22,23,24,25,26,16,15,5,6,7,8,9,10,11,12,13];
   const [total,...details]=t.rows;
-  const subtotal=details.pop();
-  const rows=[total,['','其中'],subtotal,...details];
-  return tableHTML({...t,limit:23,headers:[...order.map(i=>t.headers[i]),'说明'],rows:rows.map(r=>[...order.map(i=>r[i]),''])});
+  const rows=[total,...details];
+  const conditions={'诉讼案件数量':'诉讼数量 > 0','失信被执行人':'失信被执行人＝是','行政处罚数量':'行政处罚数量 > 0','经营天数':'经营天数 '+m.criteria.daysMin+'–'+m.criteria.daysMax+' 天（含边界）','社保人数':'参保人数 ≤ '+m.criteria.insuredMax+' 人','实缴资本':'实缴占注册资本 '+m.criteria.paidMin+'%–'+m.criteria.paidMax+'%','收支重合':'交易额 ≥ '+currency.format(m.criteria.overlapAmount)+'；重合比例 ≥ '+m.criteria.overlapPercent+'%','未识别客商关系':'交易额 ≥ '+currency.format(m.criteria.unknownAmount)};
+  return tableHTML({...t,filterHeaders:[...order.map(i=>conditions[t.headers[i]]||''),''],headers:[...order.map(i=>t.headers[i]),'说明'],rows:rows.map(r=>[...order.map(i=>r[i]),''])});
  }
  return tables.map(tableHTML).join('');
 }
