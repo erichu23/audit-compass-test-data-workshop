@@ -477,7 +477,7 @@ function detailRowsHTML(t,rows){
 }
 function tableHTML(t){
  const interactiveId=renderForExport?null:reportInteractiveTables.push(t)-1;
- const pageable=!renderAllRows&&!t.limit&&t.rows.length>20,id=pageable?reportPagerTables.push(t)-1:null;
+ const pageable=false,id=null;
  const visible=t.rows.slice(0,t.limit??(pageable?20:t.rows.length));
  const heading=h=>'<th>'+esc(reportHeader(h))+'</th>';
  const head=t.grouped?'<tr>'+t.headers.slice(0,2).map(h=>'<th rowspan="2">'+esc(reportHeader(h))+'</th>').join('')+'<th colspan="3">流入</th><th colspan="3">流出</th></tr><tr>'+t.headers.slice(2).map(h=>heading(h.slice(2))).join('')+'</tr>':'<tr>'+t.headers.map(heading).join('')+'</tr>';
@@ -564,7 +564,7 @@ function sideBySide(items,variant=''){
  return '<div class="report-panes '+variant+'">'+items.map(x=>'<div class="report-pane">'+x+'</div>').join('')+'</div>';
 }
 function subhead(title){return '<h4 class="report-subhead">'+esc(title)+'</h4>';}
-function extra(title,content){if(renderForExport)return '';return '<details class="report-extra"><summary>'+esc(title)+'</summary>'+content+'</details>';}
+function extra(title,content){if(renderForExport)return '';return '<details open class="report-extra"><summary>'+esc(title)+'</summary>'+content+'</details>';}
 function metricHTML(label,main,detail=''){
  return '<div class="report-metric"><span>'+esc(label)+'</span><strong>'+esc(main)+'</strong>'+(detail?'<small>'+esc(detail)+'</small>':'')+'</div>';
 }

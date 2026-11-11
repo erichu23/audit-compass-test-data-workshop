@@ -138,7 +138,7 @@ function resetFlowFilters(){
 const flowFilterColumns={0:'company',1:'account',3:'counterparty',5:'date',7:'currency',8:'direction',10:'direction',20:'type'};
 const flowFilterKeys=kind=>kind==='date'?['from','to']:[kind];
 const filterPopover=$('#flowFilterPopover');
-let pageSize=20,tablePagerState=null;
+
 function flowHeader(label,column){
  const active=flowSort?.column===column,kind=flowFilterColumns[column];
  const filtered=kind&&flowFilterKeys(kind).some(k=>flowFilters[k]);
@@ -202,7 +202,7 @@ function refreshFlowTable(selector){
 }
 const tableViewQueries=new Map();
 function currentTableQuery(){const key=page+'|'+(page==='master'?master:page==='preview'?preview:'');if(!tableViewQueries.has(key))tableViewQueries.set(key,{});return tableViewQueries.get(key);}
-function table(t,{edit=false,flow=false,registry=false}={}){const limit=pageSize,hits=flow?AuditTableTools.query(currentFlowRows(),currentTableQuery(),(x,c)=>x.r[c-1]):AuditTableTools.query(t.rows.map((r,i)=>({r,i})).filter(x=>!search||x.r.some(v=>String(v??'').toLowerCase().includes(search.toLowerCase()))),currentTableQuery(),(x,c)=>x.r[c-1]),pages=Math.max(1,Math.ceil(hits.length/limit));pageNo=Math.min(pageNo,pages);const subset=hits.slice((pageNo-1)*limit,pageNo*limit);tablePagerState={total:hits.length,flow};return `<div class="table-scroll"><table class="table" data-main-query="true"${flow?' id="statementFlowTable"':''}><thead><tr><th class="rowno">#</th>${t.headers.map((x,i)=>flow?flowHeader(x,i):`<th>${h(x)}</th>`).join('')}${edit||registry?'<th class="sticky-right">操作</th>':''}</tr></thead><tbody>${subset.map(({r,i})=>`<tr><td class="rowno">${i+1}</td>${t.headers.map((hd,j)=>`<td class="${typeof r[j]==='number'?'numeric':''}">${r[j]===null||r[j]===undefined||r[j]===''?'<span class="null">—</span>':h(typeof r[j]==='number'&&/金额|余额|发生额|限额|资本|_PM|_AMPT/.test(hd)&&!/笔数/.test(hd)?fmt(r[j]):r[j])}</td>`).join('')}${registry?`<td class="sticky-right"><button class="text" data-registry-edit="${h(r[0])}">编辑</button></td>`:''}${edit?`<td class="sticky-right"><button class="text" data-edit="${i}">编辑</button><button class="text danger" data-delete="${i}">删除</button></td>`:''}</tr>`).join('')}</tbody></table>${!hits.length?'<div class="empty">没有找到记录</div>':''}</div>${flow?`<small class="flow-result-count">筛选结果 ${num(hits.length)} / ${num(t.rows.length)} 笔</small>`:''}<div class="pagination" id="tablePager" aria-label="表格分页"></div>`;}
+function table(t,{edit=false,flow=false,registry=false}={}){const hits=flow?AuditTableTools.query(currentFlowRows(),currentTableQuery(),(x,c)=>x.r[c-1]):AuditTableTools.query(t.rows.map((r,i)=>({r,i})).filter(x=>!search||x.r.some(v=>String(v??'').toLowerCase().includes(search.toLowerCase()))),currentTableQuery(),(x,c)=>x.r[c-1]);const subset=hits;return `<div class="table-scroll"><table class="table" data-main-query="true"${flow?' id="statementFlowTable"':''}><thead><tr><th class="rowno">#</th>${t.headers.map((x,i)=>flow?flowHeader(x,i):`<th>${h(x)}</th>`).join('')}${edit||registry?'<th class="sticky-right">操作</th>':''}</tr></thead><tbody>${subset.map(({r,i})=>`<tr><td class="rowno">${i+1}</td>${t.headers.map((hd,j)=>`<td class="${typeof r[j]==='number'?'numeric':''}">${r[j]===null||r[j]===undefined||r[j]===''?'<span class="null">—</span>':h(typeof r[j]==='number'&&/金额|余额|发生额|限额|资本|_PM|_AMPT/.test(hd)&&!/笔数/.test(hd)?fmt(r[j]):r[j])}</td>`).join('')}${registry?`<td class="sticky-right"><button class="text" data-registry-edit="${h(r[0])}">编辑</button></td>`:''}${edit?`<td class="sticky-right"><button class="text" data-edit="${i}">编辑</button><button class="text danger" data-delete="${i}">删除</button></td>`:''}</tr>`).join('')}</tbody></table>${!hits.length?'<div class="empty">没有找到记录</div>':''}</div>${flow?`<small class="flow-result-count">筛选结果 ${num(hits.length)} / ${num(t.rows.length)} 笔</small>`:''}`;}
 function companyMode(name){
  return Object.hasOwn(config.companyFlow||{},name)?String(config.companyFlow[name]):'auto';
 }
@@ -268,7 +268,7 @@ function renderCatalog(){
  const q=$('#catalogSearch').value.trim().toLowerCase();
  const rows=E.companyCatalog().filter(r=>r.some(v=>String(v).toLowerCase().includes(q)));
  $('#catalogCount').textContent='共 '+rows.length+' 家，页面显示前 50 家。';
- $('#catalogRows').innerHTML=rows.slice(0,50).map(([name,source,url])=>`<tr><td>${h(name)}</td><td><a href="${h(url)}" target="_blank" rel="noopener noreferrer">${h(source)}</a></td></tr>`).join('');
+ $('#catalogRows').innerHTML=rows.map(([name,source,url])=>`<tr><td>${h(name)}</td><td><a href="${h(url)}" target="_blank" rel="noopener noreferrer">${h(source)}</a></td></tr>`).join('');
 }
 $('#catalogSearch').oninput=renderCatalog;
 function masters(){const keys=Object.values(K).filter(k=>k!==K.flow);return `${companyList()}${masterTools()}<section class="panel"><div class="panel-heading"><h3>主档明细</h3><div class="actions"><button id="addRow">＋ 新增记录</button><button id="exportSingle">导出当前表</button></div></div><div class="tabs">${keys.map(k=>`<button class="${master===k?'active':''}" data-master="${k}">${h(k.replace('(必须上传)','').replace('信息',''))}<small>${data[k].rows.length}</small></button>`).join('')}</div><div class="table-tools"><div class="searchbox">⌕ <input id="search" placeholder="搜索名称、账号或任意字段" value="${h(search)}"></div><span class="muted">带 * 的列是平台必填字段</span></div>${table(data[master],{edit:true})}</section>`;}
@@ -458,12 +458,6 @@ function mountComponents(){
  document.querySelectorAll('#content button:not(.ba-sort-up,.ba-sort-down,.ba-filter-btn,.workflow button), dialog button:not(.dialog-heading button)').forEach(b=>{
   b.classList.add('btn');if(b.classList.contains('primary'))b.classList.add('btn-primary');
  });
- const pager=$('#tablePager');
- if(pager&&tablePagerState){
-  const refresh=()=>{const left=$('#content .table-scroll').scrollLeft;render();$('#content .table-scroll').scrollLeft=left;};
-  renderAuditPager(pager,{total:tablePagerState.total,page:pageNo,pageSize,
-   onPage:n=>{pageNo=n;refresh();},onPageSize:n=>{pageSize=n;pageNo=1;refresh();}});
- }
  if(page==='report')AuditReport.mountPagers();
  const mainQueryTable=document.querySelector('[data-main-query]');
  if(mainQueryTable?.id==='statementFlowTable')mainQueryTable.querySelectorAll('thead th').forEach(th=>{if(!th.querySelector('[data-filter-flow]'))th.querySelector('.ba-th-tools')?.remove();});
