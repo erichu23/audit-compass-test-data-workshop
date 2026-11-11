@@ -232,11 +232,11 @@ function companyList(){
 function masterTools(){
  const catalog=E.companyCatalog(),tyc=catalog.filter(r=>r[2].includes('tianyancha.com')).length;
  const n=Object.values(config.sampleNonMerchants||{}).reduce((count,r)=>count+r.length,0);
- return `<section class="panel"><div class="panel-heading"><div><h3>快速生成主档</h3><p class="muted">内置 ${catalog.length} 个企业名称，其中 ${tyc} 个有天眼查公开来源。当前已配置 ${n} 个非客商候选（按单位计）。</p></div><div class="actions"><button id="openCatalog">查看企业名称库</button><button id="openMasterSamples" class="primary">开始生成主档</button></div></div><p>三步完成：选公司 → 选生成方案 → 确认结果。默认追加，保留已有数据；需要外币或缺失账号时，再打开高级设置。</p></section>`;
+ return `<section class="panel" id="masterGeneratorPanel"><div class="panel-heading"><div><h3>快速生成主档</h3><p class="muted">内置 ${catalog.length} 个企业名称，其中 ${tyc} 个有天眼查公开来源。当前已配置 ${n} 个非客商候选（按单位计）。</p></div><div class="actions"><button id="openCatalog">查看企业名称库</button><button id="resetMasterSamples">重新填写</button></div></div><p>三步完成：选公司 → 选生成方案 → 确认结果。默认追加，保留已有数据；需要外币或缺失账号时，再打开高级设置。</p><form id="masterSampleForm"><div id="masterSampleFields"></div><div class="dialog-footer master-wizard-footer"></div></form></section>`;
 }
 function openMasterSamples(){
  const own=data[K.company].rows;
- if(!own.length){toast('请先新增被审计单位。',true);return;}
+ if(!own.length){$('#masterSampleFields').innerHTML='<p class="empty">请先在上方新增被审计单位，再生成主档。</p>';return;}
  $('#masterSampleFields').innerHTML=`<fieldset><legend>选择要生成主档的公司</legend><div class="master-sample-companies">${own.map((r,i)=>`<label><input type="checkbox" name="company" value="${h(r[0])}" ${i===0?'checked':''}> ${h(r[0])}</label>`).join('')}</div></fieldset>
  <fieldset><legend>被审计单位补充信息（选填）</legend><div class="form-grid"><label class="field"><span>公司职能（选填）</span><input name="companyRole" placeholder="留空保留原值"></label><label class="field"><span>所属行业（选填）</span><input name="companyIndustry" placeholder="留空保留原值"></label><label class="field"><span>下次生成流水</span><select name="flowMode"><option value="">沿用当前设置</option><option value="true">生成流水</option><option value="false">不生成，测试整家公司缺流水</option></select></label></div><label><input name="linkAudited" type="checkbox"> 把其他被审计单位写入所选单位的关联方主档</label></fieldset>
  <fieldset><legend>账号及缺失场景（数量按每家新增）</legend><div class="table-scroll"><table class="table"><thead><tr><th>账号场景</th><th>币种</th><th>账号主档</th><th>分账号余额表</th><th>银行流水</th><th>新增数量</th></tr></thead><tbody>${E.ACCOUNT_GROUPS.map(([id,label,currency,bank,book,flow])=>`<tr><td>${label}</td><td>${currency||`<select name="customCurrency" aria-label="自定义账号币种"><option value="">请选择</option>${Object.keys(exchangeRates()).filter(code=>!["CNY","RMB","USD"].includes(code)).map(code=>`<option value="${h(code)}">${h(code)}</option>`).join("")}</select>`}</td><td>${bank?'有':'缺失'}</td><td>${book?'有':'缺失'}</td><td>${flow?'有':'缺失'}</td><td><input name="${id}" aria-label="${label}数量" type="number" min="0" max="50" step="1" value="0" required></td></tr>`).join('')}</tbody></table></div><p class="muted">需要余额表的账号会在正式生成时写入分账号余额表并汇入总账。其他币种先到「配置流水」添加汇率。若单位选了「不生成流水」，单位级设置优先。</p></fieldset>
@@ -247,9 +247,21 @@ function openMasterSamples(){
  <label class="field"><span>优先抽取的企业全称（可选，每行一家）</span><textarea name="preferredNames" rows="2" placeholder="可从企业名称库复制全称"></textarea></label>
  <p class="muted">客商重合会写入同一单位的客户和供应商主档。非客商仅作为流水候选，若选为关联方则只写入关联方主档。重建只影响选中单位的客商、员工和范围外关联方。</p></fieldset>`;
  setupMasterSampleWizard();
- $('#masterSampleModal').showModal();
+ restoreMasterWizardDraft();
 }
-let masterWizardStep=1,masterWizardPreview=null;
+let masterWizardStep=1,masterWizardPreview=null,masterWizardDraft=null;
+function captureMasterWizardDraft(){
+ const form=$('#masterSampleForm');if(!form||!$('#masterWizardStep1'))return;
+ masterWizardDraft={entries:[...new FormData(form).entries()],step:masterWizardStep,advanced:!!form.querySelector('.master-advanced[open]')};
+}
+function restoreMasterWizardDraft(){
+ if(!masterWizardDraft)return;const form=$('#masterSampleForm'),entries=masterWizardDraft.entries;
+ for(const input of form.querySelectorAll('input[name],select[name],textarea[name]')){const values=entries.filter(([name])=>name===input.name).map(([,value])=>value);if(input.type==='checkbox'||input.type==='radio')input.checked=values.includes(input.value);else if(values.length)input.value=values[0];}
+ form.querySelector('.master-advanced').open=masterWizardDraft.advanced;
+ form.querySelector('[data-master-preset=custom]').click();
+ const step=masterWizardDraft.step;showMasterWizardStep(Math.min(step,2));if(step===3)nextMasterWizardStep();
+}
+
 function masterSampleRequest(){
  const f=new FormData($('#masterSampleForm'));
  return {companies:[...new Set(f.getAll('company'))],mode:f.get('mode'),seed:config.seed,
@@ -274,7 +286,7 @@ function setupMasterSampleWizard(){
  const preferred=parties.querySelector('textarea')?.closest('label');if(preferred)options.append(preferred);
  options.append(accounts,companyInfo);second.append(parties,options);
  const help=document.createElement('p');help.className='master-count-help';help.textContent='仅客户：只进客户表；仅供应商：只进供应商表；客商重合：同一家公司同时进客户和供应商表；非客商：不进这两张表，用作后续流水对手方。关联方数量包含在对应分类内，不额外增加企业数。';parties.querySelector('legend').after(help);
- const footer=$('#masterSampleModal .dialog-footer');footer.innerHTML='<p id="masterWizardProgress"></p><div class="actions"><button type="button" id="masterWizardBack">上一步</button><button type="button" class="primary" id="masterWizardNext">下一步</button><button type="submit" class="primary" id="masterWizardApply" hidden>确认生成主档</button></div>';
+ const footer=$('#masterGeneratorPanel .dialog-footer');footer.innerHTML='<p id="masterWizardProgress"></p><div class="actions"><button type="button" id="masterWizardBack">上一步</button><button type="button" class="primary" id="masterWizardNext">下一步</button><button type="submit" class="primary" id="masterWizardApply" hidden>确认生成主档</button></div>';
  const set=(name,value)=>{const input=form.elements.namedItem(name);if(input){if(input.type==='checkbox')input.checked=!!value;else input.value=value;}};
  const preset=kind=>{
   root.querySelectorAll('[data-master-preset]').forEach(b=>{const active=b.dataset.masterPreset===kind;b.classList.toggle('is-selected',active);b.setAttribute('aria-pressed',String(active));});
@@ -289,6 +301,7 @@ function setupMasterSampleWizard(){
  root.querySelector('[data-master-all]').onclick=()=>{root.querySelectorAll('[name=company]').forEach(x=>x.checked=true);updateMasterWizardSummary();};
  root.querySelector('[data-master-none]').onclick=()=>{root.querySelectorAll('[name=company]').forEach(x=>x.checked=false);updateMasterWizardSummary();};
  const changed=e=>{masterWizardPreview=null;if(e.target.closest('#masterWizardStep2'))preset('custom');else updateMasterWizardSummary();};form.oninput=changed;form.onchange=changed;
+ form.onsubmit=submitMasterSamples;
  $('#masterWizardNext').onclick=nextMasterWizardStep;$('#masterWizardBack').onclick=()=>showMasterWizardStep(masterWizardStep-1);
  preset('report');showMasterWizardStep(1);
 }
@@ -322,16 +335,15 @@ function nextMasterWizardStep(){
   showMasterWizardStep(3);
  }catch(e){error.textContent=e.message;error.hidden=false;error.scrollIntoView({block:'nearest'});}
 }
-$('#masterSampleForm').onsubmit=e=>{
+function submitMasterSamples(e){
  e.preventDefault();if(masterWizardStep!==3){nextMasterWizardStep();return;}
  const q=masterSampleRequest();
- if(q.counterpartiesEnabled&&q.mode==='replace'&&!confirm('确认重建所选公司的客商、员工和范围外关联方主档？可通过「撤销」恢复。'))return;
+ const flowMode=new FormData($('#masterSampleForm')).get('flowMode');
  run(()=>{
   const result=masterWizardPreview?.request===JSON.stringify(q)?masterWizardPreview.result:E.masterSamples(data,q);
-  const flowMode=new FormData($('#masterSampleForm')).get('flowMode');
   lastData=snapshot();data=result.data;config.sampleNonMerchants=result.pools;config.sampleAccountPlans=result.accountPlans;
   if(flowMode)config.companyFlow={...config.companyFlow,...Object.fromEntries(q.companies.map(n=>[n,flowMode==='true']))};
-  persist();sourceLabel='已更新 · 自定义主档';recalc();$('#masterSampleModal').close();render();masterWizardPreview=null;
+  persist();sourceLabel='已更新 · 自定义主档';recalc();masterWizardDraft=null;$('#masterSampleForm')?.remove();render();masterWizardPreview=null;
   toast('已更新 '+q.companies.length+' 家公司的主档。下一步到「设置异常并生成」生成流水和余额表。');
  });
 };
@@ -540,8 +552,9 @@ function mountComponents(){
  if(mainQueryTable?.id==='statementFlowTable')mainQueryTable.querySelectorAll('thead th').forEach(th=>{if(!th.querySelector('[data-filter-flow]'))th.querySelector('.ba-th-tools')?.remove();});
  if(mainQueryTable)AuditTableTools.attach(mainQueryTable,currentTableQuery(),()=>{pageNo=1;render();},{skip:[0,...(mainQueryTable.tHead.rows[0].cells[mainQueryTable.tHead.rows[0].cells.length-1].textContent==='操作'?[mainQueryTable.tHead.rows[0].cells.length-1]:[])]});
  if(page!=='report')AuditTableTools.mountStatic(document.querySelector('#content'));
+ if(page==='master')openMasterSamples();
 }
-function render(){if(AuditPopover.isOpen(filterPopover))AuditPopover.hide(filterPopover);if(!analysis)recalc();document.querySelectorAll('.sidebar [data-nav]').forEach(b=>{const active=b.dataset.nav===page;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});document.querySelectorAll('.sb-toggle-head').forEach(b=>b.classList.toggle('group-current',!!b.parentElement.querySelector('[aria-current=page]')));$('#pageTitle').textContent=titles[page][0];$('#pageSubtitle').textContent=titles[page][1];$('#sourceLabel').textContent=sourceLabel;$('#sidebarCount').textContent=num(data[K.flow].rows.length)+' 条流水 · '+data[K.company].rows.length+' 家单位';$('#breadcrumbSection').textContent=['report','coverage'].includes(page)?'功能验证':page==='overview'?'数据总览':'测试数据生成';$('#content').innerHTML=(workflow.some(([id])=>id===page)?workflowNav():'')+({overview,master:()=>masters()+stepActions(null,'','rules','下一步：配置流水'),rules,anomaly:anomalies,preview:()=>previews()+stepActions('anomaly','返回异常设置','registry','下一步：对手方工商数据'),report:reportPage,registry:()=>registryPage()+stepActions('preview','返回数据预览','export','下一步：导出测试数据'),coverage:coveragePage,export:exportsPage}[page])();$('#undoTop').disabled=!lastData;mountComponents();}
+function render(){captureMasterWizardDraft();if(AuditPopover.isOpen(filterPopover))AuditPopover.hide(filterPopover);if(!analysis)recalc();document.querySelectorAll('.sidebar [data-nav]').forEach(b=>{const active=b.dataset.nav===page;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});document.querySelectorAll('.sb-toggle-head').forEach(b=>b.classList.toggle('group-current',!!b.parentElement.querySelector('[aria-current=page]')));$('#pageTitle').textContent=titles[page][0];$('#pageSubtitle').textContent=titles[page][1];$('#sourceLabel').textContent=sourceLabel;$('#sidebarCount').textContent=num(data[K.flow].rows.length)+' 条流水 · '+data[K.company].rows.length+' 家单位';$('#breadcrumbSection').textContent=['report','coverage'].includes(page)?'功能验证':page==='overview'?'数据总览':'测试数据生成';$('#content').innerHTML=(workflow.some(([id])=>id===page)?workflowNav():'')+({overview,master:()=>masters()+stepActions(null,'','rules','下一步：配置流水'),rules,anomaly:anomalies,preview:()=>previews()+stepActions('anomaly','返回异常设置','registry','下一步：对手方工商数据'),report:reportPage,registry:()=>registryPage()+stepActions('preview','返回数据预览','export','下一步：导出测试数据'),coverage:coveragePage,export:exportsPage}[page])();$('#undoTop').disabled=!lastData;mountComponents();}
 function navigate(p){closeFlyout();if(narrowScreen.matches&&!sidebarCollapsed())setSidebar(true);page=p;search='';pageNo=1;render();window.scrollTo(0,0);}
 function updateSetting(el){const id=el.dataset.config;if(!id)return;if(id==='fx'&&(!Number.isFinite(Number(el.value))||Number(el.value)<=0)){el.value=config.fx;toast('美元汇率必须大于 0。',true);return;}config[id]=el.type==='checkbox'?el.checked:el.type==='number'?Number(el.value):el.value;if(id==='fx')recalc();if(id==='missingCompany'&&$('#generationScope'))$('#generationScope').textContent=generationScope();if(id==='count'&&$('[data-planned-count]'))$('[data-planned-count]').textContent=num(config.count);persist();}
 async function run(fn){if(busy)return;busy=true;$('#busy').hidden=false;try{await new Promise(r=>setTimeout(r,35));await fn();}catch(e){console.error(e);toast(e.message||String(e),true);}finally{busy=false;$('#busy').hidden=true;}}
@@ -663,8 +676,7 @@ if(id==='exportRegistryAll')run(async()=>X.download(new Blob([await X.workbook(a
 if(id==='exportRegistryDates')run(async()=>X.download(new Blob([await X.workbook({'经营日期自动核验':registryDateAuditTable()})]),'经营日期自动核验_'+registryDate()+'.xlsx'));
 if(id==='exportRegistryRaw')run(async()=>X.download(new Blob([await X.workbook({'导入原始工商档案':R.table(rawRegistry(),registryDate(),exchangeRates())})]),'导入原始工商档案.xlsx'));
 if(['exportRegistryLawsuits','exportRegistryDishonest','exportRegistryPenalties'].includes(id))run(async()=>{const key={exportRegistryLawsuits:'诉讼明细',exportRegistryDishonest:'失信被执行人明细',exportRegistryPenalties:'行政处罚明细'}[id],tables=R.riskTables(rawRegistry(),registryDate());X.download(new Blob([await X.workbook({[key]:tables[key],'合规数量核验':tables['合规数量核验']})]),key+'_'+registryDate()+'.xlsx');});
-if(id==='openMasterSamples')openMasterSamples();
-if(id==='closeMasterSamples')$('#masterSampleModal').close();
+if(id==='resetMasterSamples'){masterWizardDraft=null;openMasterSamples();}
 if(id==='openCatalog'){$('#catalogSearch').value='';renderCatalog();$('#catalogModal').showModal();}
 if(id==='closeCatalog')$('#catalogModal').close();
 if(id==='exportCatalog')run(async()=>X.download(new Blob([await X.workbook({'企业名称库':{headers:['企业名称','来源','来源链接'],rows:E.companyCatalog()}})]),'离线企业名称库.xlsx'));

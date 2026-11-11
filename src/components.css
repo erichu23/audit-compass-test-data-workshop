@@ -890,12 +890,9 @@ body #content table thead th.ba-filtered .ba-filter-btn::before{background-image
 
 .report-detail-summary .report-stat-value{font-weight:700;color:#172438}
 
-#masterSampleModal[open]{width:min(980px,94vw);max-height:90vh;padding:0;display:flex;flex-direction:column}
-#masterSampleModal>.dialog-heading{padding:20px 24px;margin:0;border-bottom:1px solid #e1e8f1;flex-shrink:0}
 #masterSampleForm{display:flex;flex-direction:column;min-height:0;overflow:hidden}
 #masterSampleFields{padding:20px 24px;overflow-y:auto;min-height:0;display:block}
-#masterSampleModal .dialog-footer{padding:14px 24px;margin:0;flex-shrink:0;background:#f8fbff}
-#masterSampleModal [hidden]{display:none!important}
+#masterGeneratorPanel [hidden]{display:none!important}
 .master-wizard-steps{display:flex;gap:10px;list-style:none;padding:0;margin:0 0 20px}
 .master-wizard-steps li{flex:1;padding:11px 14px;background:#f0f4f9;color:#6b7f98;border-radius:6px;font-size:13px}
 .master-wizard-steps .is-current{background:#e6f0ff;color:#1f5ead;font-weight:700}
@@ -912,6 +909,13 @@ body #content table thead th.ba-filtered .ba-filter-btn::before{background-image
 .master-advanced>.form-grid{margin:16px 0}.master-advanced>.field{display:grid;margin:12px 0}
 .master-wizard-error{padding:12px;border:1px solid #e7b5b5;background:#fff4f4;color:#a33737;border-radius:6px}
 .master-review-warning{color:#275c9c;font-weight:600}.master-next-note{margin-top:18px}
-#masterSampleModal table{width:100%;border-collapse:collapse}#masterSampleModal th,#masterSampleModal td{padding:9px;border:1px solid #dce5ef;text-align:left}
-#masterSampleModal th{background:#f0f5fb}#masterSampleModal .master-sample-companies{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
-@media(max-width:650px){.master-preset-grid{grid-template-columns:1fr}#masterSampleModal .master-sample-companies{grid-template-columns:1fr}.master-wizard-steps li{padding:8px;font-size:11px}#masterSampleModal .dialog-footer{align-items:flex-start;gap:8px;flex-direction:column}}
+#masterGeneratorPanel table{width:100%;border-collapse:collapse}#masterGeneratorPanel th,#masterGeneratorPanel td{padding:9px;border:1px solid #dce5ef;text-align:left}
+#masterGeneratorPanel th{background:#f0f5fb}#masterGeneratorPanel .master-sample-companies{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(max-width:650px){.master-preset-grid{grid-template-columns:1fr}#masterGeneratorPanel .master-sample-companies{grid-template-columns:1fr}.master-wizard-steps li{padding:8px;font-size:11px}}
+
+/* The master generation wizard lives in the page and follows page scrolling. */
+#masterGeneratorPanel #masterSampleForm{display:block;overflow:visible}
+#masterGeneratorPanel #masterSampleFields{padding:4px 0 0;overflow:visible;max-height:none}
+#masterGeneratorPanel .master-wizard-footer{padding:16px 0 0;margin:20px 0 0;background:transparent;display:flex;align-items:center;justify-content:space-between;border-top:1px solid #dce5ef}
+#masterGeneratorPanel .master-wizard-footer p{margin:0;font-size:12px;color:#637c98}
+@media(max-width:650px){#masterGeneratorPanel .master-wizard-footer{align-items:flex-start;gap:12px;flex-direction:column}}
