@@ -2,7 +2,7 @@
 'use strict';
 const D=g.docx,theme=g.AuditReport.theme;
 const pageWidth=15704;
-const font={ascii:'Arial',hAnsi:'Arial',eastAsia:'Arial Unicode MS',cs:'Arial'};
+const font={ascii:'Microsoft YaHei',hAnsi:'Microsoft YaHei',eastAsia:'微软雅黑',cs:'Microsoft YaHei'};
 const border={style:D.BorderStyle.SINGLE,size:4,color:theme.border};
 const borders={top:border,bottom:border,left:border,right:border,insideHorizontal:border,insideVertical:border};
 function paragraph(text,{heading,align,bold=false,color=theme.ink,size=18}={}){
@@ -19,7 +19,7 @@ async function svgImage(svg,width){
  clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
  clone.setAttribute('width',String(pixels*2));clone.setAttribute('height',String(height*2));
  const style=document.createElementNS('http://www.w3.org/2000/svg','style');
- style.textContent='text{font:9px Arial,sans-serif;fill:#435976}';clone.prepend(style);
+ style.textContent='text{font:9px "Microsoft YaHei","微软雅黑",sans-serif;fill:#435976}';clone.prepend(style);
  const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'}));
  try{
   const image=new Image();

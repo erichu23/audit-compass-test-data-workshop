@@ -20,7 +20,7 @@
 .report-chart ul{list-style:none;padding:0;margin:0}
 .report-chart li{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px}
 .report-chart i{display:inline-block;width:10px;height:10px;border-radius:2px;flex:none}
-.report-chart svg text{font:10px Arial,sans-serif;fill:#3b5261}
+.report-chart svg text{font:10px "Microsoft YaHei","微软雅黑",sans-serif;fill:#3b5261}
 
 .workflow{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px}
 .workflow button{display:inline-flex;align-items:center;gap:8px;padding:7px 12px}
@@ -1249,7 +1249,7 @@ body .statement-sticky-clone-table thead th.ba-filtered .ba-filter-btn::before{
 .registry-grid{display:flex;flex-wrap:wrap;gap:8px 12px}
 #registryModal{max-height:90vh}
 .report-stacked svg{display:block;width:100%;max-width:440px;height:auto;margin:0 auto}
-.report-stacked svg text{font:9px Arial,sans-serif;fill:#435976}
+.report-stacked svg text{font:9px "Microsoft YaHei","微软雅黑",sans-serif;fill:#435976}
 .report-stacked .report-stack-legend{display:flex;flex-wrap:wrap;justify-content:center;gap:2px 8px}
 .report-stacked .report-stack-legend li{font-size:10px;gap:3px}
 .report-stacked .report-stack-legend i{width:7px;height:7px;border-radius:1px}
@@ -1298,7 +1298,7 @@ body .statement-sticky-clone-table thead th.ba-filtered .ba-filter-btn::before{
 }
 
 /* Word-style report pages, independent of the workspace tables. */
-.report-document{font-family:Arial,"PingFang SC","Microsoft YaHei",sans-serif;color:#171e29}
+.report-document{font-family:"Microsoft YaHei","微软雅黑",sans-serif;color:#171e29}
 .report-sheet .report-table table,.report-sheet .report-cover-grid,.report-sheet .report-concentration{border-collapse:collapse}
 .report-sheet .report-table table th,.report-sheet .report-table table td,.report-sheet .report-concentration th,.report-sheet .report-concentration td{border:1px solid #bac9da}
 .report-sheet .report-table thead th,.report-sheet .report-concentration thead th{background:#e8f0fa;color:#203b5d}
@@ -25869,7 +25869,7 @@ var __async = (__this, __arguments, generator) => {
 'use strict';
 const D=g.docx,theme=g.AuditReport.theme;
 const pageWidth=15704;
-const font={ascii:'Arial',hAnsi:'Arial',eastAsia:'Arial Unicode MS',cs:'Arial'};
+const font={ascii:'Microsoft YaHei',hAnsi:'Microsoft YaHei',eastAsia:'微软雅黑',cs:'Microsoft YaHei'};
 const border={style:D.BorderStyle.SINGLE,size:4,color:theme.border};
 const borders={top:border,bottom:border,left:border,right:border,insideHorizontal:border,insideVertical:border};
 function paragraph(text,{heading,align,bold=false,color=theme.ink,size=18}={}){
@@ -25886,7 +25886,7 @@ async function svgImage(svg,width){
  clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
  clone.setAttribute('width',String(pixels*2));clone.setAttribute('height',String(height*2));
  const style=document.createElementNS('http://www.w3.org/2000/svg','style');
- style.textContent='text{font:9px Arial,sans-serif;fill:#435976}';clone.prepend(style);
+ style.textContent='text{font:9px "Microsoft YaHei","微软雅黑",sans-serif;fill:#435976}';clone.prepend(style);
  const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'}));
  try{
   const image=new Image();

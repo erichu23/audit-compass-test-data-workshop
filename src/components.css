@@ -624,7 +624,7 @@ body .statement-sticky-clone-table thead th.ba-filtered .ba-filter-btn::before{
 .registry-grid{display:flex;flex-wrap:wrap;gap:8px 12px}
 #registryModal{max-height:90vh}
 .report-stacked svg{display:block;width:100%;max-width:440px;height:auto;margin:0 auto}
-.report-stacked svg text{font:9px Arial,sans-serif;fill:#435976}
+.report-stacked svg text{font:9px "Microsoft YaHei","微软雅黑",sans-serif;fill:#435976}
 .report-stacked .report-stack-legend{display:flex;flex-wrap:wrap;justify-content:center;gap:2px 8px}
 .report-stacked .report-stack-legend li{font-size:10px;gap:3px}
 .report-stacked .report-stack-legend i{width:7px;height:7px;border-radius:1px}
@@ -673,7 +673,7 @@ body .statement-sticky-clone-table thead th.ba-filtered .ba-filter-btn::before{
 }
 
 /* Word-style report pages, independent of the workspace tables. */
-.report-document{font-family:Arial,"PingFang SC","Microsoft YaHei",sans-serif;color:#171e29}
+.report-document{font-family:"Microsoft YaHei","微软雅黑",sans-serif;color:#171e29}
 .report-sheet .report-table table,.report-sheet .report-cover-grid,.report-sheet .report-concentration{border-collapse:collapse}
 .report-sheet .report-table table th,.report-sheet .report-table table td,.report-sheet .report-concentration th,.report-sheet .report-concentration td{border:1px solid #bac9da}
 .report-sheet .report-table thead th,.report-sheet .report-concentration thead th{background:#e8f0fa;color:#203b5d}

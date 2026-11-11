@@ -20,7 +20,7 @@
 .report-chart ul{list-style:none;padding:0;margin:0}
 .report-chart li{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px}
 .report-chart i{display:inline-block;width:10px;height:10px;border-radius:2px;flex:none}
-.report-chart svg text{font:10px Arial,sans-serif;fill:#3b5261}
+.report-chart svg text{font:10px "Microsoft YaHei","微软雅黑",sans-serif;fill:#3b5261}
 
 .workflow{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px}
 .workflow button{display:inline-flex;align-items:center;gap:8px;padding:7px 12px}
