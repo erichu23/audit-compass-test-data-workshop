@@ -632,7 +632,7 @@ function sectionBody(s,m,continuations){
  ]})),'report-four')+extra('个人交易明细',tableHTML(tables[1]));
  if(s.id==='follow')return sideBySide(charts.map((c,i)=>{
   const r=tables[0].rows[i];
-  return chartAndTable(c,tables)+'<p class="report-note">'+(i?'与不在客户和供应商清单中的对手方的往来':'对同一交易对方的往来同时存在收款、付款')+'（已剔除集团合并单位内的交易）</p>'+criteriaForm(i?'unknown':'overlap',m.criteria)+tableHTML({name:'系统设定筛选结果',headers:['指标','本期结果'],rows:[['识别对手方数',r[1]+' 家'],['识别流入金额 / 笔数',currency.format(r[2])+' 百万元 / '+integer(r[3])+' 笔'],['识别流出金额 / 笔数',currency.format(r[4])+' 百万元 / '+integer(r[5])+' 笔']]})+'<p class="report-note">'+esc(r[8])+'</p><p class="report-follow-highlight">'+esc(r[9])+'</p>'+extra(tables[i+1].name,tableHTML(tables[i+1]));
+  return chartAndTable(c,tables)+'<p class="report-note">'+(i?'与不在客户和供应商清单中的对手方的往来':'对同一交易对方的往来同时存在收款、付款')+'（已剔除集团合并单位内的交易）</p>'+criteriaForm(i?'unknown':'overlap',m.criteria)+'<div class="report-registry-screen"><h4>系统设定筛选条件</h4><p class="report-note">'+esc(r[8])+'</p>'+tableHTML({name:'',hideHeader:true,headers:['指标','本期结果'],rows:[['识别对手方数',integer(r[1])],['识别流入金额/笔数',currency.format(r[2])+'百万/'+integer(r[3])+'笔'],['识别流出金额/笔数',currency.format(r[4])+'百万/'+integer(r[5])+'笔']]})+'</div><p class="report-follow-highlight">'+esc(r[9])+'</p>'+extra(tables[i+1].name,tableHTML(tables[i+1]));
  }));
  if(s.id==='focus'){
   const t=tables[0],order=[0,1,2,14,3,4,18,20,19,21,22,23,24,25,26,16,15,5,6,7,8,9,10,11,12,13];
