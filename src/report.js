@@ -172,12 +172,14 @@ function compute(data,settings={}){
  const external=rows.filter(r=>!own.has(r[3]));
  const externalTotals=sum(external);
  const {sources:periodSources,status:sourceStatus}=scopeData(data,periodRows,own,from,to,cut);
- const cover=section('cover','综合分析报告（年审适用）','本页为模拟数据的核验预期值。'+(originalCurrency?'金额只使用 '+originalCurrency+' 原币。资料状态仍基于本期全币种数据。':'金额折算为人民币后汇总。'+(unknown.length?'未设置汇率的币种 '+unknown.join('、')+' 使用导入表已有的等值人民币列，缺值按 0。':''))+' 最后更新时间需与平台记录核对。');
+ const cover=section('cover','综合分析报告（年审适用）','本页为模拟数据的核验预期值。'+(originalCurrency?'金额只使用 '+originalCurrency+' 原币。资料状态仍基于本期全币种数据。':'金额折算为人民币后汇总。'+(unknown.length?'未设置汇率的币种 '+unknown.join('、')+' 使用导入表已有的等值人民币列，缺值按 0。':''))+' 最后更新时间为本次报告生成时的北京时间（模拟）。');
  table(cover,'封面',['项目','当前结果'],[['被审计单位',[...own].join('、')],['系统已有数据期间',rangeLabel(minimum,maximum)],['财务报表期间',rangeLabel(from,to)],['本期首末交易日期',rangeLabel(selectedDates[0],selectedDates.at(-1))],['金额口径',originalCurrency?'原币 '+originalCurrency:'折算人民币'],['测试汇率',fxLabel],['报告版本','核验预览 V1.0']]);
+ const timestampParts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(new Date()).map(p=>[p.type,p.value]));
+ const simulatedUpdatedAt=timestampParts.year+'-'+timestampParts.month+'-'+timestampParts.day+' '+timestampParts.hour+':'+timestampParts.minute+':'+timestampParts.second;
  const masterList=[['company','被审计单位主档'],['bank','银行账号主档'],['flow','资金交易明细'],['related','关联方主档'],['customer','客户主档'],['supplier','供应商主档'],['employee','员工主档'],['balance','银行科目主档'],['gl','总账科目余额表']];
  table(cover,'分析数据范围',['主档名称','状态','本期记录数','最后更新时间','本期核验说明'],masterList.map(([k,label])=>{
   const [,status,count,note]=sourceStatus.find(r=>r[0]===k);
-  return [label,status,count,missingValue,note];
+  return [label,status,count,simulatedUpdatedAt,note];
  }));
 
  const background=section('background','1 被审计单位企业背景','工商、诉讼、执行和董监高变更资料需另行核验。当前预览可查看主档中的单位、上级公司和行业。');
@@ -561,7 +563,7 @@ function coverHTML(s){
  const info=cover.rows.slice(0,3);
  const version=cover.rows.find(([label])=>label==='报告版本');
  const row=([label,text])=>'<tr><th scope="row">'+esc(label)+'</th><td>'+esc(text)+(label==='系统已有数据期间'?'<p>本报告为年审使用模板，资金流水交易统计按所选报告期间核算。</p>':'')+'</td></tr>';
- return '<table class="report-cover-grid"><tbody>'+info.map(row).join('')+'<tr><th scope="row">分析数据范围</th><td><div class="table-scroll"><table class="report-cover-status"><thead><tr>'+[0,1,3].map(i=>'<th>'+esc(status.headers[i])+'</th>').join('')+'</tr></thead><tbody>'+status.rows.filter(r=>r[0]!=='总账科目余额表').map(r=>'<tr>'+[0,1,3].map(i=>'<td'+(i===1?' title="'+esc(r[4])+'"':'')+'>'+tableCell(r[i],status.headers[i])+'</td>').join('')+'</tr>').join('')+'</tbody></table></div></td></tr>'+row(version)+'</tbody></table><div class="report-cover-notes"><b>本报告数据展示说明</b><p>本报告仅展示特定指标的汇总分析，以及重点内容的前20大清单。特定分析事项的完整清单请见本报告附录Excel文件。依据交易对手方汇总的资金流水全量分析，请见同报告一同导出的&lt;资金流水核查和工商信息汇总明细附件.excel&gt;。</p><b>报告说明</b><p>本报告是由毕马威审计罗盘平台输出生成，基于对项目组上传的资金交易明细，通过平台设定的数据分析方法，帮助项目组对被审计单位进行风险画像，以及识别包括集中度高、可能存在潜在舞弊风险的交易对手方及相关交易。该报告属于审计风险评价的一部分，不构成任何实质性审计证据或审计意见。</p></div>';
+ return '<table class="report-cover-grid"><tbody>'+info.map(row).join('')+'<tr><th scope="row">分析数据范围</th><td><div class="table-scroll"><table class="report-cover-status"><colgroup><col style="width:40%"><col style="width:22%"><col style="width:38%"></colgroup><thead><tr>'+[0,1,3].map(i=>'<th>'+esc(status.headers[i])+'</th>').join('')+'</tr></thead><tbody>'+status.rows.filter(r=>r[0]!=='总账科目余额表').map(r=>'<tr>'+[0,1,3].map(i=>'<td'+(i===1?' title="'+esc(r[4])+'"':'')+'>'+tableCell(r[i],status.headers[i])+'</td>').join('')+'</tr>').join('')+'</tbody></table></div></td></tr>'+row(version)+'</tbody></table><div class="report-cover-notes"><b>本报告数据展示说明</b><p>本报告仅展示特定指标的汇总分析，以及重点内容的前20大清单。特定分析事项的完整清单请见本报告附录Excel文件。依据交易对手方汇总的资金流水全量分析，请见同报告一同导出的&lt;资金流水核查和工商信息汇总明细附件.excel&gt;。</p><b>报告说明</b><p>本报告是由毕马威审计罗盘平台输出生成，基于对项目组上传的资金交易明细，通过平台设定的数据分析方法，帮助项目组对被审计单位进行风险画像，以及识别包括集中度高、可能存在潜在舞弊风险的交易对手方及相关交易。该报告属于审计风险评价的一部分，不构成任何实质性审计证据或审计意见。</p></div>';
 }
 function concentrationHTML(s){
  const sections=s.tables.filter(t=>/^(流入|流出)集中度$/.test(t.name));

@@ -749,3 +749,10 @@ body .statement-sticky-clone-table thead th.ba-filtered .ba-filter-btn::before{
 .report-document .report-toc li{font-size:14px;line-height:1.8;padding-top:6px;padding-bottom:6px}
 .report-document .report-toc .toc-chapter{margin-top:8px}
 @media print{.report-sheet-footer>span:first-child{display:none}}
+
+/* Fill the cover data-range cell and align its three columns. */
+.report-sheet .report-cover-status{width:100%;max-width:none;table-layout:fixed}
+.report-sheet .report-cover-status th,.report-sheet .report-cover-status td{padding:7px 12px;line-height:1.5;border:1px solid #d7e1ee;vertical-align:middle}
+.report-sheet .report-cover-status th:first-child,.report-sheet .report-cover-status td:first-child{text-align:left}
+.report-sheet .report-cover-status th:nth-child(n+2),.report-sheet .report-cover-status td:nth-child(n+2){text-align:center;white-space:nowrap}
+.report-sheet .report-cover-status .report-status{min-width:72px;justify-content:center}

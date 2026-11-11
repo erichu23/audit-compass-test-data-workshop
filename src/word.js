@@ -55,7 +55,8 @@ async function grid(children,width,weights){
 async function table(node,width){
  const rows=[...node.rows],columns=Math.max(...rows.map(row=>[...row.cells].reduce((n,c)=>n+c.colSpan,0)));
  const unit=Math.floor(width/columns);
- const widths=node.classList.contains('report-cover-grid')?[Math.floor(width*.23),Math.floor(width*.77)]:Array(columns).fill(unit);
+ const customWidths=node.classList.contains('report-cover-grid')?[.23,.77]:node.classList.contains('report-cover-status')?[.40,.22,.38]:null;
+ const widths=customWidths?customWidths.map(n=>Math.floor(width*n)):Array(columns).fill(unit);
  return new D.Table({
   layout:D.TableLayoutType.FIXED,width:{size:width,type:D.WidthType.DXA},columnWidths:widths,borders,
   rows:await Promise.all(rows.map(async row=>new D.TableRow({
@@ -65,10 +66,10 @@ async function table(node,width){
     const statusElement=cell.querySelector('.report-status');
     const status=statusElement?.closest('td,th')===cell?theme.statuses[statusElement.dataset.status]:undefined;
     return new D.TableCell({
-     width:{size:node.classList.contains('report-cover-grid')?widths[i]:unit*cell.colSpan,type:D.WidthType.DXA},columnSpan:cell.colSpan,rowSpan:cell.rowSpan,
+     width:{size:customWidths?widths[i]:unit*cell.colSpan,type:D.WidthType.DXA},columnSpan:cell.colSpan,rowSpan:cell.rowSpan,
      margins:{top:45,bottom:45,left:55,right:55},
      shading:status?{fill:status.fill}:header||total?{fill:header?theme.fill:theme.total}:undefined,
-     children:await blocks(cell,Math.max(200,(node.classList.contains('report-cover-grid')?widths[i]:unit*cell.colSpan)-120),{cell:true,bold:header||total||!!status,color:status?.text||(header?theme.heading:theme.ink),align:status?D.AlignmentType.CENTER:undefined})
+     children:await blocks(cell,Math.max(200,(customWidths?widths[i]:unit*cell.colSpan)-120),{cell:true,bold:header||total||!!status,color:status?.text||(header?theme.heading:theme.ink),align:status||node.classList.contains('report-cover-status')&&i>0?D.AlignmentType.CENTER:undefined})
     });
    }))
   })))
