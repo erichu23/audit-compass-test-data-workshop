@@ -470,33 +470,43 @@ function tableCell(value,header){
  if(typeof value==='string'&&header.includes('%')&&/区间|占比|比例/.test(header))return esc(value.replace(/(\d)%/g,'$1'));
  return display(value,header);
 }
-let reportPagerTables=[],renderAllRows=false,renderForExport=false;
+let reportPagerTables=[],reportInteractiveTables=[],renderAllRows=false,renderForExport=false;
 function detailRowsHTML(t,rows){
  return rows.map(r=>'<tr'+(r.some((v,i)=>i<2&&typeof v==='string'&&/^(合计|前20小计)/.test(v))?' class="report-total"':'')+'>'+t.headers.map((h,i)=>'<td class="'+(typeof r[i]==='number'?'report-num':'')+'">'+tableCell(r[i],h)+'</td>').join('')+'</tr>').join('')||
   '<tr><td colspan="'+t.headers.length+'">本期无记录</td></tr>';
 }
 function tableHTML(t){
+ const interactiveId=renderForExport?null:reportInteractiveTables.push(t)-1;
  const pageable=!renderAllRows&&!t.limit&&t.rows.length>20,id=pageable?reportPagerTables.push(t)-1:null;
  const visible=t.rows.slice(0,t.limit??(pageable?20:t.rows.length));
  const heading=h=>'<th>'+esc(reportHeader(h))+'</th>';
  const head=t.grouped?'<tr>'+t.headers.slice(0,2).map(h=>'<th rowspan="2">'+esc(reportHeader(h))+'</th>').join('')+'<th colspan="3">流入</th><th colspan="3">流出</th></tr><tr>'+t.headers.slice(2).map(h=>heading(h.slice(2))).join('')+'</tr>':'<tr>'+t.headers.map(heading).join('')+'</tr>';
  return '<div class="report-table"><h4>'+esc(t.name)+'</h4>'+(t.note?'<p class="muted report-detail-summary">'+esc(t.note).replaceAll('\n','<br>')+'</p>':'')+
-  '<div class="table-scroll"><table class="table">'+(t.hideHeader?'':'<thead>'+head+(t.filterHeaders?'<tr class="report-filter-header">'+t.filterHeaders.map(v=>'<th>'+esc(v)+'</th>').join('')+'</tr>':'')+'</thead>')+'<tbody>'+detailRowsHTML(t,visible)+'</tbody></table></div>'+
+  '<div class="table-scroll"><table class="table"'+(interactiveId==null?'':' data-report-table="'+interactiveId+'"')+'>'+(t.hideHeader?'':'<thead>'+head+(t.filterHeaders?'<tr class="report-filter-header">'+t.filterHeaders.map(v=>'<th>'+esc(v)+'</th>').join('')+'</tr>':'')+'</thead>')+'<tbody>'+detailRowsHTML(t,visible)+'</tbody></table></div>'+
   (pageable?'<div class="pagination" data-report-pager="'+id+'" aria-label="'+esc(t.name)+'分页"></div>':visible.length<t.rows.length?'<p class="muted">页面显示前 '+visible.length+' 行，共 '+t.rows.length+' 行。完整明细见本期核验 Excel。</p>':'')+'</div>';
 }
 const printPagers=[];
 function mountPagers(){
  printPagers.length=0;
- for(const el of document.querySelectorAll('[data-report-pager]')){
-  const t=reportPagerTables[Number(el.dataset.reportPager)],tbody=el.previousElementSibling.querySelector('tbody');
+ for(const element of document.querySelectorAll('[data-report-table]')){
+  const t=reportInteractiveTables[Number(element.dataset.reportTable)],tbody=element.tBodies[0];
+  const el=element.closest('.table-scroll').nextElementSibling;
+  const pager=el?.matches('[data-report-pager]')?el:null;
+  const source=t.limit?t.rows.slice(0,t.limit):t.rows;
+  const isTotal=r=>!r[0]&&/合计|小计|总计|其中|其他/.test(String(r[1]||''));
+  const pinned=source.filter(isTotal),rows=source.filter(r=>!isTotal(r)),state={};
   let page=1,pageSize=20;
   const draw=()=>{
-   tbody.innerHTML=detailRowsHTML(t,t.rows.slice((page-1)*pageSize,page*pageSize));
-   g.renderAuditPager(el,{total:t.rows.length,page,pageSize,onPage:n=>{page=n;draw();},onPageSize:n=>{pageSize=n;page=1;draw();}});
+   const hits=g.AuditTableTools.query(rows,state),visible=pager?hits.slice((page-1)*pageSize,page*pageSize):hits;
+   const leading=pinned.filter(r=>/合计|总计/.test(String(r[1]))),trailing=pinned.filter(r=>!leading.includes(r));
+   tbody.innerHTML=detailRowsHTML(t,state.sort||Object.keys(state.filters||{}).length?[...leading,...visible,...trailing]:(pager?source.slice((page-1)*pageSize,page*pageSize):source));
+   if(pager)g.renderAuditPager(pager,{total:hits.length,page,pageSize,onPage:n=>{page=n;draw();},onPageSize:n=>{pageSize=n;page=1;draw();}});
   };
+  g.AuditTableTools.attach(element,state,()=>{page=1;draw();});
   draw();
-  printPagers.push({showAll:()=>{tbody.innerHTML=detailRowsHTML(t,t.rows);},restore:draw});
+  printPagers.push({showAll:()=>{tbody.innerHTML=detailRowsHTML(t,source);},restore:draw});
  }
+
 }
 g.addEventListener?.('beforeprint',()=>printPagers.forEach(p=>p.showAll()));
 g.addEventListener?.('afterprint',()=>printPagers.forEach(p=>p.restore()));
@@ -693,7 +703,7 @@ function reportPages(m){
 }
 function render(m,{allRows=false,forExport=false}={}){
  renderAllRows=allRows;renderForExport=forExport;
- reportPagerTables=[];
+ reportPagerTables=[];reportInteractiveTables=[];
  const full=(m.minimum||m.from)+'|'+(m.maximum||m.to);
  const first=Number((m.minimum||m.from).slice(0,4)),last=Number((m.maximum||m.to).slice(0,4));
  const presets=[['全部流水期间',full]];

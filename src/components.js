@@ -61,3 +61,71 @@
 
   window.renderAuditPager=renderAuditPager;
 })();
+
+/* View-only table queries: numeric sorting, combined column filters and reset. */
+(function(g){
+ const clean=v=>String(v??'').trim();
+ function number(v){const s=clean(v).replace(/[,，%]/g,'');return s!==''&&Number.isFinite(Number(s))?Number(s):null;}
+ function query(rows,state,value=(r,c)=>r[c]){
+  const hits=rows.filter(r=>Object.entries(state.filters||{}).every(([c,f])=>{
+   const v=value(r,Number(c)),s=clean(v).toLocaleLowerCase(),n=number(v);
+   return (!f.text||s.includes(f.text.toLocaleLowerCase()))&&(!f.blank||s==='—'||s==='')&&(f.min===''||f.min==null||n!=null&&n>=Number(f.min))&&(f.max===''||f.max==null||n!=null&&n<=Number(f.max));
+  }));
+  if(state.sort)hits.sort((a,b)=>{const x=value(a,state.sort.column),y=value(b,state.sort.column),nx=number(x),ny=number(y);return (nx!=null&&ny!=null?nx-ny:clean(x).localeCompare(clean(y),'zh-CN',{numeric:true}))*(state.sort.desc?-1:1);});
+  return hits;
+ }
+ const esc=s=>clean(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ let popup;
+ function attach(table,state,onChange,{skip=[]}={}){
+  if(table.dataset.queryReady)return;table.dataset.queryReady='true';
+  const head=table.tHead;if(!head)return;
+  const occupied=[];
+  [...head.rows].forEach((row,ri)=>{let ci=0;[...row.cells].forEach(th=>{
+   while(occupied[ri]?.[ci])ci++;const col=ci;
+   for(let r=ri;r<ri+th.rowSpan;r++){occupied[r]??=[];for(let c=ci;c<ci+th.colSpan;c++)occupied[r][c]=true;}ci+=th.colSpan;
+   if(th.colSpan>1||row.classList.contains('report-filter-header')||skip.includes(col)||th.querySelector('button')||th.closest('table')!==table||!th.textContent.trim())return;
+   const title=th.textContent.trim();
+   const tools=document.createElement('span');tools.className='ba-th-tools table-query-tools';
+   tools.innerHTML='<span class="ba-sort-icons"><button type="button" class="ba-sort-up" aria-label="'+esc(title)+'升序" title="升序"></button><button type="button" class="ba-sort-down" aria-label="'+esc(title)+'降序" title="降序"></button></span><button type="button" class="ba-filter-btn" aria-label="筛选'+esc(title)+'" title="筛选"></button>';
+   th.append(tools);
+   th.dataset.queryColumn=col;
+   const refresh=()=>table.querySelectorAll('[data-query-column]').forEach(cell=>{const c=Number(cell.dataset.queryColumn),active=state.sort?.column===c;cell.classList.toggle('ba-filtered',!!state.filters?.[c]);cell.classList.toggle('ba-sort-asc',active&&!state.sort.desc);cell.classList.toggle('ba-sort-desc',active&&state.sort.desc);cell.setAttribute('aria-sort',active?(state.sort.desc?'descending':'ascending'):'none');});refresh();
+   tools.querySelectorAll('.ba-sort-icons button').forEach((b,i)=>b.onclick=()=>{state.sort={column:col,desc:!!i};onChange();refresh();});
+   tools.querySelector('.ba-filter-btn').onclick=()=>{
+    popup?.remove();popup=document.createElement('div');popup.className='table-query-popup';popup.setAttribute('popover','auto');document.body.append(popup);
+    const f=state.filters?.[col]||{};
+    popup.innerHTML='<form><b>'+esc(title)+'</b><label>包含文字<input name="text" value="'+esc(f.text)+'" placeholder="输入名称、日期或内容"></label><div class="table-query-range"><label>最小值<input type="number" step="any" name="min" value="'+esc(f.min)+'"></label><label>最大值<input type="number" step="any" name="max" value="'+esc(f.max)+'"></label></div><label><input type="checkbox" name="blank"'+(f.blank?' checked':'')+'> 仅空白值</label><small>多列条件同时生效；数值范围包含上下限。</small><div class="actions"><button type="button" data-clear>重置本列</button><button type="button" data-all>重置全表</button><button class="primary" type="submit">应用</button></div></form>';
+    const close=()=>{popup?.remove();popup=null;};
+    popup.querySelector('form').onsubmit=e=>{e.preventDefault();const f=Object.fromEntries(new FormData(e.target));if(f.min!==''&&f.max!==''&&Number(f.min)>Number(f.max)){popup.querySelector('[name=max]').setCustomValidity('最大值不能小于最小值');popup.querySelector('[name=max]').oninput=e=>e.target.setCustomValidity('');popup.querySelector('[name=max]').reportValidity();return;}state.filters??={};if(f.text||f.min!==''||f.max!==''||f.blank)state.filters[col]=f;else delete state.filters[col];close();onChange();refresh();};
+    popup.querySelector('[data-clear]').onclick=()=>{delete (state.filters||{})[col];if(state.sort?.column===col)state.sort=null;close();onChange();refresh();};
+    popup.querySelector('[data-all]').onclick=()=>{state.filters={};state.sort=null;close();onChange();refresh();};
+    popup.showPopover();const rect=th.getBoundingClientRect();popup.style.left=Math.max(8,Math.min(rect.left,innerWidth-340))+'px';popup.style.top=Math.max(8,Math.min(rect.bottom+5,innerHeight-popup.offsetHeight-8))+'px';popup.querySelector('input').focus();
+   };
+  });});
+ }
+ function mountStatic(root){
+  root.querySelectorAll('table').forEach(table=>{
+   if(table.dataset.queryReady||table.id==='statementFlowTable'||!table.tHead||!table.tBodies.length)return;
+   const body=table.tBodies[0],original=body.innerHTML;
+   if([...body.rows].some(r=>[...r.cells].some(c=>c.rowSpan>1))){
+    const spans=[];
+    [...body.rows].forEach(row=>{const cells=[...row.cells],out=[];let i=0,c=0;
+     while(i<cells.length||spans.some((s,j)=>j>=c&&s?.left>0)){
+      if(spans[c]?.left>0){const saved=spans[c];out.push(saved.cell.cloneNode(true));saved.left--;c++;continue;}
+      const cell=cells[i++];if(!cell)break;
+      const clone=cell.cloneNode(true);clone.rowSpan=1;out.push(clone);
+      if(cell.rowSpan>1)spans[c]={cell:clone,left:cell.rowSpan-1};c+=cell.colSpan;
+     }row.replaceChildren(...out);
+    });
+   }
+   const rows=[...body.rows];
+   const pinned=r=>r.classList.contains('report-total')||/^(合计|总计|小计|前20小计|其他|其中)/.test(r.textContent.trim());
+   const fixed=rows.filter(pinned),data=rows.filter(r=>!pinned(r)),state={};
+   const draw=()=>body.replaceChildren(...fixed,...query(data,state,(r,c)=>r.cells[c]?.textContent));
+   attach(table,state,draw);
+   g.addEventListener('beforeprint',()=>{if(table.isConnected)body.innerHTML=original;});
+   g.addEventListener('afterprint',()=>{if(table.isConnected)body.replaceChildren(...rows);});
+  });
+ }
+ g.AuditTableTools={query,attach,mountStatic};
+})(globalThis);

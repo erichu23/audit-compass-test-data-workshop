@@ -1383,6 +1383,7 @@ body .statement-sticky-clone-table thead th.ba-filtered .ba-filter-btn::before{
 .report-sheet .report-cover-status .report-status{min-width:72px;justify-content:center}
 
 @media print{.report-document .report-extra{display:none!important}}
+.table-query-tools{margin-left:7px;display:inline-flex;vertical-align:middle;position:static!important}.table-query-popup{position:fixed;inset:auto;margin:0;width:330px;max-height:85vh;overflow:auto;padding:18px;border:1px solid #dce5f1;border-radius:8px;color:#203b5d;box-shadow:0 8px 28px #15376322;background:#fff}.table-query-popup form{display:grid;gap:12px}.table-query-popup label{display:grid;gap:5px;font-size:12px}.table-query-popup label:has([type=checkbox]){display:flex;align-items:center}.table-query-popup input:not([type=checkbox]){width:100%;padding:8px;border:1px solid #ccd8e6;border-radius:5px}.table-query-range{display:grid;grid-template-columns:1fr 1fr;gap:10px}.table-query-popup small{font-size:11px;color:#758498}.table-query-popup .actions{gap:5px}.table-query-popup button{padding:7px 9px;font-size:12px}@media print{.table-query-tools,.table-query-popup{display:none!important}}
 </style></head><body>
 <header class="layout-header">
  <div class="layout-header-name">Audit Compass测试数据工作坊 <span class="layout-header-project" id="sourceLabel"></span></div>
@@ -1946,6 +1947,74 @@ g.AuditExcel={workbook,read,download};
 
   window.renderAuditPager=renderAuditPager;
 })();
+
+/* View-only table queries: numeric sorting, combined column filters and reset. */
+(function(g){
+ const clean=v=>String(v??'').trim();
+ function number(v){const s=clean(v).replace(/[,，%]/g,'');return s!==''&&Number.isFinite(Number(s))?Number(s):null;}
+ function query(rows,state,value=(r,c)=>r[c]){
+  const hits=rows.filter(r=>Object.entries(state.filters||{}).every(([c,f])=>{
+   const v=value(r,Number(c)),s=clean(v).toLocaleLowerCase(),n=number(v);
+   return (!f.text||s.includes(f.text.toLocaleLowerCase()))&&(!f.blank||s==='—'||s==='')&&(f.min===''||f.min==null||n!=null&&n>=Number(f.min))&&(f.max===''||f.max==null||n!=null&&n<=Number(f.max));
+  }));
+  if(state.sort)hits.sort((a,b)=>{const x=value(a,state.sort.column),y=value(b,state.sort.column),nx=number(x),ny=number(y);return (nx!=null&&ny!=null?nx-ny:clean(x).localeCompare(clean(y),'zh-CN',{numeric:true}))*(state.sort.desc?-1:1);});
+  return hits;
+ }
+ const esc=s=>clean(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ let popup;
+ function attach(table,state,onChange,{skip=[]}={}){
+  if(table.dataset.queryReady)return;table.dataset.queryReady='true';
+  const head=table.tHead;if(!head)return;
+  const occupied=[];
+  [...head.rows].forEach((row,ri)=>{let ci=0;[...row.cells].forEach(th=>{
+   while(occupied[ri]?.[ci])ci++;const col=ci;
+   for(let r=ri;r<ri+th.rowSpan;r++){occupied[r]??=[];for(let c=ci;c<ci+th.colSpan;c++)occupied[r][c]=true;}ci+=th.colSpan;
+   if(th.colSpan>1||row.classList.contains('report-filter-header')||skip.includes(col)||th.querySelector('button')||th.closest('table')!==table||!th.textContent.trim())return;
+   const title=th.textContent.trim();
+   const tools=document.createElement('span');tools.className='ba-th-tools table-query-tools';
+   tools.innerHTML='<span class="ba-sort-icons"><button type="button" class="ba-sort-up" aria-label="'+esc(title)+'升序" title="升序"></button><button type="button" class="ba-sort-down" aria-label="'+esc(title)+'降序" title="降序"></button></span><button type="button" class="ba-filter-btn" aria-label="筛选'+esc(title)+'" title="筛选"></button>';
+   th.append(tools);
+   th.dataset.queryColumn=col;
+   const refresh=()=>table.querySelectorAll('[data-query-column]').forEach(cell=>{const c=Number(cell.dataset.queryColumn),active=state.sort?.column===c;cell.classList.toggle('ba-filtered',!!state.filters?.[c]);cell.classList.toggle('ba-sort-asc',active&&!state.sort.desc);cell.classList.toggle('ba-sort-desc',active&&state.sort.desc);cell.setAttribute('aria-sort',active?(state.sort.desc?'descending':'ascending'):'none');});refresh();
+   tools.querySelectorAll('.ba-sort-icons button').forEach((b,i)=>b.onclick=()=>{state.sort={column:col,desc:!!i};onChange();refresh();});
+   tools.querySelector('.ba-filter-btn').onclick=()=>{
+    popup?.remove();popup=document.createElement('div');popup.className='table-query-popup';popup.setAttribute('popover','auto');document.body.append(popup);
+    const f=state.filters?.[col]||{};
+    popup.innerHTML='<form><b>'+esc(title)+'</b><label>包含文字<input name="text" value="'+esc(f.text)+'" placeholder="输入名称、日期或内容"></label><div class="table-query-range"><label>最小值<input type="number" step="any" name="min" value="'+esc(f.min)+'"></label><label>最大值<input type="number" step="any" name="max" value="'+esc(f.max)+'"></label></div><label><input type="checkbox" name="blank"'+(f.blank?' checked':'')+'> 仅空白值</label><small>多列条件同时生效；数值范围包含上下限。</small><div class="actions"><button type="button" data-clear>重置本列</button><button type="button" data-all>重置全表</button><button class="primary" type="submit">应用</button></div></form>';
+    const close=()=>{popup?.remove();popup=null;};
+    popup.querySelector('form').onsubmit=e=>{e.preventDefault();const f=Object.fromEntries(new FormData(e.target));if(f.min!==''&&f.max!==''&&Number(f.min)>Number(f.max)){popup.querySelector('[name=max]').setCustomValidity('最大值不能小于最小值');popup.querySelector('[name=max]').oninput=e=>e.target.setCustomValidity('');popup.querySelector('[name=max]').reportValidity();return;}state.filters??={};if(f.text||f.min!==''||f.max!==''||f.blank)state.filters[col]=f;else delete state.filters[col];close();onChange();refresh();};
+    popup.querySelector('[data-clear]').onclick=()=>{delete (state.filters||{})[col];if(state.sort?.column===col)state.sort=null;close();onChange();refresh();};
+    popup.querySelector('[data-all]').onclick=()=>{state.filters={};state.sort=null;close();onChange();refresh();};
+    popup.showPopover();const rect=th.getBoundingClientRect();popup.style.left=Math.max(8,Math.min(rect.left,innerWidth-340))+'px';popup.style.top=Math.max(8,Math.min(rect.bottom+5,innerHeight-popup.offsetHeight-8))+'px';popup.querySelector('input').focus();
+   };
+  });});
+ }
+ function mountStatic(root){
+  root.querySelectorAll('table').forEach(table=>{
+   if(table.dataset.queryReady||table.id==='statementFlowTable'||!table.tHead||!table.tBodies.length)return;
+   const body=table.tBodies[0],original=body.innerHTML;
+   if([...body.rows].some(r=>[...r.cells].some(c=>c.rowSpan>1))){
+    const spans=[];
+    [...body.rows].forEach(row=>{const cells=[...row.cells],out=[];let i=0,c=0;
+     while(i<cells.length||spans.some((s,j)=>j>=c&&s?.left>0)){
+      if(spans[c]?.left>0){const saved=spans[c];out.push(saved.cell.cloneNode(true));saved.left--;c++;continue;}
+      const cell=cells[i++];if(!cell)break;
+      const clone=cell.cloneNode(true);clone.rowSpan=1;out.push(clone);
+      if(cell.rowSpan>1)spans[c]={cell:clone,left:cell.rowSpan-1};c+=cell.colSpan;
+     }row.replaceChildren(...out);
+    });
+   }
+   const rows=[...body.rows];
+   const pinned=r=>r.classList.contains('report-total')||/^(合计|总计|小计|前20小计|其他|其中)/.test(r.textContent.trim());
+   const fixed=rows.filter(pinned),data=rows.filter(r=>!pinned(r)),state={};
+   const draw=()=>body.replaceChildren(...fixed,...query(data,state,(r,c)=>r.cells[c]?.textContent));
+   attach(table,state,draw);
+   g.addEventListener('beforeprint',()=>{if(table.isConnected)body.innerHTML=original;});
+   g.addEventListener('afterprint',()=>{if(table.isConnected)body.replaceChildren(...rows);});
+  });
+ }
+ g.AuditTableTools={query,attach,mountStatic};
+})(globalThis);
 </script><script>(function(g){
 'use strict';
 const fields=[
@@ -2578,33 +2647,43 @@ function tableCell(value,header){
  if(typeof value==='string'&&header.includes('%')&&/区间|占比|比例/.test(header))return esc(value.replace(/(\d)%/g,'$1'));
  return display(value,header);
 }
-let reportPagerTables=[],renderAllRows=false,renderForExport=false;
+let reportPagerTables=[],reportInteractiveTables=[],renderAllRows=false,renderForExport=false;
 function detailRowsHTML(t,rows){
  return rows.map(r=>'<tr'+(r.some((v,i)=>i<2&&typeof v==='string'&&/^(合计|前20小计)/.test(v))?' class="report-total"':'')+'>'+t.headers.map((h,i)=>'<td class="'+(typeof r[i]==='number'?'report-num':'')+'">'+tableCell(r[i],h)+'</td>').join('')+'</tr>').join('')||
   '<tr><td colspan="'+t.headers.length+'">本期无记录</td></tr>';
 }
 function tableHTML(t){
+ const interactiveId=renderForExport?null:reportInteractiveTables.push(t)-1;
  const pageable=!renderAllRows&&!t.limit&&t.rows.length>20,id=pageable?reportPagerTables.push(t)-1:null;
  const visible=t.rows.slice(0,t.limit??(pageable?20:t.rows.length));
  const heading=h=>'<th>'+esc(reportHeader(h))+'</th>';
  const head=t.grouped?'<tr>'+t.headers.slice(0,2).map(h=>'<th rowspan="2">'+esc(reportHeader(h))+'</th>').join('')+'<th colspan="3">流入</th><th colspan="3">流出</th></tr><tr>'+t.headers.slice(2).map(h=>heading(h.slice(2))).join('')+'</tr>':'<tr>'+t.headers.map(heading).join('')+'</tr>';
  return '<div class="report-table"><h4>'+esc(t.name)+'</h4>'+(t.note?'<p class="muted report-detail-summary">'+esc(t.note).replaceAll('\n','<br>')+'</p>':'')+
-  '<div class="table-scroll"><table class="table">'+(t.hideHeader?'':'<thead>'+head+(t.filterHeaders?'<tr class="report-filter-header">'+t.filterHeaders.map(v=>'<th>'+esc(v)+'</th>').join('')+'</tr>':'')+'</thead>')+'<tbody>'+detailRowsHTML(t,visible)+'</tbody></table></div>'+
+  '<div class="table-scroll"><table class="table"'+(interactiveId==null?'':' data-report-table="'+interactiveId+'"')+'>'+(t.hideHeader?'':'<thead>'+head+(t.filterHeaders?'<tr class="report-filter-header">'+t.filterHeaders.map(v=>'<th>'+esc(v)+'</th>').join('')+'</tr>':'')+'</thead>')+'<tbody>'+detailRowsHTML(t,visible)+'</tbody></table></div>'+
   (pageable?'<div class="pagination" data-report-pager="'+id+'" aria-label="'+esc(t.name)+'分页"></div>':visible.length<t.rows.length?'<p class="muted">页面显示前 '+visible.length+' 行，共 '+t.rows.length+' 行。完整明细见本期核验 Excel。</p>':'')+'</div>';
 }
 const printPagers=[];
 function mountPagers(){
  printPagers.length=0;
- for(const el of document.querySelectorAll('[data-report-pager]')){
-  const t=reportPagerTables[Number(el.dataset.reportPager)],tbody=el.previousElementSibling.querySelector('tbody');
+ for(const element of document.querySelectorAll('[data-report-table]')){
+  const t=reportInteractiveTables[Number(element.dataset.reportTable)],tbody=element.tBodies[0];
+  const el=element.closest('.table-scroll').nextElementSibling;
+  const pager=el?.matches('[data-report-pager]')?el:null;
+  const source=t.limit?t.rows.slice(0,t.limit):t.rows;
+  const isTotal=r=>!r[0]&&/合计|小计|总计|其中|其他/.test(String(r[1]||''));
+  const pinned=source.filter(isTotal),rows=source.filter(r=>!isTotal(r)),state={};
   let page=1,pageSize=20;
   const draw=()=>{
-   tbody.innerHTML=detailRowsHTML(t,t.rows.slice((page-1)*pageSize,page*pageSize));
-   g.renderAuditPager(el,{total:t.rows.length,page,pageSize,onPage:n=>{page=n;draw();},onPageSize:n=>{pageSize=n;page=1;draw();}});
+   const hits=g.AuditTableTools.query(rows,state),visible=pager?hits.slice((page-1)*pageSize,page*pageSize):hits;
+   const leading=pinned.filter(r=>/合计|总计/.test(String(r[1]))),trailing=pinned.filter(r=>!leading.includes(r));
+   tbody.innerHTML=detailRowsHTML(t,state.sort||Object.keys(state.filters||{}).length?[...leading,...visible,...trailing]:(pager?source.slice((page-1)*pageSize,page*pageSize):source));
+   if(pager)g.renderAuditPager(pager,{total:hits.length,page,pageSize,onPage:n=>{page=n;draw();},onPageSize:n=>{pageSize=n;page=1;draw();}});
   };
+  g.AuditTableTools.attach(element,state,()=>{page=1;draw();});
   draw();
-  printPagers.push({showAll:()=>{tbody.innerHTML=detailRowsHTML(t,t.rows);},restore:draw});
+  printPagers.push({showAll:()=>{tbody.innerHTML=detailRowsHTML(t,source);},restore:draw});
  }
+
 }
 g.addEventListener?.('beforeprint',()=>printPagers.forEach(p=>p.showAll()));
 g.addEventListener?.('afterprint',()=>printPagers.forEach(p=>p.restore()));
@@ -2801,7 +2880,7 @@ function reportPages(m){
 }
 function render(m,{allRows=false,forExport=false}={}){
  renderAllRows=allRows;renderForExport=forExport;
- reportPagerTables=[];
+ reportPagerTables=[];reportInteractiveTables=[];
  const full=(m.minimum||m.from)+'|'+(m.maximum||m.to);
  const first=Number((m.minimum||m.from).slice(0,4)),last=Number((m.maximum||m.to).slice(0,4));
  const presets=[['全部流水期间',full]];
@@ -26278,7 +26357,9 @@ function refreshFlowTable(selector){
  $('#content .table-scroll').scrollLeft=left;
  if(selector)$(selector)?.focus({preventScroll:true});
 }
-function table(t,{edit=false,flow=false,registry=false}={}){const limit=pageSize,hits=flow?currentFlowRows():t.rows.map((r,i)=>({r,i})).filter(x=>!search||x.r.some(v=>String(v??'').toLowerCase().includes(search.toLowerCase()))),pages=Math.max(1,Math.ceil(hits.length/limit));pageNo=Math.min(pageNo,pages);const subset=hits.slice((pageNo-1)*limit,pageNo*limit);tablePagerState={total:hits.length,flow};return `<div class="table-scroll"><table class="table"${flow?' id="statementFlowTable"':''}><thead><tr><th class="rowno">#</th>${t.headers.map((x,i)=>flow?flowHeader(x,i):`<th>${h(x)}</th>`).join('')}${edit||registry?'<th class="sticky-right">操作</th>':''}</tr></thead><tbody>${subset.map(({r,i})=>`<tr><td class="rowno">${i+1}</td>${t.headers.map((hd,j)=>`<td class="${typeof r[j]==='number'?'numeric':''}">${r[j]===null||r[j]===undefined||r[j]===''?'<span class="null">—</span>':h(typeof r[j]==='number'&&/金额|余额|发生额|限额|资本|_PM|_AMPT/.test(hd)&&!/笔数/.test(hd)?fmt(r[j]):r[j])}</td>`).join('')}${registry?`<td class="sticky-right"><button class="text" data-registry-edit="${h(r[0])}">编辑</button></td>`:''}${edit?`<td class="sticky-right"><button class="text" data-edit="${i}">编辑</button><button class="text danger" data-delete="${i}">删除</button></td>`:''}</tr>`).join('')}</tbody></table>${!hits.length?'<div class="empty">没有找到记录</div>':''}</div>${flow?`<small class="flow-result-count">筛选结果 ${num(hits.length)} / ${num(t.rows.length)} 笔</small>`:''}<div class="pagination" id="tablePager" aria-label="表格分页"></div>`;}
+const tableViewQueries=new Map();
+function currentTableQuery(){const key=page+'|'+(page==='master'?master:page==='preview'?preview:'');if(!tableViewQueries.has(key))tableViewQueries.set(key,{});return tableViewQueries.get(key);}
+function table(t,{edit=false,flow=false,registry=false}={}){const limit=pageSize,hits=flow?AuditTableTools.query(currentFlowRows(),currentTableQuery(),(x,c)=>x.r[c-1]):AuditTableTools.query(t.rows.map((r,i)=>({r,i})).filter(x=>!search||x.r.some(v=>String(v??'').toLowerCase().includes(search.toLowerCase()))),currentTableQuery(),(x,c)=>x.r[c-1]),pages=Math.max(1,Math.ceil(hits.length/limit));pageNo=Math.min(pageNo,pages);const subset=hits.slice((pageNo-1)*limit,pageNo*limit);tablePagerState={total:hits.length,flow};return `<div class="table-scroll"><table class="table" data-main-query="true"${flow?' id="statementFlowTable"':''}><thead><tr><th class="rowno">#</th>${t.headers.map((x,i)=>flow?flowHeader(x,i):`<th>${h(x)}</th>`).join('')}${edit||registry?'<th class="sticky-right">操作</th>':''}</tr></thead><tbody>${subset.map(({r,i})=>`<tr><td class="rowno">${i+1}</td>${t.headers.map((hd,j)=>`<td class="${typeof r[j]==='number'?'numeric':''}">${r[j]===null||r[j]===undefined||r[j]===''?'<span class="null">—</span>':h(typeof r[j]==='number'&&/金额|余额|发生额|限额|资本|_PM|_AMPT/.test(hd)&&!/笔数/.test(hd)?fmt(r[j]):r[j])}</td>`).join('')}${registry?`<td class="sticky-right"><button class="text" data-registry-edit="${h(r[0])}">编辑</button></td>`:''}${edit?`<td class="sticky-right"><button class="text" data-edit="${i}">编辑</button><button class="text danger" data-delete="${i}">删除</button></td>`:''}</tr>`).join('')}</tbody></table>${!hits.length?'<div class="empty">没有找到记录</div>':''}</div>${flow?`<small class="flow-result-count">筛选结果 ${num(hits.length)} / ${num(t.rows.length)} 笔</small>`:''}<div class="pagination" id="tablePager" aria-label="表格分页"></div>`;}
 function companyMode(name){
  return Object.hasOwn(config.companyFlow||{},name)?String(config.companyFlow[name]):'auto';
 }
@@ -26541,6 +26622,10 @@ function mountComponents(){
    onPage:n=>{pageNo=n;refresh();},onPageSize:n=>{pageSize=n;pageNo=1;refresh();}});
  }
  if(page==='report')AuditReport.mountPagers();
+ const mainQueryTable=document.querySelector('[data-main-query]');
+ if(mainQueryTable?.id==='statementFlowTable')mainQueryTable.querySelectorAll('thead th').forEach(th=>{if(!th.querySelector('[data-filter-flow]'))th.querySelector('.ba-th-tools')?.remove();});
+ if(mainQueryTable)AuditTableTools.attach(mainQueryTable,currentTableQuery(),()=>{pageNo=1;render();},{skip:[0,...(mainQueryTable.tHead.rows[0].cells[mainQueryTable.tHead.rows[0].cells.length-1].textContent==='操作'?[mainQueryTable.tHead.rows[0].cells.length-1]:[])]});
+ AuditTableTools.mountStatic(document.querySelector('#content'));
 }
 function render(){if(filterPopover.matches(':popover-open'))filterPopover.hidePopover();if(!analysis)recalc();document.querySelectorAll('.sidebar [data-nav]').forEach(b=>{const active=b.dataset.nav===page;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});document.querySelectorAll('.sb-toggle-head').forEach(b=>b.classList.toggle('group-current',!!b.parentElement.querySelector('[aria-current=page]')));$('#pageTitle').textContent=titles[page][0];$('#pageSubtitle').textContent=titles[page][1];$('#sourceLabel').textContent=sourceLabel;$('#sidebarCount').textContent=num(data[K.flow].rows.length)+' 条流水 · '+data[K.company].rows.length+' 家单位';$('#breadcrumbSection').textContent=['report','coverage'].includes(page)?'功能验证':page==='overview'?'数据总览':'测试数据生成';$('#content').innerHTML=(workflow.some(([id])=>id===page)?workflowNav():'')+({overview,master:()=>masters()+stepActions(null,'','rules','下一步：配置流水'),rules,anomaly:anomalies,preview:()=>previews()+stepActions('anomaly','返回异常设置','registry','下一步：对手方工商数据'),report:reportPage,registry:()=>registryPage()+stepActions('preview','返回数据预览','export','下一步：导出测试数据'),coverage:coveragePage,export:exportsPage}[page])();$('#undoTop').disabled=!lastData;mountComponents();}
 function navigate(p){closeFlyout();if(narrowScreen.matches&&!sidebarCollapsed())setSidebar(true);page=p;search='';pageNo=1;render();window.scrollTo(0,0);}
