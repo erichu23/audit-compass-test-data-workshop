@@ -887,3 +887,5 @@ body #content table thead th.ba-filtered .ba-filter-btn::before{background-image
 .report-section-options label{display:flex;align-items:flex-start;gap:6px;font-size:13px;line-height:1.5;cursor:pointer}
 .report-section-options input{accent-color:#2f6fed;flex-shrink:0;margin-top:3px}
 @media print{.report-section-picker{display:none!important}}
+
+.report-detail-summary .report-stat-value{font-weight:700;color:#172438}

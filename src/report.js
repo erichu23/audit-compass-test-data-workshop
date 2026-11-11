@@ -234,7 +234,7 @@ function compute(data,settings={}){
   if(rs===big){card.condition=thresholdLabel;card.breakdown=groups.slice(0,2).map(([n,r])=>[n.includes('范围内')?'合并范围内':'合并范围外',involved(r,3),amount(turnover(sum(r))),r.length]);}
   return card;
  });
- const buckets=['低于1','1至低于5','5至低于10','10至20','超过20'];
+ const buckets=['<1百万','1～<5百万','5～<10百万','10～20百万','>20百万'];
  for(const [name,rs] of [['合并范围内',groups[0][1]],['合并范围外',groups[1][1]]]){
   const parts=buckets.map(()=>aggregate());
   for(const r of rs){const m=amount(value(r,8,fx)+value(r,10,fx));add(parts[m<1?0:m<5?1:m<10?2:m<=20?3:4],r,fx);}
@@ -481,7 +481,7 @@ function tableHTML(t){
  const visible=t.rows.slice(0,t.limit??(pageable?20:t.rows.length));
  const heading=h=>'<th>'+esc(reportHeader(h))+'</th>';
  const head=t.grouped?'<tr>'+t.headers.slice(0,2).map(h=>'<th rowspan="2">'+esc(reportHeader(h))+'</th>').join('')+'<th colspan="3">流入</th><th colspan="3">流出</th></tr><tr>'+t.headers.slice(2).map(h=>heading(h.slice(2))).join('')+'</tr>':'<tr>'+t.headers.map(heading).join('')+'</tr>';
- return '<div class="report-table"><h4>'+esc(t.name)+'</h4>'+(t.note?'<p class="muted report-detail-summary">'+esc(t.note).replaceAll('\n','<br>')+'</p>':'')+
+ return '<div class="report-table"><h4>'+esc(t.name)+'</h4>'+(t.note?'<p class="muted report-detail-summary">'+esc(t.note).replace(/\d[\d,]*(?:\.\d+)?/g,n=>'<strong class="report-stat-value">'+n+'</strong>').replaceAll('\n','<br>')+'</p>':'')+
   '<div class="table-scroll"><table class="table"'+(interactiveId==null?'':' data-report-table="'+interactiveId+'"')+'>'+(t.hideHeader?'':'<thead>'+head+(t.filterHeaders?'<tr class="report-filter-header">'+t.filterHeaders.map(v=>'<th>'+esc(v)+'</th>').join('')+'</tr>':'')+'</thead>')+'<tbody>'+detailRowsHTML(t,visible)+'</tbody></table></div>'+
   (pageable?'<div class="pagination" data-report-pager="'+id+'" aria-label="'+esc(t.name)+'分页"></div>':visible.length<t.rows.length?'<p class="muted">页面显示前 '+visible.length+' 行，共 '+t.rows.length+' 行。完整明细见本期核验 Excel。</p>':'')+'</div>';
 }

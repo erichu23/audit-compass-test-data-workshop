@@ -9,11 +9,11 @@ class ReportTableOfContents extends D.TableOfContents {
 let headingBookmarks=new WeakMap(),reportTocEntries=[];
 const border={style:D.BorderStyle.SINGLE,size:4,color:theme.border};
 const borders={top:border,bottom:border,left:border,right:border,insideHorizontal:border,insideVertical:border};
-function paragraph(text,{heading,align,bold=false,color=theme.ink,size=18,bookmark}={}){
+function paragraph(text,{heading,align,bold=false,color=theme.ink,size=18,bookmark,runs}={}){
  return new D.Paragraph({
   ...(heading?{heading}:{}),
   alignment:align,spacing:{after:65,line:240},keepNext:!!heading,
-  children:bookmark?[new D.Bookmark({id:bookmark,children:[new D.TextRun({text:String(text??''),font,size,bold,color})]})]:[new D.TextRun({text:String(text??''),font,size,bold,color})]
+  children:bookmark?[new D.Bookmark({id:bookmark,children:[new D.TextRun({text:String(text??''),font,size,bold,color})]})]:(runs||[new D.TextRun({text:String(text??''),font,size,bold,color})])
  });
 }
 async function svgImage(svg,width){
@@ -128,7 +128,14 @@ async function blocks(node,width,context={}){
    for(const line of lines){
     const temp=document.createElement('div');temp.innerHTML=line;
     const value=text(temp);
-    if(value)out.push(paragraph(value,{bold:context.bold||['b','strong','figcaption'].includes(tag),color:context.color,align:context.align,size:context.cell?15:18}));
+    if(value){
+     const bold=context.bold||['b','strong','figcaption'].includes(tag),size=context.cell?15:18;
+     if(child.matches('.report-detail-summary')){
+      const runs=[];
+      const visit=(node,heavy=false)=>{if(node.nodeType===3){runs.push(new D.TextRun({text:node.textContent,font,size,bold:!!bold||heavy,color:context.color||theme.ink}));return;}for(const part of node.childNodes)visit(part,heavy||['STRONG','B'].includes(node.tagName));};
+      visit(temp);out.push(paragraph('',{runs,color:context.color,align:context.align,size}));
+     }else out.push(paragraph(value,{bold,color:context.color,align:context.align,size}));
+    }
    }
    continue;
   }
