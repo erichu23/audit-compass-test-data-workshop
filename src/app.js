@@ -232,37 +232,107 @@ function companyList(){
 function masterTools(){
  const catalog=E.companyCatalog(),tyc=catalog.filter(r=>r[2].includes('tianyancha.com')).length;
  const n=Object.values(config.sampleNonMerchants||{}).reduce((count,r)=>count+r.length,0);
- return `<section class="panel"><div class="panel-heading"><div><h3>按被审计单位组合生成主档</h3><p class="muted">内置 ${catalog.length} 个企业名称，其中 ${tyc} 个有天眼查公开来源。当前已配置 ${n} 个非客商候选（按单位计）。</p></div><div class="actions"><button id="openCatalog">查看企业名称库</button><button id="openMasterSamples" class="primary">配置单位主档组合</button></div></div><p>先选被审计单位，再组合单位信息、银行账号、余额表、客商、关联方和人员场景。正常账号和缺失账号可以同时配置，流水及余额表在正式生成时兑现。</p></section>`;
+ return `<section class="panel"><div class="panel-heading"><div><h3>快速生成主档</h3><p class="muted">内置 ${catalog.length} 个企业名称，其中 ${tyc} 个有天眼查公开来源。当前已配置 ${n} 个非客商候选（按单位计）。</p></div><div class="actions"><button id="openCatalog">查看企业名称库</button><button id="openMasterSamples" class="primary">开始生成主档</button></div></div><p>三步完成：选公司 → 选生成方案 → 确认结果。默认追加，保留已有数据；需要外币或缺失账号时，再打开高级设置。</p></section>`;
 }
 function openMasterSamples(){
  const own=data[K.company].rows;
  if(!own.length){toast('请先新增被审计单位。',true);return;}
- $('#masterSampleFields').innerHTML=`<fieldset><legend>适用单位（数量按每家计算）</legend><div class="master-sample-companies">${own.map((r,i)=>`<label><input type="checkbox" name="company" value="${h(r[0])}" ${i===0?'checked':''}> ${h(r[0])}</label>`).join('')}</div></fieldset>
- <fieldset><legend>1. 被审计单位与合并范围</legend><div class="form-grid"><label class="field"><span>公司职能（选填）</span><input name="companyRole" placeholder="留空保留原值"></label><label class="field"><span>所属行业（选填）</span><input name="companyIndustry" placeholder="留空保留原值"></label><label class="field"><span>下次生成流水</span><select name="flowMode"><option value="">沿用当前设置</option><option value="true">生成流水</option><option value="false">不生成，测试整家公司缺流水</option></select></label></div><label><input name="linkAudited" type="checkbox"> 把其他被审计单位写入所选单位的关联方主档</label></fieldset>
- <fieldset><legend>2. 银行账号与余额表（按每家新增账号数）</legend><div class="table-scroll"><table class="table"><thead><tr><th>账号场景</th><th>币种</th><th>账号主档</th><th>分账号余额表</th><th>银行流水</th><th>新增数量</th></tr></thead><tbody>${E.ACCOUNT_GROUPS.map(([id,label,currency,bank,book,flow])=>`<tr><td>${label}</td><td>${currency||`<select name="customCurrency" aria-label="自定义账号币种"><option value="">请选择</option>${Object.keys(exchangeRates()).filter(code=>!["CNY","RMB","USD"].includes(code)).map(code=>`<option value="${h(code)}">${h(code)}</option>`).join("")}</select>`}</td><td>${bank?'有':'缺失'}</td><td>${book?'有':'缺失'}</td><td>${flow?'有':'缺失'}</td><td><input name="${id}" aria-label="${label}数量" type="number" min="0" max="50" step="1" value="0" required></td></tr>`).join('')}</tbody></table></div><p class="muted">需要余额表的账号会在正式生成时写入分账号余额表并汇入总账。其他币种先到「配置流水」添加汇率。若单位选了「不生成流水」，单位级设置优先。</p></fieldset>
- <fieldset><legend>3. 客户、供应商、关联方与员工</legend><label><input type="checkbox" name="counterpartiesEnabled" checked> 本次生成往来及人员主档</label>
+ $('#masterSampleFields').innerHTML=`<fieldset><legend>选择要生成主档的公司</legend><div class="master-sample-companies">${own.map((r,i)=>`<label><input type="checkbox" name="company" value="${h(r[0])}" ${i===0?'checked':''}> ${h(r[0])}</label>`).join('')}</div></fieldset>
+ <fieldset><legend>被审计单位补充信息（选填）</legend><div class="form-grid"><label class="field"><span>公司职能（选填）</span><input name="companyRole" placeholder="留空保留原值"></label><label class="field"><span>所属行业（选填）</span><input name="companyIndustry" placeholder="留空保留原值"></label><label class="field"><span>下次生成流水</span><select name="flowMode"><option value="">沿用当前设置</option><option value="true">生成流水</option><option value="false">不生成，测试整家公司缺流水</option></select></label></div><label><input name="linkAudited" type="checkbox"> 把其他被审计单位写入所选单位的关联方主档</label></fieldset>
+ <fieldset><legend>账号及缺失场景（数量按每家新增）</legend><div class="table-scroll"><table class="table"><thead><tr><th>账号场景</th><th>币种</th><th>账号主档</th><th>分账号余额表</th><th>银行流水</th><th>新增数量</th></tr></thead><tbody>${E.ACCOUNT_GROUPS.map(([id,label,currency,bank,book,flow])=>`<tr><td>${label}</td><td>${currency||`<select name="customCurrency" aria-label="自定义账号币种"><option value="">请选择</option>${Object.keys(exchangeRates()).filter(code=>!["CNY","RMB","USD"].includes(code)).map(code=>`<option value="${h(code)}">${h(code)}</option>`).join("")}</select>`}</td><td>${bank?'有':'缺失'}</td><td>${book?'有':'缺失'}</td><td>${flow?'有':'缺失'}</td><td><input name="${id}" aria-label="${label}数量" type="number" min="0" max="50" step="1" value="0" required></td></tr>`).join('')}</tbody></table></div><p class="muted">需要余额表的账号会在正式生成时写入分账号余额表并汇入总账。其他币种先到「配置流水」添加汇率。若单位选了「不生成流水」，单位级设置优先。</p></fieldset>
+ <fieldset><legend>客户、供应商与人员（数量按每家新增）</legend><label><input type="checkbox" name="counterpartiesEnabled" checked> 生成客户、供应商、关联方和人员（取消后只配置账号与公司信息）</label>
  <div class="form-grid"><label class="field"><span>生成方式</span><select name="mode"><option value="append">追加，保留当前主档</option><option value="replace">重建所选单位的往来主档</option></select></label><label class="field"><span>企业名称来源</span><select name="sourceMode"><option value="all">优先天眼查，公开企业名录补充</option><option value="tyc">仅使用天眼查公开来源</option></select></label></div>
- <table class="table"><thead><tr><th>分类</th><th>每家生成数</th><th>其中关联方</th></tr></thead><tbody>${E.MASTER_GROUPS.map(([id,label])=>`<tr><td>${label}</td><td><input aria-label="${label}家数" name="${id}" type="number" min="0" max="200" step="1" value="6" required></td><td><input aria-label="${label}关联方家数" name="${id}Related" type="number" min="0" max="200" step="1" value="2" required></td></tr>`).join('')}</tbody></table>
- <div class="form-grid"><label class="field"><span>员工人数</span><input name="employees" type="number" min="0" max="200" step="1" value="4" required></label><label class="field"><span>董监高人数</span><input name="officers" type="number" min="0" max="200" step="1" value="2" required></label></div>
+ <table class="table"><thead><tr><th>分类</th><th>每家生成数</th><th>其中有多少家是关联方</th></tr></thead><tbody>${E.MASTER_GROUPS.map(([id,label])=>`<tr><td>${label}</td><td><input aria-label="${label}家数" name="${id}" type="number" min="0" max="200" step="1" value="6" required></td><td><input aria-label="${label}关联方家数" name="${id}Related" type="number" min="0" max="200" step="1" value="2" required></td></tr>`).join('')}</tbody></table>
+ <div class="form-grid"><label class="field"><span>员工人数（写入员工主档）</span><input name="employees" type="number" min="0" max="200" step="1" value="4" required></label><label class="field"><span>董监高人数（写入关联方主档）</span><input name="officers" type="number" min="0" max="200" step="1" value="2" required></label></div>
  <label class="field"><span>优先抽取的企业全称（可选，每行一家）</span><textarea name="preferredNames" rows="2" placeholder="可从企业名称库复制全称"></textarea></label>
  <p class="muted">客商重合会写入同一单位的客户和供应商主档。非客商仅作为流水候选，若选为关联方则只写入关联方主档。重建只影响选中单位的客商、员工和范围外关联方。</p></fieldset>`;
+ setupMasterSampleWizard();
  $('#masterSampleModal').showModal();
 }
+let masterWizardStep=1,masterWizardPreview=null;
+function masterSampleRequest(){
+ const f=new FormData($('#masterSampleForm'));
+ return {companies:[...new Set(f.getAll('company'))],mode:f.get('mode'),seed:config.seed,
+  counts:Object.fromEntries(E.MASTER_GROUPS.map(([id])=>[id,Number(f.get(id))])),
+  related:Object.fromEntries(E.MASTER_GROUPS.map(([id])=>[id,Number(f.get(id+'Related'))])),
+  employees:Number(f.get('employees')),officers:Number(f.get('officers')),pools:config.sampleNonMerchants,
+  sourceMode:f.get('sourceMode'),preferredNames:String(f.get('preferredNames')||'').split(/[\n、，,]+/).map(s=>s.trim()).filter(Boolean),
+  counterpartiesEnabled:f.has('counterpartiesEnabled'),linkAudited:f.has('linkAudited'),companyRole:String(f.get('companyRole')||''),companyIndustry:String(f.get('companyIndustry')||''),
+  accounts:{...Object.fromEntries(E.ACCOUNT_GROUPS.map(([id])=>[id,Number(f.get(id))])),customCurrency:f.get('customCurrency')},accountPlans:config.sampleAccountPlans};
+}
+function setupMasterSampleWizard(){
+ const root=$('#masterSampleFields'),form=$('#masterSampleForm'),sets=[...root.children];masterWizardStep=1;masterWizardPreview=null;form.noValidate=true;
+ const companies=sets[0],companyInfo=sets[1],accounts=sets[2],parties=sets[3];
+ root.replaceChildren();
+ root.innerHTML='<ol class="master-wizard-steps"><li>1 选择公司</li><li>2 选择方案</li><li>3 确认结果</li></ol><p class="master-wizard-error" role="alert" hidden></p><section id="masterWizardStep1"></section><section id="masterWizardStep2" hidden></section><section id="masterWizardStep3" hidden></section>';
+ const first=$('#masterWizardStep1'),second=$('#masterWizardStep2');
+ first.innerHTML='<h4>先选择本次要补充数据的公司</h4><p class="muted">下面填写的数量，都按每家公司计算。未选中的公司保持原样。</p><div class="actions"><button type="button" data-master-all>全选公司</button><button type="button" data-master-none>清空</button></div>';
+ first.append(companies);
+ second.innerHTML='<h4>选一个起点，再按需要调整</h4><div class="master-preset-grid"><button type="button" data-master-preset="report"><b>报告常用主档</b><small>客商重合、关联方、人员及缺失账号场景</small></button><button type="button" data-master-preset="basic"><b>基础业务数据</b><small>正常人民币账号、客户、供应商和员工</small></button><button type="button" data-master-preset="custom"><b>自定义数量</b><small>保留当前填写值，按你的测试要求调整</small></button></div><p class="master-preset-explanation"></p>';
+ const options=document.createElement('details');options.className='master-advanced';options.innerHTML='<summary>高级设置：外币、缺失账号、覆盖方式和企业名称来源</summary><p class="muted">不需要特殊场景时可以跳过。重建会替换选中公司的客商、员工和范围外关联方；账号仍按新增处理。</p>';
+ const sourceGrid=parties.querySelector('.form-grid');if(sourceGrid)options.append(sourceGrid);
+ const preferred=parties.querySelector('textarea')?.closest('label');if(preferred)options.append(preferred);
+ options.append(accounts,companyInfo);second.append(parties,options);
+ const help=document.createElement('p');help.className='master-count-help';help.textContent='仅客户：只进客户表；仅供应商：只进供应商表；客商重合：同一家公司同时进客户和供应商表；非客商：不进这两张表，用作后续流水对手方。关联方数量包含在对应分类内，不额外增加企业数。';parties.querySelector('legend').after(help);
+ const footer=$('#masterSampleModal .dialog-footer');footer.innerHTML='<p id="masterWizardProgress"></p><div class="actions"><button type="button" id="masterWizardBack">上一步</button><button type="button" class="primary" id="masterWizardNext">下一步</button><button type="submit" class="primary" id="masterWizardApply" hidden>确认生成主档</button></div>';
+ const set=(name,value)=>{const input=form.elements.namedItem(name);if(input){if(input.type==='checkbox')input.checked=!!value;else input.value=value;}};
+ const preset=kind=>{
+  root.querySelectorAll('[data-master-preset]').forEach(b=>{const active=b.dataset.masterPreset===kind;b.classList.toggle('is-selected',active);b.setAttribute('aria-pressed',String(active));});
+  if(kind!=='custom'){
+   const report=kind==='report';for(const [id] of E.ACCOUNT_GROUPS)set(id,id==='normalCNY'?2:report&&['bankOnly','bookOnly','noBook','noMaster','flowOnly'].includes(id)?1:0);
+   for(const [id] of E.MASTER_GROUPS){set(id,report?(id==='both'?8:12):(id==='customerOnly'||id==='supplierOnly'?10:0));set(id+'Related',report?(id==='both'?3:4):0);}
+   set('employees',report?10:5);set('officers',report?2:0);set('counterpartiesEnabled',true);set('mode','append');set('flowMode','');set('linkAudited',report);set('sourceMode','all');
+  }
+  updateMasterWizardSummary();
+ };
+ root.querySelectorAll('[data-master-preset]').forEach(b=>b.onclick=()=>preset(b.dataset.masterPreset));
+ root.querySelector('[data-master-all]').onclick=()=>{root.querySelectorAll('[name=company]').forEach(x=>x.checked=true);updateMasterWizardSummary();};
+ root.querySelector('[data-master-none]').onclick=()=>{root.querySelectorAll('[name=company]').forEach(x=>x.checked=false);updateMasterWizardSummary();};
+ const changed=e=>{masterWizardPreview=null;if(e.target.closest('#masterWizardStep2'))preset('custom');else updateMasterWizardSummary();};form.oninput=changed;form.onchange=changed;
+ $('#masterWizardNext').onclick=nextMasterWizardStep;$('#masterWizardBack').onclick=()=>showMasterWizardStep(masterWizardStep-1);
+ preset('report');showMasterWizardStep(1);
+}
+function updateMasterWizardSummary(){
+ const q=masterSampleRequest(),n=q.companies.length,counts=q.counts;
+ const customers=q.counterpartiesEnabled?counts.customerOnly+counts.both:0,suppliers=q.counterpartiesEnabled?counts.supplierOnly+counts.both:0;
+ const accountCount=E.ACCOUNT_GROUPS.reduce((sum,[id])=>sum+q.accounts[id],0);
+ $('#masterSampleFields .master-preset-explanation').textContent='每家公司：客户 '+customers+' 家、供应商 '+suppliers+' 家（客商重合 '+(q.counterpartiesEnabled?counts.both:0)+' 家已计入双方），员工 '+(q.counterpartiesEnabled?q.employees:0)+' 人；新增账号场景 '+accountCount+' 个。可在下方调整。';
+ $('#masterWizardProgress').textContent='已选 '+n+' 家公司 · '+(q.mode==='replace'?'重建所选单位往来主档':'追加生成，保留已有数据');
+}
+function showMasterWizardStep(step){
+ masterWizardStep=Math.max(1,Math.min(3,step));
+ for(let i=1;i<=3;i++)$('#masterWizardStep'+i).hidden=i!==masterWizardStep;
+ document.querySelectorAll('.master-wizard-steps li').forEach((li,i)=>{li.classList.toggle('is-current',i+1===masterWizardStep);if(i+1===masterWizardStep)li.setAttribute('aria-current','step');else li.removeAttribute('aria-current');});
+ $('#masterWizardBack').hidden=masterWizardStep===1;$('#masterWizardNext').hidden=masterWizardStep===3;$('#masterWizardApply').hidden=masterWizardStep!==3;
+ $('#masterWizardNext').textContent=masterWizardStep===1?'下一步：选择方案':'下一步：查看生成结果';
+ $('#masterSampleFields .master-wizard-error').hidden=true;$('#masterSampleFields').scrollTop=0;
+}
+function nextMasterWizardStep(){
+ const error=$('#masterSampleFields .master-wizard-error');
+ try{
+  const q=masterSampleRequest();if(!q.companies.length)throw Error('请先勾选至少一家公司。');
+  if(masterWizardStep===1){showMasterWizardStep(2);return;}
+  for(const input of $('#masterWizardStep2').querySelectorAll('input,select,textarea'))if(!input.checkValidity()){for(let el=input.parentElement;el;el=el.parentElement)if(el.tagName==='DETAILS')el.open=true;input.reportValidity();throw Error('请检查标出的输入项，数量需要是范围内的整数。');}
+  const result=E.masterSamples(data,q);masterWizardPreview={result,request:JSON.stringify(q)};
+  const plans=q.companies.length*E.ACCOUNT_GROUPS.reduce((n,[id])=>n+q.accounts[id],0);
+  const plannedFlow=q.companies.length*E.ACCOUNT_GROUPS.reduce((n,[id,,,,,flow])=>n+(flow?q.accounts[id]:0),0);
+  const plannedBook=q.companies.length*E.ACCOUNT_GROUPS.reduce((n,[id,,,,book])=>n+(book?q.accounts[id]:0),0);
+  const rows=[K.bank,K.customer,K.supplier,K.related,K.employee].map(key=>{const before=data[key].rows.length,after=result.data[key].rows.length;return '<tr><td>'+h(key.replace('信息',''))+'</td><td>'+num(before)+'</td><td>'+num(after)+'</td><td>'+(after-before>=0?'+':'')+num(after-before)+'</td></tr>';}).join('');
+  $('#masterWizardStep3').innerHTML='<h4>确认这些变化后，再生成</h4><p>适用公司：'+q.companies.map(h).join('、')+'</p><p class="master-review-warning">'+(q.mode==='replace'?'将重建所选公司的往来主档；其他公司不变。':'本次追加生成，保留已有记录。')+'</p><table class="table"><thead><tr><th>立即更新的主档</th><th>当前总条数</th><th>生成后总条数</th><th>净变化</th></tr></thead><tbody>'+rows+'</tbody></table><div class="master-next-note"><b>这一步不生成银行流水或余额表</b><p>另保存 '+plans+' 个新增账号场景，其中 '+plannedFlow+' 个计划有流水，'+plannedBook+' 个计划有余额表；是否最终生成流水仍以公司和流水设置为准。</p><p>确认后只保存主档和账号场景计划。接下来到「设置异常并生成」生成流水；需要余额表的账号也在那一步写入余额表。非客商作为后续流水候选，不单独生成客户或供应商记录。</p></div>';
+  showMasterWizardStep(3);
+ }catch(e){error.textContent=e.message;error.hidden=false;error.scrollIntoView({block:'nearest'});}
+}
 $('#masterSampleForm').onsubmit=e=>{
- e.preventDefault();
- const f=new FormData(e.currentTarget),companies=f.getAll('company');
- const fields=Object.fromEntries(E.MASTER_GROUPS.map(([id])=>[id,Number(f.get(id))]));
- const related=Object.fromEntries(E.MASTER_GROUPS.map(([id])=>[id,Number(f.get(id+'Related'))]));
- const mode=f.get('mode');
- if(f.has('counterpartiesEnabled')&&mode==='replace'&&!confirm('重建会替换选中单位现有的客商、员工及范围外关联方。可通过「撤销」恢复。继续吗？'))return;
+ e.preventDefault();if(masterWizardStep!==3){nextMasterWizardStep();return;}
+ const q=masterSampleRequest();
+ if(q.counterpartiesEnabled&&q.mode==='replace'&&!confirm('确认重建所选公司的客商、员工和范围外关联方主档？可通过「撤销」恢复。'))return;
  run(()=>{
-  const result=E.masterSamples(data,{companies,mode,seed:config.seed,counts:fields,related,employees:Number(f.get('employees')),officers:Number(f.get('officers')),pools:config.sampleNonMerchants,sourceMode:f.get('sourceMode'),preferredNames:String(f.get('preferredNames')).split(/[\n、，,]+/).map(s=>s.trim()).filter(Boolean),counterpartiesEnabled:f.has('counterpartiesEnabled'),linkAudited:f.has('linkAudited'),companyRole:String(f.get('companyRole')),companyIndustry:String(f.get('companyIndustry')),accounts:{...Object.fromEntries(E.ACCOUNT_GROUPS.map(([id])=>[id,Number(f.get(id))])),customCurrency:f.get('customCurrency')},accountPlans:config.sampleAccountPlans});
+  const result=masterWizardPreview?.request===JSON.stringify(q)?masterWizardPreview.result:E.masterSamples(data,q);
+  const flowMode=new FormData($('#masterSampleForm')).get('flowMode');
   lastData=snapshot();data=result.data;config.sampleNonMerchants=result.pools;config.sampleAccountPlans=result.accountPlans;
-  const flowMode=f.get('flowMode');
-  if(flowMode)config.companyFlow={...config.companyFlow,...Object.fromEntries(companies.map(n=>[n,flowMode==='true']))};
-  persist();
-  sourceLabel='已更新 · 自定义主档';recalc();$('#masterSampleModal').close();render();
-  toast('已保存 '+new Set(companies).size+' 家单位的主档组合。可继续设置并生成流水。');
+  if(flowMode)config.companyFlow={...config.companyFlow,...Object.fromEntries(q.companies.map(n=>[n,flowMode==='true']))};
+  persist();sourceLabel='已更新 · 自定义主档';recalc();$('#masterSampleModal').close();render();masterWizardPreview=null;
+  toast('已更新 '+q.companies.length+' 家公司的主档。下一步到「设置异常并生成」生成流水和余额表。');
  });
 };
 function renderCatalog(){
