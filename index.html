@@ -26260,7 +26260,9 @@ function legendHex(value){
 function wordContents(){
  const entries=reportTocEntries.map(entry=>new D.Paragraph({
   style:'TOC'+entry.level,tabStops:[{type:D.TabStopType.RIGHT,position:pageWidth,leader:D.LeaderType.DOT}],
-  children:[new D.InternalHyperlink({anchor:entry.href,children:[new D.TextRun({text:entry.title,font,size:24,bold:entry.level===1,color:theme.ink})]}),new D.TextRun({text:'\t',font}),new D.SimpleField('PAGEREF '+entry.href+' \\h','待更新')]
+  // A dirty complex field asks Word to calculate the bookmark's actual page.
+  // Do not cache placeholder text: readers that defer field updates would print it.
+  children:[new D.InternalHyperlink({anchor:entry.href,children:[new D.TextRun({text:entry.title,font,size:24,bold:entry.level===1,color:theme.ink})]}),new D.TextRun({text:'\t',font}),new D.PageReference(entry.href,{hyperlink:true})]
  }));
  return new ReportTableOfContents('报告目录',{hyperlink:true,headingStyleRange:'1-3',contentChildren:entries,beginDirty:true});
 }
