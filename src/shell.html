@@ -4,7 +4,7 @@
  <nav class="layout-header-nav" aria-label="项目操作">
   <button class="nav-btn" id="undoTop" disabled>撤销</button>
   <button class="nav-btn" id="saveProjectTop">保存项目</button>
-  <button class="nav-btn" id="importButton">导入数据</button>
+  <button class="nav-btn" id="importButton">导入项目 / 文件</button><button class="nav-btn" data-nav="templateImport">Excel 模板转项目</button>
  </nav>
 </header>
 <aside class="sidebar" id="mainSidebar">
@@ -15,7 +15,7 @@
 <div class="sidebar-flyout" id="sidebarFlyout"></div>
 <button id="sidebarScrim" aria-label="关闭侧边栏" tabindex="-1" hidden></button>
 <div class="app"><main class="main"><nav class="breadcrumb-bar" aria-label="当前位置"><span>Audit Compass</span><span class="sep" aria-hidden="true">/</span><b id="breadcrumbSection">数据总览</b></nav><div class="page-heading"><div><h1 id="pageTitle"></h1><p id="pageSubtitle"></p></div><div class="version">UAT 4.0.0</div></div><div id="content"></div><footer class="footer">AUDIT COMPASS DATA FORGE · 模拟数据仅用于测试</footer></main></div>
-<input id="fileInput" type="file" accept=".xlsx,.json,.zip" multiple hidden><div id="toast" class="toast" role="status" aria-live="polite"></div><div id="busy" class="busy" hidden><div><span class="spinner"></span>正在处理数据，请稍候…</div></div><dialog id="rowModal"><div class="dialog-heading"><h3 id="modalTitle"></h3><button id="closeModal" type="button" aria-label="关闭">×</button></div><form id="rowForm"><div id="modalFields" class="modal-fields"></div><div class="dialog-footer"><p>带 * 为平台必填项；留空可保留缺失场景。银行账号按文本保存，金额填数字。</p><button class="primary" type="submit">保存记录</button></div></form></dialog>
+<input id="templateFileInput" type="file" accept=".xlsx,.zip" multiple hidden><input id="fileInput" type="file" accept=".xlsx,.json,.zip" multiple hidden><div id="toast" class="toast" role="status" aria-live="polite"></div><div id="busy" class="busy" hidden><div><span class="spinner"></span>正在处理数据，请稍候…</div></div><dialog id="rowModal"><div class="dialog-heading"><h3 id="modalTitle"></h3><button id="closeModal" type="button" aria-label="关闭">×</button></div><form id="rowForm"><div id="modalFields" class="modal-fields"></div><div class="dialog-footer"><p>带 * 为平台必填项；留空可保留缺失场景。银行账号按文本保存，金额填数字。</p><button class="primary" type="submit">保存记录</button></div></form></dialog>
 <dialog id="companyModal" aria-labelledby="companyModalTitle"><div class="dialog-heading"><h3 id="companyModalTitle">新增被审计单位</h3><button id="closeCompany" type="button" aria-label="关闭新增窗口">×</button></div>
 <form id="companyForm"><div class="company-form">
 <label class="field"><span>公司名称 *</span><input name="name" required autofocus placeholder="输入公司全称"></label>
@@ -29,4 +29,4 @@
 </dialog>
 <dialog id="catalogModal" aria-labelledby="catalogTitle"><div class="dialog-heading"><h3 id="catalogTitle">离线企业名称库</h3><button type="button" id="closeCatalog" aria-label="关闭">×</button></div><div class="table-tools"><label>搜索名称或来源 <input type="search" id="catalogSearch" placeholder="例如 天眼查、母婴、上海"></label><label>企业分组 <select id="catalogGroup"><option value="">全部企业名称</option></select></label><button type="button" class="btn" id="exportCatalog">下载名称及集团分组</button></div><p id="catalogCount" class="muted"></p><div class="table-scroll"><table class="table"><thead><tr><th>企业全称</th><th>来源</th></tr></thead><tbody id="catalogRows"></tbody></table></div><p class="muted">名称库随 HTML 内置；来源链接可在联网时查看。测试交易和关系为模拟。</p></dialog>
 <dialog id="registryModal" aria-labelledby="registryTitle"><div class="dialog-heading"><h3 id="registryTitle">编辑对手方工商档案</h3><button type="button" id="closeRegistry" aria-label="关闭">×</button></div><form id="registryRecord"><div id="registryFields" class="modal-fields"></div><div class="dialog-footer"><button type="submit" class="btn btn-primary">保存档案</button></div></form></dialog>
-<div id="flowFilterPopover" class="ba-table-filter-popover" popover="auto" aria-label="流水列筛选"></div><script>__ZIP__</script><script>__BASELINE__</script><script>__COMPANY_GROUPS__</script><script>__ENGINE__</script><script>__EXCEL__</script><script>__COMPONENTS__</script><script>__REGISTRY__</script><script>__REPORT__</script><script>__DOCX__</script><script>__WORD__</script><script>__APP__</script></body></html>
+<div id="flowFilterPopover" class="ba-table-filter-popover" popover="auto" aria-label="流水列筛选"></div><script>__ZIP__</script><script>__BASELINE__</script><script>__COMPANY_GROUPS__</script><script>__ENGINE__</script><script>__EXCEL__</script><script>__COMPONENTS__</script><script>__REGISTRY__</script><script>__IMPORTER__</script><script>__REPORT__</script><script>__DOCX__</script><script>__WORD__</script><script>__APP__</script></body></html>
