@@ -1562,6 +1562,11 @@ body #content table thead th.ba-filtered .ba-filter-btn::before{background-image
 @page report-front{@bottom-right{content:none}}
 @page report-body-first{counter-reset:page 1;@bottom-right{content:"第 " counter(page) " 页"}}
 @page report-body{@bottom-right{content:"第 " counter(page) " 页"}}
+
+.report-unidentified{color:#c00000!important}
+.report-document .report-toc .toc-level-1{padding-left:0;font-weight:700;margin-top:8px}
+.report-document .report-toc .toc-level-2{padding-left:18px;font-weight:400}
+.report-document .report-toc .toc-level-3{padding-left:36px;font-weight:400}
 </style></head><body>
 <header class="layout-header">
  <div class="layout-header-name">Audit Compass测试数据工作坊 <span class="layout-header-project" id="sourceLabel"></span></div>
@@ -2851,10 +2856,10 @@ function compute(data,settings={}){
  details[0]=['','合计（全部对手方）','','',flagged.length+' 家',...cpAmounts(externalTotals,externalTotals)];
  function focusProfile(r){
   if(!r[0])return Array(10).fill('');
-  const profile=profiles.get(r[1]);
-  return [null,profile?.cases,profile?.dishonest,profile?.penalties,R.value(profile,'days',registryEnd,rates),profile?.industry,R.value(profile,'capital',registryEnd,rates),R.value(profile,'paidIn',registryEnd,rates),profile?.insured,[profile?.directors,profile?.supervisors,profile?.executives].filter(Boolean).join('、')||null].map(x=>x??missingValue);
+  const profile=profiles.get(r[1]),empty=flagByName.has(r[1])?'':missingValue;
+  return [null,profile?.cases,profile?.dishonest,profile?.penalties,R.value(profile,'days',registryEnd,rates),profile?.industry,R.value(profile,'capital',registryEnd,rates),R.value(profile,'paidIn',registryEnd,rates),profile?.insured,[profile?.directors,profile?.supervisors,profile?.executives].filter(Boolean).join('、')||null].map(x=>x==null||empty===''&&x===missingValue?empty:x);
  }
- table(focus,'重点关注对手方并集清单',[...cpHeaders,'个人类型','收支重合','未识别客商关系','疑似关联方','诉讼案件数量','失信被执行人','行政处罚数量','经营天数','所属行业','注册资本','实缴资本','社保人数','董监高信息'],details.filter(r=>r[1]!=='其他').map(r=>[...r,[...(flagByName.get(r[1])||[])].join('、'),overlapNames.has(r[1])?'是':'',unknownNames.has(r[1])?'是':'',...focusProfile(r)]));
+ table(focus,'重点关注对手方并集清单',[...cpHeaders,'个人类型','收支重合','未识别客商关系','疑似关联方','诉讼案件数量','失信被执行人','行政处罚数量','经营天数','所属行业','注册资本','实缴资本','社保人数','董监高信息'],details.filter(r=>r[1]!=='其他').map(r=>[...r,[...(flagByName.get(r[1])||[])].join('、'),overlapNames.has(r[1])?'是':'',unknownNames.has(r[1])?'未识别':'',...focusProfile(r)]));
  const numbering={scope:['2.1','1.1'],features:['2.2','1.2'],concentration:['2.3','1.3'],counterparties:['3.1','2.1'],related:['3.2','2.2'],compliance:['3.3.1','2.3.1'],people:['3.3.2','2.3.2'],follow:['3.3.3','2.3.3'],focus:['3.4','2.4']};
  for(const s of model.sections){
   const pair=numbering[s.id];
@@ -2881,6 +2886,7 @@ function cardHTML(card){
  return '<article class="report-nature-card"><h4>'+esc(card.name)+'</h4>'+(card.condition?'<p class="report-condition">'+esc(card.condition)+'</p>':'')+'<strong>'+currency.format(card.amount)+' <small>百万元</small> / '+integer(card.count)+' <small>笔</small></strong><p>涉及 '+card.companies+' 家被审计单位 · '+card.parties+' 个有名称对手方</p>'+(card.breakdown?'<dl>'+card.breakdown.map(([label,parties,amount,count])=>'<div><dt>'+esc(label)+'</dt><dd>'+parties+' 个对手方 / '+currency.format(amount)+' 百万元 / '+integer(count)+' 笔</dd></div>').join('')+'</dl>':'')+'</article>';
 }
 function tableCell(value,header){
+ if(header==='未识别客商关系'&&value==='未识别')return '<span class="report-unidentified">未识别</span>';
  if(header==='状态'&&['已上传','部分缺失','未上传'].includes(value))return '<span class="report-status" data-status="'+esc(value)+'">'+esc(value)+'</span>';
  if(typeof value==='number'&&/占比|比例/.test(header))return (100*value).toFixed(2);
  if(typeof value==='string'&&header.includes('%')&&/区间|占比|比例/.test(header))return esc(value.replace(/(\d)%/g,'$1'));
@@ -3089,8 +3095,10 @@ function exportReportTable(t,code){
 }
 function formatTables(tables,code){return Object.fromEntries(Object.entries(tables).map(([name,t])=>[name,exportReportTable(t,code)]));}
 
+function tocDepth(title){return Math.min(3,(String(title).match(/^\d+(?:\.\d+)*/)?.[0]||'1').split('.').length);}
 function tocHTML(m){
- return '<nav class="report-toc" aria-label="报告目录"><h2>报告目录</h2><p>Table of Contents</p><ol>'+m.sections.filter(s=>!['cover','background'].includes(s.id)).map(s=>(chapterTitles[s.id]?'<li class="toc-chapter"><a href="#report-'+s.id+'">'+esc(chapterTitles[s.id])+'</a></li>':'')+'<li><a href="#report-'+s.id+'">'+esc(s.title)+'</a></li>').join('')+'</ol></nav>';
+ const item=(title,id)=>'<li class="toc-level-'+tocDepth(title)+'"><a href="#report-'+id+'">'+esc(title)+'</a></li>';
+ return '<nav class="report-toc" aria-label="报告目录"><h2>报告目录</h2><p>Table of Contents</p><ol>'+m.sections.filter(s=>!['cover','background'].includes(s.id)).map(s=>(chapterTitles[s.id]?item(chapterTitles[s.id],s.id):'')+item(s.title,s.id)).join('')+'</ol></nav>';
 }
 function selectSections(model,ids){
  const allSections=model.allSections||model.sections;
@@ -26231,6 +26239,7 @@ var __async = (__this, __arguments, generator) => {
 </script><script>(function(g){
 'use strict';
 const D=g.docx,theme=g.AuditReport.theme;
+const headingDepth=node=>Math.min(3,(text(node).match(/^\d+(?:\.\d+)*/)?.[0]||'1').split('.').length);
 const pageWidth=15704;
 const font={ascii:'Microsoft YaHei',hAnsi:'Microsoft YaHei',eastAsia:'微软雅黑',cs:'Microsoft YaHei'};
 class ReportTableOfContents extends D.TableOfContents {
@@ -26253,7 +26262,7 @@ function wordContents(){
   style:'TOC'+entry.level,tabStops:[{type:D.TabStopType.RIGHT,position:pageWidth,leader:D.LeaderType.DOT}],
   children:[new D.InternalHyperlink({anchor:entry.href,children:[new D.TextRun({text:entry.title,font,size:24,bold:entry.level===1,color:theme.ink})]}),new D.TextRun({text:'\t',font}),new D.SimpleField('PAGEREF '+entry.href+' \\h','待更新')]
  }));
- return new ReportTableOfContents('报告目录',{hyperlink:true,headingStyleRange:'1-2',contentChildren:entries,beginDirty:true});
+ return new ReportTableOfContents('报告目录',{hyperlink:true,headingStyleRange:'1-3',contentChildren:entries,beginDirty:true});
 }
 function paragraph(text,{heading,align,bold=false,color=theme.ink,size=18,bookmark,runs}={}){
  return new D.Paragraph({
@@ -26310,12 +26319,13 @@ async function table(node,width){
    children:await Promise.all([...row.cells].map(async (cell,i)=>{
     const header=cell.tagName==='TH',total=row.classList.contains('report-total');
     const statusElement=cell.querySelector('.report-status');
+    const unidentified=!!cell.querySelector('.report-unidentified');
     const status=statusElement?.closest('td,th')===cell?theme.statuses[statusElement.dataset.status]:undefined;
     return new D.TableCell({
      width:{size:customWidths?widths[i]:unit*cell.colSpan,type:D.WidthType.DXA},columnSpan:cell.colSpan,rowSpan:cell.rowSpan,
      margins:{top:45,bottom:45,left:55,right:55},
      shading:status?{fill:status.fill}:header||total?{fill:header?theme.fill:theme.total}:undefined,
-     children:await blocks(cell,Math.max(200,(customWidths?widths[i]:unit*cell.colSpan)-120),{cell:true,bold:header||total||!!status,color:status?.text||(header?theme.heading:theme.ink),align:status||node.classList.contains('report-cover-status')&&i>0?D.AlignmentType.CENTER:undefined})
+     children:await blocks(cell,Math.max(200,(customWidths?widths[i]:unit*cell.colSpan)-120),{cell:true,bold:header||total||!!status,color:unidentified?'C00000':status?.text||(header?theme.heading:theme.ink),align:status||node.classList.contains('report-cover-status')&&i>0?D.AlignmentType.CENTER:undefined})
     });
    }))
   })))
@@ -26353,7 +26363,7 @@ async function blocks(node,width,context={}){
   }
   if(/^h[1-4]$/.test(tag)){
    const toc=!!child.closest('.report-toc');
-   const main=tag==='h2',level=headingBookmarks.has(child)?(main?D.HeadingLevel.HEADING_1:D.HeadingLevel.HEADING_2):undefined;
+   const main=tag==='h2',level=headingBookmarks.has(child)?[D.HeadingLevel.HEADING_1,D.HeadingLevel.HEADING_2,D.HeadingLevel.HEADING_3][headingDepth(child)-1]:undefined;
    out.push(paragraph(text(child),{heading:child.textContent.includes('综合分析报告（年审适用）')?D.HeadingLevel.TITLE:level,bold:true,color:toc?theme.navy:theme.ink,size:main?32:23,bookmark:headingBookmarks.get(child)}));
    if(toc)out.push(new D.Table({
     layout:D.TableLayoutType.FIXED,width:{size:width,type:D.WidthType.DXA},columnWidths:[Math.floor(width*.12),Math.ceil(width*.88)],
@@ -26406,7 +26416,7 @@ async function report(model){
  headingBookmarks=new WeakMap();reportTocEntries=[];
  pages.forEach((page,i)=>page.querySelectorAll('.report-chapter,.report-section > h3').forEach(node=>{
   const id='ReportHeading'+(reportTocEntries.length+1);headingBookmarks.set(node,id);
-  reportTocEntries.push({title:text(node),level:node.matches('.report-chapter')?1:2,href:id});
+  reportTocEntries.push({title:text(node),level:headingDepth(node),href:id});
  }));
  const run=t=>new D.TextRun({text:t,font,size:15,color:theme.muted});
  const header=new D.Header({children:[new D.Paragraph({
@@ -26432,7 +26442,7 @@ async function report(model){
  }
  const wordDocument=new D.Document({
   features:{updateFields:true},creator:'Audit Compass',title:'综合分析报告（年审适用）',
-  styles:{default:{document:{run:{font,size:18},paragraph:{spacing:{after:65}}}},paragraphStyles:[{id:'TOC1',name:'toc 1',basedOn:'Normal',run:{font,size:24,bold:true,color:theme.ink},paragraph:{spacing:{before:100,after:120,line:320}}},{id:'TOC2',name:'toc 2',basedOn:'Normal',run:{font,size:24,color:theme.ink},paragraph:{indent:{left:240},spacing:{after:120,line:320}}}]},
+  styles:{default:{document:{run:{font,size:18},paragraph:{spacing:{after:65}}}},paragraphStyles:[{id:'TOC3',name:'toc 3',basedOn:'Normal',run:{font,size:24,color:theme.ink},paragraph:{indent:{left:480},spacing:{after:120,line:320}}},{id:'TOC1',name:'toc 1',basedOn:'Normal',run:{font,size:24,bold:true,color:theme.ink},paragraph:{spacing:{before:100,after:120,line:320}}},{id:'TOC2',name:'toc 2',basedOn:'Normal',run:{font,size:24,color:theme.ink},paragraph:{indent:{left:240},spacing:{after:120,line:320}}}]},
   sections
  });
  return D.Packer.toBlob(wordDocument);

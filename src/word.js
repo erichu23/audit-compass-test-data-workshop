@@ -1,6 +1,7 @@
 (function(g){
 'use strict';
 const D=g.docx,theme=g.AuditReport.theme;
+const headingDepth=node=>Math.min(3,(text(node).match(/^\d+(?:\.\d+)*/)?.[0]||'1').split('.').length);
 const pageWidth=15704;
 const font={ascii:'Microsoft YaHei',hAnsi:'Microsoft YaHei',eastAsia:'微软雅黑',cs:'Microsoft YaHei'};
 class ReportTableOfContents extends D.TableOfContents {
@@ -23,7 +24,7 @@ function wordContents(){
   style:'TOC'+entry.level,tabStops:[{type:D.TabStopType.RIGHT,position:pageWidth,leader:D.LeaderType.DOT}],
   children:[new D.InternalHyperlink({anchor:entry.href,children:[new D.TextRun({text:entry.title,font,size:24,bold:entry.level===1,color:theme.ink})]}),new D.TextRun({text:'\t',font}),new D.SimpleField('PAGEREF '+entry.href+' \\h','待更新')]
  }));
- return new ReportTableOfContents('报告目录',{hyperlink:true,headingStyleRange:'1-2',contentChildren:entries,beginDirty:true});
+ return new ReportTableOfContents('报告目录',{hyperlink:true,headingStyleRange:'1-3',contentChildren:entries,beginDirty:true});
 }
 function paragraph(text,{heading,align,bold=false,color=theme.ink,size=18,bookmark,runs}={}){
  return new D.Paragraph({
@@ -80,12 +81,13 @@ async function table(node,width){
    children:await Promise.all([...row.cells].map(async (cell,i)=>{
     const header=cell.tagName==='TH',total=row.classList.contains('report-total');
     const statusElement=cell.querySelector('.report-status');
+    const unidentified=!!cell.querySelector('.report-unidentified');
     const status=statusElement?.closest('td,th')===cell?theme.statuses[statusElement.dataset.status]:undefined;
     return new D.TableCell({
      width:{size:customWidths?widths[i]:unit*cell.colSpan,type:D.WidthType.DXA},columnSpan:cell.colSpan,rowSpan:cell.rowSpan,
      margins:{top:45,bottom:45,left:55,right:55},
      shading:status?{fill:status.fill}:header||total?{fill:header?theme.fill:theme.total}:undefined,
-     children:await blocks(cell,Math.max(200,(customWidths?widths[i]:unit*cell.colSpan)-120),{cell:true,bold:header||total||!!status,color:status?.text||(header?theme.heading:theme.ink),align:status||node.classList.contains('report-cover-status')&&i>0?D.AlignmentType.CENTER:undefined})
+     children:await blocks(cell,Math.max(200,(customWidths?widths[i]:unit*cell.colSpan)-120),{cell:true,bold:header||total||!!status,color:unidentified?'C00000':status?.text||(header?theme.heading:theme.ink),align:status||node.classList.contains('report-cover-status')&&i>0?D.AlignmentType.CENTER:undefined})
     });
    }))
   })))
@@ -123,7 +125,7 @@ async function blocks(node,width,context={}){
   }
   if(/^h[1-4]$/.test(tag)){
    const toc=!!child.closest('.report-toc');
-   const main=tag==='h2',level=headingBookmarks.has(child)?(main?D.HeadingLevel.HEADING_1:D.HeadingLevel.HEADING_2):undefined;
+   const main=tag==='h2',level=headingBookmarks.has(child)?[D.HeadingLevel.HEADING_1,D.HeadingLevel.HEADING_2,D.HeadingLevel.HEADING_3][headingDepth(child)-1]:undefined;
    out.push(paragraph(text(child),{heading:child.textContent.includes('综合分析报告（年审适用）')?D.HeadingLevel.TITLE:level,bold:true,color:toc?theme.navy:theme.ink,size:main?32:23,bookmark:headingBookmarks.get(child)}));
    if(toc)out.push(new D.Table({
     layout:D.TableLayoutType.FIXED,width:{size:width,type:D.WidthType.DXA},columnWidths:[Math.floor(width*.12),Math.ceil(width*.88)],
@@ -176,7 +178,7 @@ async function report(model){
  headingBookmarks=new WeakMap();reportTocEntries=[];
  pages.forEach((page,i)=>page.querySelectorAll('.report-chapter,.report-section > h3').forEach(node=>{
   const id='ReportHeading'+(reportTocEntries.length+1);headingBookmarks.set(node,id);
-  reportTocEntries.push({title:text(node),level:node.matches('.report-chapter')?1:2,href:id});
+  reportTocEntries.push({title:text(node),level:headingDepth(node),href:id});
  }));
  const run=t=>new D.TextRun({text:t,font,size:15,color:theme.muted});
  const header=new D.Header({children:[new D.Paragraph({
@@ -202,7 +204,7 @@ async function report(model){
  }
  const wordDocument=new D.Document({
   features:{updateFields:true},creator:'Audit Compass',title:'综合分析报告（年审适用）',
-  styles:{default:{document:{run:{font,size:18},paragraph:{spacing:{after:65}}}},paragraphStyles:[{id:'TOC1',name:'toc 1',basedOn:'Normal',run:{font,size:24,bold:true,color:theme.ink},paragraph:{spacing:{before:100,after:120,line:320}}},{id:'TOC2',name:'toc 2',basedOn:'Normal',run:{font,size:24,color:theme.ink},paragraph:{indent:{left:240},spacing:{after:120,line:320}}}]},
+  styles:{default:{document:{run:{font,size:18},paragraph:{spacing:{after:65}}}},paragraphStyles:[{id:'TOC3',name:'toc 3',basedOn:'Normal',run:{font,size:24,color:theme.ink},paragraph:{indent:{left:480},spacing:{after:120,line:320}}},{id:'TOC1',name:'toc 1',basedOn:'Normal',run:{font,size:24,bold:true,color:theme.ink},paragraph:{spacing:{before:100,after:120,line:320}}},{id:'TOC2',name:'toc 2',basedOn:'Normal',run:{font,size:24,color:theme.ink},paragraph:{indent:{left:240},spacing:{after:120,line:320}}}]},
   sections
  });
  return D.Packer.toBlob(wordDocument);

@@ -435,10 +435,10 @@ function compute(data,settings={}){
  details[0]=['','合计（全部对手方）','','',flagged.length+' 家',...cpAmounts(externalTotals,externalTotals)];
  function focusProfile(r){
   if(!r[0])return Array(10).fill('');
-  const profile=profiles.get(r[1]);
-  return [null,profile?.cases,profile?.dishonest,profile?.penalties,R.value(profile,'days',registryEnd,rates),profile?.industry,R.value(profile,'capital',registryEnd,rates),R.value(profile,'paidIn',registryEnd,rates),profile?.insured,[profile?.directors,profile?.supervisors,profile?.executives].filter(Boolean).join('、')||null].map(x=>x??missingValue);
+  const profile=profiles.get(r[1]),empty=flagByName.has(r[1])?'':missingValue;
+  return [null,profile?.cases,profile?.dishonest,profile?.penalties,R.value(profile,'days',registryEnd,rates),profile?.industry,R.value(profile,'capital',registryEnd,rates),R.value(profile,'paidIn',registryEnd,rates),profile?.insured,[profile?.directors,profile?.supervisors,profile?.executives].filter(Boolean).join('、')||null].map(x=>x==null||empty===''&&x===missingValue?empty:x);
  }
- table(focus,'重点关注对手方并集清单',[...cpHeaders,'个人类型','收支重合','未识别客商关系','疑似关联方','诉讼案件数量','失信被执行人','行政处罚数量','经营天数','所属行业','注册资本','实缴资本','社保人数','董监高信息'],details.filter(r=>r[1]!=='其他').map(r=>[...r,[...(flagByName.get(r[1])||[])].join('、'),overlapNames.has(r[1])?'是':'',unknownNames.has(r[1])?'是':'',...focusProfile(r)]));
+ table(focus,'重点关注对手方并集清单',[...cpHeaders,'个人类型','收支重合','未识别客商关系','疑似关联方','诉讼案件数量','失信被执行人','行政处罚数量','经营天数','所属行业','注册资本','实缴资本','社保人数','董监高信息'],details.filter(r=>r[1]!=='其他').map(r=>[...r,[...(flagByName.get(r[1])||[])].join('、'),overlapNames.has(r[1])?'是':'',unknownNames.has(r[1])?'未识别':'',...focusProfile(r)]));
  const numbering={scope:['2.1','1.1'],features:['2.2','1.2'],concentration:['2.3','1.3'],counterparties:['3.1','2.1'],related:['3.2','2.2'],compliance:['3.3.1','2.3.1'],people:['3.3.2','2.3.2'],follow:['3.3.3','2.3.3'],focus:['3.4','2.4']};
  for(const s of model.sections){
   const pair=numbering[s.id];
@@ -465,6 +465,7 @@ function cardHTML(card){
  return '<article class="report-nature-card"><h4>'+esc(card.name)+'</h4>'+(card.condition?'<p class="report-condition">'+esc(card.condition)+'</p>':'')+'<strong>'+currency.format(card.amount)+' <small>百万元</small> / '+integer(card.count)+' <small>笔</small></strong><p>涉及 '+card.companies+' 家被审计单位 · '+card.parties+' 个有名称对手方</p>'+(card.breakdown?'<dl>'+card.breakdown.map(([label,parties,amount,count])=>'<div><dt>'+esc(label)+'</dt><dd>'+parties+' 个对手方 / '+currency.format(amount)+' 百万元 / '+integer(count)+' 笔</dd></div>').join('')+'</dl>':'')+'</article>';
 }
 function tableCell(value,header){
+ if(header==='未识别客商关系'&&value==='未识别')return '<span class="report-unidentified">未识别</span>';
  if(header==='状态'&&['已上传','部分缺失','未上传'].includes(value))return '<span class="report-status" data-status="'+esc(value)+'">'+esc(value)+'</span>';
  if(typeof value==='number'&&/占比|比例/.test(header))return (100*value).toFixed(2);
  if(typeof value==='string'&&header.includes('%')&&/区间|占比|比例/.test(header))return esc(value.replace(/(\d)%/g,'$1'));
@@ -673,8 +674,10 @@ function exportReportTable(t,code){
 }
 function formatTables(tables,code){return Object.fromEntries(Object.entries(tables).map(([name,t])=>[name,exportReportTable(t,code)]));}
 
+function tocDepth(title){return Math.min(3,(String(title).match(/^\d+(?:\.\d+)*/)?.[0]||'1').split('.').length);}
 function tocHTML(m){
- return '<nav class="report-toc" aria-label="报告目录"><h2>报告目录</h2><p>Table of Contents</p><ol>'+m.sections.filter(s=>!['cover','background'].includes(s.id)).map(s=>(chapterTitles[s.id]?'<li class="toc-chapter"><a href="#report-'+s.id+'">'+esc(chapterTitles[s.id])+'</a></li>':'')+'<li><a href="#report-'+s.id+'">'+esc(s.title)+'</a></li>').join('')+'</ol></nav>';
+ const item=(title,id)=>'<li class="toc-level-'+tocDepth(title)+'"><a href="#report-'+id+'">'+esc(title)+'</a></li>';
+ return '<nav class="report-toc" aria-label="报告目录"><h2>报告目录</h2><p>Table of Contents</p><ol>'+m.sections.filter(s=>!['cover','background'].includes(s.id)).map(s=>(chapterTitles[s.id]?item(chapterTitles[s.id],s.id):'')+item(s.title,s.id)).join('')+'</ol></nav>';
 }
 function selectSections(model,ids){
  const allSections=model.allSections||model.sections;
