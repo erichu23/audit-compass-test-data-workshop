@@ -173,8 +173,8 @@ function compute(data,settings={}){
  const externalTotals=sum(external);
  const {sources:periodSources,status:sourceStatus}=scopeData(data,periodRows,own,from,to,cut);
  const cover=section('cover','综合分析报告（年审适用）','本页为模拟数据的核验预期值。'+(originalCurrency?'金额只使用 '+originalCurrency+' 原币。资料状态仍基于本期全币种数据。':'金额折算为人民币后汇总。'+(unknown.length?'未设置汇率的币种 '+unknown.join('、')+' 使用导入表已有的等值人民币列，缺值按 0。':''))+' 最后更新时间为本次报告生成时的北京时间（模拟）。');
- table(cover,'封面',['项目','当前结果'],[['被审计单位',[...own].join('、')],['系统已有数据期间',rangeLabel(minimum,maximum)],['财务报表期间',rangeLabel(from,to)],['本期首末交易日期',rangeLabel(selectedDates[0],selectedDates.at(-1))],['金额口径',originalCurrency?'原币 '+originalCurrency:'折算人民币'],['测试汇率',fxLabel],['报告版本','核验预览 V1.0']]);
  const timestampParts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(new Date()).map(p=>[p.type,p.value]));
+ table(cover,'封面',['项目','当前结果'],[['被审计单位',[...own].join('、')],['系统已有数据期间',rangeLabel(minimum,maximum)],['财务报表期间',rangeLabel(from,to)],['本期首末交易日期',rangeLabel(selectedDates[0],selectedDates.at(-1))],['金额口径',originalCurrency?'原币 '+originalCurrency:'折算人民币'],['测试汇率',fxLabel],['报告版本','核验预览 V1.0 '+timestampParts.year+'年'+Number(timestampParts.month)+'月'+Number(timestampParts.day)+'日']]);
  const simulatedUpdatedAt=timestampParts.year+'-'+timestampParts.month+'-'+timestampParts.day+' '+timestampParts.hour+':'+timestampParts.minute+':'+timestampParts.second;
  const masterList=[['company','被审计单位主档'],['bank','银行账号主档'],['flow','资金交易明细'],['related','关联方主档'],['customer','客户主档'],['supplier','供应商主档'],['employee','员工主档'],['balance','银行科目主档'],['gl','总账科目余额表']];
  table(cover,'分析数据范围',['主档名称','状态','本期记录数','最后更新时间','本期核验说明'],masterList.map(([k,label])=>{

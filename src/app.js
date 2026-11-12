@@ -275,6 +275,7 @@ function makeProjectCheckpoint(label){
  const point={label,time:new Date().toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'}),raw:JSON.stringify(data),registry:JSON.stringify(rawRegistry()),counts:Object.fromEntries(Object.entries(data).map(([name,t])=>[name,t.rows.length])),context:JSON.stringify({period:reportPeriod,criteria:config.reportCriteria,rates:exchangeRates(),registryEnd:registryReportEnd(),registryBounds:bounds(),threshold:config.bigThreshold,cut:config.cut})};
  try{
   const tables=AuditReport.workbook(fullReportModel());delete tables['本期流水明细'];
+  if(tables['封面'])tables['封面'].rows=tables['封面'].rows.map(r=>r[0]==='报告版本'?[r[0],String(r[1]).replace(/\s+\d{4}年\d{1,2}月\d{1,2}日$/,'')]:r);
   const status=tables['分析数据范围'];if(status){const column=status.headers.indexOf('最后更新时间');if(column>=0)status.rows=status.rows.map(r=>r.map((v,i)=>i===column?'':v));}
   point.tables=Object.fromEntries(Object.entries(tables).map(([key,t])=>[key,JSON.stringify(t)]));
  }catch(error){point.error=error.message;}
