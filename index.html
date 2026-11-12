@@ -3144,7 +3144,7 @@ function render(m,{allRows=false,forExport=false}={}){
   if(end>=(m.minimum||m.from)&&start<=(m.maximum||m.to))presets.push([y+' 财年 · '+start+' ～ '+end,start+'|'+end,y]);
  }
  const current=m.from+'|'+m.to;
- const output='<section class="panel report-controls"><div class="panel-heading"><h3>选择分析与导出期间</h3><div class="actions"><button id="reportPrint"'+(m.sections.length?'':' disabled')+'>打印横版报告</button><button id="reportWord"'+(m.sections.length?'':' disabled')+'>下载 Word 报告</button><button class="primary" id="reportExport"'+(m.sections.length?'':' disabled')+'>下载本期核验 Excel</button></div></div><div class="report-inputs"><label>金额口径<select id="reportCurrency"><option value="">折算人民币（CNY）</option>'+m.currencies.map(code=>'<option value="'+code+'"'+(code===m.originalCurrency?' selected':'')+'>原币 · '+code+'</option>').join('')+'</select></label><label>财年截止日<select id="reportCut">'+['03-31','06-30','09-30','12-31'].map(c=>'<option'+(c===m.cut?' selected':'')+'>'+c+'</option>').join('')+'</select></label><label>期间快捷选择<select id="reportPreset"><option value="">自定义日期</option>'+presets.map(([label,value,year])=>'<option value="'+esc(value)+'"'+(year?' data-year="'+year+'"':'')+(value===current?' selected':'')+'>'+esc(label)+'</option>').join('')+'</select></label><label>开始日期<input id="reportFrom" type="date" value="'+esc(m.from)+'"></label><label>结束日期<input id="reportTo" type="date" value="'+esc(m.to)+'"></label><button id="reportApply">应用区间</button></div><p class="muted">Word 目录需在打开后更新域，页码按正文重新计算，封面和目录不编号。日期包含首尾两天。财年按结束年份命名；导出使用已应用的期间，含核验表及本期流水。上传整套数据请使用「测试数据生成 → 导出测试数据」。</p>'+sectionPicker(m)+'<nav class="report-index" aria-label="报告章节">'+m.sections.filter(s=>s.id!=='background').map(s=>'<a href="#report-'+s.id+'">'+esc(s.title.startsWith('综合')?'封面':s.title.split(' ').slice(0,2).join(' '))+'</a>').join('')+'</nav></section>'+
+ const output='<section class="panel report-controls"><div class="panel-heading"><h3>选择分析与导出期间</h3><div class="actions"><button id="reportPrint"'+(m.sections.length?'':' disabled')+'>打印横版报告</button><button id="reportWord"'+(m.sections.length?'':' disabled')+'>下载 Word 报告</button><button class="primary" id="reportExport"'+(m.sections.length?'':' disabled')+'>下载本期核验 Excel</button></div></div><div class="report-inputs"><label>金额口径<select id="reportCurrency"><option value="">折算人民币（CNY）</option>'+m.currencies.map(code=>'<option value="'+code+'"'+(code===m.originalCurrency?' selected':'')+'>原币 · '+code+'</option>').join('')+'</select></label><label>财年截止日<select id="reportCut">'+['03-31','06-30','09-30','12-31'].map(c=>'<option'+(c===m.cut?' selected':'')+'>'+c+'</option>').join('')+'</select></label><label>期间快捷选择<select id="reportPreset"><option value="">自定义日期</option>'+presets.map(([label,value,year])=>'<option value="'+esc(value)+'"'+(year?' data-year="'+year+'"':'')+(value===current?' selected':'')+'>'+esc(label)+'</option>').join('')+'</select></label><label>开始日期<input id="reportFrom" type="date" value="'+esc(m.from)+'"></label><label>结束日期<input id="reportTo" type="date" value="'+esc(m.to)+'"></label><button id="reportApply">应用区间</button></div><p class="muted">Word 目录需在打开后更新域，页码按正文重新计算，封面和目录不编号。日期包含首尾两天。财年按结束年份命名；导出使用已应用的期间，含核验表及本期流水。上传整套数据请使用「测试数据生成 → 导出测试数据」。</p>'+ '<details class="report-macro-tools"><summary>目录更新宏设置（首次配置后，允许宏时打开报告自动弹窗）</summary><p>先下载配置包，在 Word 中保存宏模板，再导入此处。导入后下载的报告为 .docm；未导入时仍为 .docx。宏受 Word 安全设置控制。</p><div class="actions"><button id="reportMacroKit">下载宏代码与设置说明</button><button id="reportMacroTemplate">导入宏模板（.docm / .dotm）</button><span>'+ (g.AuditWord?.hasMacroTemplate()?'本次会话已加载宏模板':'尚未加载宏模板')+'</span></div></details>'+sectionPicker(m)+'<nav class="report-index" aria-label="报告章节">'+m.sections.filter(s=>s.id!=='background').map(s=>'<a href="#report-'+s.id+'">'+esc(s.title.startsWith('综合')?'封面':s.title.split(' ').slice(0,2).join(' '))+'</a>').join('')+'</nav></section>'+
  '<article class="report-document" aria-label="综合分析报告预览">'+(m.sections.length?amountLabels(reportPages(m),m.originalCurrency):'<p class="empty">请至少勾选一个报告章节，预览和导出将按所选内容生成。</p>')+'</article>';
  renderAllRows=false;renderForExport=false;
  return output;
@@ -26281,7 +26281,7 @@ function paragraph(text,{heading,align,bold=false,color=theme.ink,size=18,bookma
   children:bookmark?[new D.Bookmark({id:bookmark,children:[new D.TextRun({text:String(text??''),font,size,bold,color})]})]:(runs||[new D.TextRun({text:String(text??''),font,size,bold,color})])
  });
 }
-async function svgImage(svg,width){
+async function svgImage(svg,width,legend){
  const clone=svg.cloneNode(true),box=svg.viewBox.baseVal;
  const aspect=(box.width||Number(svg.getAttribute('width'))||330)/(box.height||Number(svg.getAttribute('height'))||181);
  const pixels=Math.min(1050,width/15),height=pixels/aspect;
@@ -26295,14 +26295,28 @@ async function svgImage(svg,width){
   image.src=url;
   await image.decode();
   const canvas=document.createElement('canvas');
-  canvas.width=Math.ceil(pixels*2);canvas.height=Math.ceil(height*2);
+  canvas.width=Math.ceil(pixels*2);
   const context=canvas.getContext('2d');
   if(!context)throw Error('浏览器无法绘制报告图表。');
-  context.fillStyle='#ffffff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(image,0,0,canvas.width,canvas.height);
+  const scale=canvas.width/330,legendFont=8*scale,lineHeight=15*scale,padding=8*scale;
+  const items=legend?[...legend.children]:[],layout=[];let x=padding,y=padding;
+  context.font=legendFont+'px "Microsoft YaHei","微软雅黑",sans-serif';
+  for(const item of items){
+   const colors=[...item.querySelectorAll('i')].map(icon=>legendHex(icon.style.backgroundColor||icon.style.background));
+   const label=text(item),itemWidth=context.measureText(label).width+(colors.length*7+10)*scale;
+   if(x>padding&&x+itemWidth>canvas.width-padding){x=padding;y+=lineHeight;}
+   layout.push({x,y,label,colors});x+=itemWidth;
+  }
+  const legendHeight=layout.length?y+lineHeight:0;
+  canvas.height=Math.ceil(height*2+legendHeight);
+  context.fillStyle='#ffffff';context.fillRect(0,0,canvas.width,canvas.height);
+  context.font=legendFont+'px "Microsoft YaHei","微软雅黑",sans-serif';context.textBaseline='middle';
+  for(const item of layout){let left=item.x;for(const color of item.colors){context.fillStyle='#'+color;context.fillRect(left,item.y+3*scale,5*scale,5*scale);left+=7*scale;}context.fillStyle='#435976';context.fillText(item.label,left+2*scale,item.y+6*scale);}
+  context.drawImage(image,0,legendHeight,canvas.width,height*2);
   const png=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
   if(!png)throw Error('报告图表转换失败。');
   return new D.Paragraph({alignment:D.AlignmentType.CENTER,children:[
-   new D.ImageRun({type:'png',data:new Uint8Array(await png.arrayBuffer()),transformation:{width:pixels,height}})
+   new D.ImageRun({type:'png',data:new Uint8Array(await png.arrayBuffer()),transformation:{width:pixels,height:canvas.height/2}})
   ]});
  }finally{URL.revokeObjectURL(url);}
 }
@@ -26355,6 +26369,12 @@ async function blocks(node,width,context={}){
   if(child.matches('.report-toc')){
    out.push(paragraph('报告目录',{bold:true,color:theme.navy,size:32}));
    out.push(wordContents());
+   continue;
+  }
+  if(child.matches('.report-chart')&&child.querySelector('svg')){
+   const caption=child.querySelector('figcaption');if(caption)out.push(paragraph(text(caption),{bold:true,color:theme.heading,size:16}));
+   out.push(await svgImage(child.querySelector('svg'),width,child.querySelector('.report-stack-legend,.report-legend')));
+   for(const note of child.querySelectorAll(':scope > p'))out.push(paragraph(text(note),{size:15,color:theme.muted}));
    continue;
   }
   if(tag==='svg'){out.push(await svgImage(child,width));continue;}
@@ -26461,7 +26481,51 @@ async function report(model){
  });
  return D.Packer.toBlob(wordDocument);
 }
-g.AuditWord={report};
+let macroProject=null;
+async function setMacroTemplate(file){
+ const zip=await g.JSZip.loadAsync(file),project=zip.file('word/vbaProject.bin');
+ if(!project)throw Error('此文件没有 Word VBA 宏。请按设置说明保存带 AutoOpen 宏的 .docm 文件后再导入。');
+ if(zip.file('word/_rels/vbaProject.bin.rels'))throw Error('请使用仅含目录更新宏的独立模板，不支持含外部宏依赖的模板。');
+ macroProject=await project.async('uint8array');
+}
+async function exportReport(model){
+ const blob=await report(model);if(!macroProject)return {blob,extension:'docx'};
+ const zip=await g.JSZip.loadAsync(await blob.arrayBuffer()),relPath='word/_rels/document.xml.rels';
+ let types=await zip.file('[Content_Types].xml').async('string');
+ types=types.replace('application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml','application/vnd.ms-word.document.macroEnabled.main+xml');
+ types=types.replace('</Types>','<Override PartName="/word/vbaProject.bin" ContentType="application/vnd.ms-office.vbaProject"/></Types>');
+ let rels=await zip.file(relPath).async('string');let id='AuditCompassVba';while(rels.includes('Id="'+id+'"'))id+='1';
+ rels=rels.replace('</Relationships>','<Relationship Id="'+id+'" Type="http://schemas.microsoft.com/office/2006/relationships/vbaProject" Target="vbaProject.bin"/></Relationships>');
+ zip.file('word/vbaProject.bin',macroProject);zip.file('[Content_Types].xml',types);zip.file(relPath,rels);
+ return {blob:await zip.generateAsync({type:'blob',mimeType:'application/vnd.ms-word.document.macroEnabled.12'}),extension:'docm'};
+}
+const macroCode=`Attribute VB_Name = "AuditCompassContents"
+Option Explicit
+
+Public Sub AutoOpen()
+    On Error GoTo Done
+    If ActiveDocument.TablesOfContents.Count = 0 Then Exit Sub
+    ActiveDocument.Repaginate
+    ActiveDocument.TablesOfContents(1).Range.Select
+    Dialogs(wdDialogUpdateTOC).Show
+Done:
+End Sub
+`;
+async function macroKit(){
+ const zip=new g.JSZip();zip.file('AuditCompassContents.bas',macroCode);
+ zip.file('首次设置说明.txt',`目录打开时更新（仅需配置一次）
+1. 在桌面版 Microsoft Word 新建空白文档，打开开发工具中的 Visual Basic 编辑器。
+2. 在此文档项目内选择 文件 → 导入文件，导入 AuditCompassContents.bas（标准模块，保留模块名）。
+3. 将文档另存为 Word 启用宏的文档（.docm），关闭文档。模板不需要报告正文。
+4. 回到工作坊的“目录更新宏设置”，导入这个 .docm 模板。之后本次页面中的报告会导出为 .docm。
+5. 用 Word 打开报告，在你信任该宏时允许宏运行。AutoOpen 会定位第一个目录并显示“更新目录”对话框，请选择更新整个目录。
+宏只重新分页、定位目录、打开更新窗口；不联网、不修改测试数据。Word 禁用宏、受保护视图或安全策略阻止时不会执行；网页不能绕过这些设置。
+宏模板只在当前页面会话中使用，不保存进项目 JSON；刷新页面后需要重新导入模板。
+请使用未签名、仅包含本目录更新宏的独立模板；模板中的 VBA 代码将原样带入导出报告。
+`);
+ return zip.generateAsync({type:'blob'});
+}
+g.AuditWord={report,exportReport,setMacroTemplate,macroKit,hasMacroTemplate:()=>!!macroProject};
 })(globalThis);
 </script><script>'use strict';
 const E=AuditEngine,X=AuditExcel,K=E.KEYS,$=s=>document.querySelector(s),h=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -27238,7 +27302,7 @@ if(id==='exportFilteredFlow')run(async()=>{
  const source=E.checksWorkbook(analysis);
  const names=['逐年异常覆盖','专项交易','缺失同名付款明细','余额断点','账号覆盖','核验口径'];
  X.download(new Blob([await X.workbook(Object.fromEntries(names.map(n=>[n,source[n]])))]),'测试数据场景检查.xlsx');
- });if(id==='generate')run(async()=>{const result=E.generate(generationInput(),{...config,rates:exchangeRates()});lastData=snapshot();data=result.data;sourceLabel='新生成 · '+config.seed;recalc();reportPeriod=config.includeForeign===false?{originalCurrency:'CNY'}:{};preview=K.flow;resetFlowFilters();navigate('preview');toast('测试数据已生成，可预览流水或继续导出。');});if(id==='refreshAnalysis')run(async()=>{analyzeConfig();render();toast('已按当前财年重新核验。');});if(id==='reportApply')run(async()=>{const from=$('#reportFrom').value,to=$('#reportTo').value;if(!from||!to||from>to||Number(to.slice(0,4))-Number(from.slice(0,4))>11)throw Error('请选择有效的开始和结束日期。');reportPeriod={...reportPeriod,from,to,fiscalYear:undefined};render();});if(id==='reportPrint'){if(!reportModel().sections.length)toast('请至少选择一个报告章节。',true);else window.print();}if(id==='reportWord')run(async()=>{const m=reportModel();if(!m.sections.length)throw Error('请至少选择一个报告章节。');X.download(await AuditWord.report(m),'综合分析报告_'+m.from+'_'+m.to+'_'+(m.originalCurrency||'CNY')+'.docx');toast('Word 已导出。目录初始页码按平台分页生成；如 Word 重新分页，请在目录中选择“更新整个目录”。');});if(id==='reportExport')run(async()=>{const m=reportModel();if(!m.sections.length)throw Error('请至少选择一个报告章节。');X.download(new Blob([await X.workbook(AuditReport.workbook(m))]),'综合分析报告核验_'+m.from+'_'+m.to+'_'+(m.originalCurrency||'CNY')+'.xlsx');});if(id==='exportZip')run(exportZip);if(id==='exportSingle')run(async()=>{const name=page==='master'?master:preview;X.download(new Blob([await X.workbook({[name]:data[name]})]),name+'.xlsx');});if(id==='undo'||id==='undoTop'){if(lastData){const next=lastData;lastData=snapshot();restoreRegistryDateState(next);data=next.data;generationSource=next.source;config.companyFlow=next.companyFlow;config.sampleNonMerchants=next.sampleNonMerchants;config.sampleAccountPlans=next.sampleAccountPlans;config.registryRecords=next.registryRecords;config.registryBounds=next.registryBounds;config.reportCriteria=next.reportCriteria;persist();sourceLabel=next.label;recalc();render();toast('已恢复到上次修改前的数据。');}}if(id==='reset'){if(confirm('恢复内置可优比版数据？建议先保存当前项目。')){lastData=snapshot();const fresh=defaultReportProject();data=fresh.data;generationSource=fresh.source;for(const key of Object.keys(config))delete config[key];Object.assign(config,fresh.config);reportPeriod={};persist();sourceLabel=defaultSourceLabel;recalc();render();toast('已恢复内置数据。');}}if(id==='addCompany'||id==='addRow'&&master===K.company)$('#companyModal').showModal();else if(id==='addRow')editRow(null);if(id==='closeCompany')$('#companyModal').close();if(id==='closeModal')$('#rowModal').close();});
+ });if(id==='generate')run(async()=>{const result=E.generate(generationInput(),{...config,rates:exchangeRates()});lastData=snapshot();data=result.data;sourceLabel='新生成 · '+config.seed;recalc();reportPeriod=config.includeForeign===false?{originalCurrency:'CNY'}:{};preview=K.flow;resetFlowFilters();navigate('preview');toast('测试数据已生成，可预览流水或继续导出。');});if(id==='refreshAnalysis')run(async()=>{analyzeConfig();render();toast('已按当前财年重新核验。');});if(id==='reportApply')run(async()=>{const from=$('#reportFrom').value,to=$('#reportTo').value;if(!from||!to||from>to||Number(to.slice(0,4))-Number(from.slice(0,4))>11)throw Error('请选择有效的开始和结束日期。');reportPeriod={...reportPeriod,from,to,fiscalYear:undefined};render();});if(id==='reportPrint'){if(!reportModel().sections.length)toast('请至少选择一个报告章节。',true);else window.print();}if(id==='reportMacroKit')run(async()=>X.download(await AuditWord.macroKit(),'Word目录自动更新配置.zip'));if(id==='reportMacroTemplate'){const picker=document.createElement('input');picker.type='file';picker.accept='.docm,.dotm';picker.onchange=()=>run(async()=>{if(!picker.files[0])return;await AuditWord.setMacroTemplate(picker.files[0]);render();toast('宏模板已加载，本次会话将导出 .docm 报告。');});picker.click();}if(id==='reportWord')run(async()=>{const m=reportModel();if(!m.sections.length)throw Error('请至少选择一个报告章节。');const result=await AuditWord.exportReport(m);X.download(result.blob,'综合分析报告_'+m.from+'_'+m.to+'_'+(m.originalCurrency||'CNY')+'.'+result.extension);toast('Word 已导出。目录初始页码按平台分页生成；如 Word 重新分页，请在目录中选择“更新整个目录”。');});if(id==='reportExport')run(async()=>{const m=reportModel();if(!m.sections.length)throw Error('请至少选择一个报告章节。');X.download(new Blob([await X.workbook(AuditReport.workbook(m))]),'综合分析报告核验_'+m.from+'_'+m.to+'_'+(m.originalCurrency||'CNY')+'.xlsx');});if(id==='exportZip')run(exportZip);if(id==='exportSingle')run(async()=>{const name=page==='master'?master:preview;X.download(new Blob([await X.workbook({[name]:data[name]})]),name+'.xlsx');});if(id==='undo'||id==='undoTop'){if(lastData){const next=lastData;lastData=snapshot();restoreRegistryDateState(next);data=next.data;generationSource=next.source;config.companyFlow=next.companyFlow;config.sampleNonMerchants=next.sampleNonMerchants;config.sampleAccountPlans=next.sampleAccountPlans;config.registryRecords=next.registryRecords;config.registryBounds=next.registryBounds;config.reportCriteria=next.reportCriteria;persist();sourceLabel=next.label;recalc();render();toast('已恢复到上次修改前的数据。');}}if(id==='reset'){if(confirm('恢复内置可优比版数据？建议先保存当前项目。')){lastData=snapshot();const fresh=defaultReportProject();data=fresh.data;generationSource=fresh.source;for(const key of Object.keys(config))delete config[key];Object.assign(config,fresh.config);reportPeriod={};persist();sourceLabel=defaultSourceLabel;recalc();render();toast('已恢复内置数据。');}}if(id==='addCompany'||id==='addRow'&&master===K.company)$('#companyModal').showModal();else if(id==='addRow')editRow(null);if(id==='closeCompany')$('#companyModal').close();if(id==='closeModal')$('#rowModal').close();});
 document.addEventListener('change',e=>{if(e.target.dataset.reportSection){const selected=reportModel().selectedSectionIds;config.reportSections=e.target.checked?[...new Set([...selected,e.target.dataset.reportSection])]:selected.filter(id=>id!==e.target.dataset.reportSection);const top=window.scrollY;persist();render();window.scrollTo(0,top);return;}if(e.target.form?.id==='registryFilter'&&e.target.name==='metric'){registryFilter={...Object.fromEntries(new FormData(e.target.form)),range:''};pageNo=1;render();return;}if(e.target.name==='currencyMode'){config.includeForeign=e.target.value==='all';persist();render();document.querySelector('input[name=currencyMode]:checked')?.focus({preventScroll:true});return;}if(e.target.dataset.config)updateSetting(e.target);if(e.target.dataset.config==='bigThreshold')recalc();if(e.target.dataset.companyMode!==undefined){const name=data[K.company].rows[Number(e.target.dataset.companyMode)][0];const modes={...(config.companyFlow||{})};if(e.target.value==='auto')delete modes[name];else Object.defineProperty(modes,name,{value:e.target.value==='true',enumerable:true,configurable:true});config.companyFlow=modes;persist();toast('已保存，下次生成流水时生效。');}if(e.target.id==='reportCurrency'){reportPeriod={...reportPeriod,originalCurrency:e.target.value};render();}if(e.target.id==='reportCut'){const cut=e.target.value;reportPeriod={...reportPeriod,cut,...(reportPeriod.fiscalYear?AuditReport.fiscalPeriod(reportPeriod.fiscalYear,cut):{})};render();}if(e.target.id==='reportPreset'&&e.target.value){const [from,to]=e.target.value.split('|');reportPeriod={...reportPeriod,from,to,fiscalYear:Number(e.target.selectedOptions[0].dataset.year)||undefined};render();}if(e.target.id==='previewSelect'){preview=e.target.value;pageNo=1;search='';render();}if(e.target.id==='fileInput'){const fs=[...e.target.files];run(()=>importFiles(fs));e.target.value='';}});
 document.addEventListener('input',e=>{if(e.target.dataset.annual){const {annual,year}=e.target.dataset;config.annualCounts??={};const counts=config.annualCounts[year]??={};if(e.target.value==='')delete counts[annual];else counts[annual]=Number(e.target.value);persist();}if(e.target.dataset.config)updateSetting(e.target);if(e.target.id==='search'){search=e.target.value;pageNo=1;const start=e.target.selectionStart;render();$('#search').focus();$('#search').setSelectionRange(start,start);}});
 recalc();render();

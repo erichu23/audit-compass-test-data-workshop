@@ -43,7 +43,7 @@ function paragraph(text,{heading,align,bold=false,color=theme.ink,size=18,bookma
   children:bookmark?[new D.Bookmark({id:bookmark,children:[new D.TextRun({text:String(text??''),font,size,bold,color})]})]:(runs||[new D.TextRun({text:String(text??''),font,size,bold,color})])
  });
 }
-async function svgImage(svg,width){
+async function svgImage(svg,width,legend){
  const clone=svg.cloneNode(true),box=svg.viewBox.baseVal;
  const aspect=(box.width||Number(svg.getAttribute('width'))||330)/(box.height||Number(svg.getAttribute('height'))||181);
  const pixels=Math.min(1050,width/15),height=pixels/aspect;
@@ -57,14 +57,28 @@ async function svgImage(svg,width){
   image.src=url;
   await image.decode();
   const canvas=document.createElement('canvas');
-  canvas.width=Math.ceil(pixels*2);canvas.height=Math.ceil(height*2);
+  canvas.width=Math.ceil(pixels*2);
   const context=canvas.getContext('2d');
   if(!context)throw Error('浏览器无法绘制报告图表。');
-  context.fillStyle='#ffffff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(image,0,0,canvas.width,canvas.height);
+  const scale=canvas.width/330,legendFont=8*scale,lineHeight=15*scale,padding=8*scale;
+  const items=legend?[...legend.children]:[],layout=[];let x=padding,y=padding;
+  context.font=legendFont+'px "Microsoft YaHei","微软雅黑",sans-serif';
+  for(const item of items){
+   const colors=[...item.querySelectorAll('i')].map(icon=>legendHex(icon.style.backgroundColor||icon.style.background));
+   const label=text(item),itemWidth=context.measureText(label).width+(colors.length*7+10)*scale;
+   if(x>padding&&x+itemWidth>canvas.width-padding){x=padding;y+=lineHeight;}
+   layout.push({x,y,label,colors});x+=itemWidth;
+  }
+  const legendHeight=layout.length?y+lineHeight:0;
+  canvas.height=Math.ceil(height*2+legendHeight);
+  context.fillStyle='#ffffff';context.fillRect(0,0,canvas.width,canvas.height);
+  context.font=legendFont+'px "Microsoft YaHei","微软雅黑",sans-serif';context.textBaseline='middle';
+  for(const item of layout){let left=item.x;for(const color of item.colors){context.fillStyle='#'+color;context.fillRect(left,item.y+3*scale,5*scale,5*scale);left+=7*scale;}context.fillStyle='#435976';context.fillText(item.label,left+2*scale,item.y+6*scale);}
+  context.drawImage(image,0,legendHeight,canvas.width,height*2);
   const png=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
   if(!png)throw Error('报告图表转换失败。');
   return new D.Paragraph({alignment:D.AlignmentType.CENTER,children:[
-   new D.ImageRun({type:'png',data:new Uint8Array(await png.arrayBuffer()),transformation:{width:pixels,height}})
+   new D.ImageRun({type:'png',data:new Uint8Array(await png.arrayBuffer()),transformation:{width:pixels,height:canvas.height/2}})
   ]});
  }finally{URL.revokeObjectURL(url);}
 }
@@ -117,6 +131,12 @@ async function blocks(node,width,context={}){
   if(child.matches('.report-toc')){
    out.push(paragraph('报告目录',{bold:true,color:theme.navy,size:32}));
    out.push(wordContents());
+   continue;
+  }
+  if(child.matches('.report-chart')&&child.querySelector('svg')){
+   const caption=child.querySelector('figcaption');if(caption)out.push(paragraph(text(caption),{bold:true,color:theme.heading,size:16}));
+   out.push(await svgImage(child.querySelector('svg'),width,child.querySelector('.report-stack-legend,.report-legend')));
+   for(const note of child.querySelectorAll(':scope > p'))out.push(paragraph(text(note),{size:15,color:theme.muted}));
    continue;
   }
   if(tag==='svg'){out.push(await svgImage(child,width));continue;}
@@ -223,5 +243,49 @@ async function report(model){
  });
  return D.Packer.toBlob(wordDocument);
 }
-g.AuditWord={report};
+let macroProject=null;
+async function setMacroTemplate(file){
+ const zip=await g.JSZip.loadAsync(file),project=zip.file('word/vbaProject.bin');
+ if(!project)throw Error('此文件没有 Word VBA 宏。请按设置说明保存带 AutoOpen 宏的 .docm 文件后再导入。');
+ if(zip.file('word/_rels/vbaProject.bin.rels'))throw Error('请使用仅含目录更新宏的独立模板，不支持含外部宏依赖的模板。');
+ macroProject=await project.async('uint8array');
+}
+async function exportReport(model){
+ const blob=await report(model);if(!macroProject)return {blob,extension:'docx'};
+ const zip=await g.JSZip.loadAsync(await blob.arrayBuffer()),relPath='word/_rels/document.xml.rels';
+ let types=await zip.file('[Content_Types].xml').async('string');
+ types=types.replace('application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml','application/vnd.ms-word.document.macroEnabled.main+xml');
+ types=types.replace('</Types>','<Override PartName="/word/vbaProject.bin" ContentType="application/vnd.ms-office.vbaProject"/></Types>');
+ let rels=await zip.file(relPath).async('string');let id='AuditCompassVba';while(rels.includes('Id="'+id+'"'))id+='1';
+ rels=rels.replace('</Relationships>','<Relationship Id="'+id+'" Type="http://schemas.microsoft.com/office/2006/relationships/vbaProject" Target="vbaProject.bin"/></Relationships>');
+ zip.file('word/vbaProject.bin',macroProject);zip.file('[Content_Types].xml',types);zip.file(relPath,rels);
+ return {blob:await zip.generateAsync({type:'blob',mimeType:'application/vnd.ms-word.document.macroEnabled.12'}),extension:'docm'};
+}
+const macroCode=`Attribute VB_Name = "AuditCompassContents"
+Option Explicit
+
+Public Sub AutoOpen()
+    On Error GoTo Done
+    If ActiveDocument.TablesOfContents.Count = 0 Then Exit Sub
+    ActiveDocument.Repaginate
+    ActiveDocument.TablesOfContents(1).Range.Select
+    Dialogs(wdDialogUpdateTOC).Show
+Done:
+End Sub
+`;
+async function macroKit(){
+ const zip=new g.JSZip();zip.file('AuditCompassContents.bas',macroCode);
+ zip.file('首次设置说明.txt',`目录打开时更新（仅需配置一次）
+1. 在桌面版 Microsoft Word 新建空白文档，打开开发工具中的 Visual Basic 编辑器。
+2. 在此文档项目内选择 文件 → 导入文件，导入 AuditCompassContents.bas（标准模块，保留模块名）。
+3. 将文档另存为 Word 启用宏的文档（.docm），关闭文档。模板不需要报告正文。
+4. 回到工作坊的“目录更新宏设置”，导入这个 .docm 模板。之后本次页面中的报告会导出为 .docm。
+5. 用 Word 打开报告，在你信任该宏时允许宏运行。AutoOpen 会定位第一个目录并显示“更新目录”对话框，请选择更新整个目录。
+宏只重新分页、定位目录、打开更新窗口；不联网、不修改测试数据。Word 禁用宏、受保护视图或安全策略阻止时不会执行；网页不能绕过这些设置。
+宏模板只在当前页面会话中使用，不保存进项目 JSON；刷新页面后需要重新导入模板。
+请使用未签名、仅包含本目录更新宏的独立模板；模板中的 VBA 代码将原样带入导出报告。
+`);
+ return zip.generateAsync({type:'blob'});
+}
+g.AuditWord={report,exportReport,setMacroTemplate,macroKit,hasMacroTemplate:()=>!!macroProject};
 })(globalThis);
