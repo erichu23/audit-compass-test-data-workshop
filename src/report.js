@@ -256,7 +256,7 @@ function compute(data,settings={}){
 
  }
 
- const concentration=section('concentration','1.3 资金流水集中度分析','剔除合并范围内单位之间的往来。先按客商分类对对手方排名，再拆分关联方和第三方。占比的分母是该方向、该客商分类的总金额。只有同一本方单位与对手方在关联方主档中匹配，才列为关联方；内部往来仍剔除。对手方名称为空的交易计入合计和其他，跳过排名。');
+ const concentration=section('concentration','1.3 资金流水集中度分析（以下数据分析已剔除被审计单位合并范围内各单位之间的交易往来）','剔除合并范围内单位之间的往来。先按客商分类对对手方排名，再拆分关联方和第三方。占比的分母是该方向、该客商分类的总金额。只有同一本方单位与对手方在关联方主档中匹配，才列为关联方；内部往来仍剔除。对手方名称为空的交易计入合计和其他，跳过排名。');
  const months=new Map(),counterparties=new Map(),related=new Map(),relations=new Map(),people=new Map(),byCategory=new Map(),byCategoryRelated=new Map();
  const flagByName=new Map(),relationshipNames=new Map();
  for(const r of external){
@@ -322,7 +322,7 @@ function compute(data,settings={}){
  ]));
  cpSection.tables.at(-1).grouped=true;
  for(const [dir,metric] of [['流入','in'],['流出','out']])table(cpSection,dir+'前20大对手方',cpHeaders,ranking(sortBy(cp.filter(x=>x[metric]>0),x=>x[metric]),externalTotals,20,cp.filter(x=>x[metric]<=0)));
- const relatedSection=section('related','2.2 关联方资金流水分析','关联组合按被审计单位公司名称＋关联方名称去重，不按关联关系类型或重复主档行重复计数。在已有主档组合基础上，自动补齐不同被审计单位之间的有向关联组合（X→Y和Y→X分别计一组），不自动增加自身组合，也不扩展第三方关系。组合数量使用“组”，不同关联方名称数量使用“个”。交易统计仍剔除合并范围内往来。');
+ const relatedSection=section('related','2.2 关联方资金流水分析（以下数据分析是依据系统中关联方主档名单进行汇总）','关联组合按被审计单位公司名称＋关联方名称去重，不按关联关系类型或重复主档行重复计数。在已有主档组合基础上，自动补齐不同被审计单位之间的有向关联组合（X→Y和Y→X分别计一组），不自动增加自身组合，也不扩展第三方关系。组合数量使用“组”，不同关联方名称数量使用“个”。交易统计仍剔除合并范围内往来。');
  const rels=[...related.values()];
  const masterRelatedNames=new Set(data[K.related].rows.map(r=>clean(r[1])).filter(Boolean));
  const relationPairs=new Map();
@@ -652,7 +652,7 @@ function sectionBody(s,m,continuations){
  }
  return tables.map(tableHTML).join('');
 }
-const chapterTitles={scope:'1 被审计单位资金流水数据总览',counterparties:'2 被审计单位资金流水按交易对手方分析总览',compliance:'2.3 交易对手方重点事项分析'};
+const chapterTitles={scope:'1 被审计单位资金流水数据总览（相关信息依据工作簿资金流水数据信息汇总）',counterparties:'2 被审计单位资金流水按交易对手方分析总览（以下数据分析已剔除被审计单位合并范围内各单位之间的交易往来）',compliance:'2.3 交易对手方重点事项分析（相关信息依据天眼查信息汇总，交易金额前20大见2.4，详细清单见<资金流水核查和工商信息汇总明细附件.excel>）'};
 function logicHTML(s){return renderForExport?'':'<details class="report-logic"><summary>查看统计逻辑</summary><p>'+esc(s.note)+'</p></details>';}
 function reportSection(s,m,continuations){
  const tag=s.id==='cover'?'h2':'h3';

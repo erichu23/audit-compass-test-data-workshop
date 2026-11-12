@@ -2677,7 +2677,7 @@ function compute(data,settings={}){
 
  }
 
- const concentration=section('concentration','1.3 资金流水集中度分析','剔除合并范围内单位之间的往来。先按客商分类对对手方排名，再拆分关联方和第三方。占比的分母是该方向、该客商分类的总金额。只有同一本方单位与对手方在关联方主档中匹配，才列为关联方；内部往来仍剔除。对手方名称为空的交易计入合计和其他，跳过排名。');
+ const concentration=section('concentration','1.3 资金流水集中度分析（以下数据分析已剔除被审计单位合并范围内各单位之间的交易往来）','剔除合并范围内单位之间的往来。先按客商分类对对手方排名，再拆分关联方和第三方。占比的分母是该方向、该客商分类的总金额。只有同一本方单位与对手方在关联方主档中匹配，才列为关联方；内部往来仍剔除。对手方名称为空的交易计入合计和其他，跳过排名。');
  const months=new Map(),counterparties=new Map(),related=new Map(),relations=new Map(),people=new Map(),byCategory=new Map(),byCategoryRelated=new Map();
  const flagByName=new Map(),relationshipNames=new Map();
  for(const r of external){
@@ -2743,7 +2743,7 @@ function compute(data,settings={}){
  ]));
  cpSection.tables.at(-1).grouped=true;
  for(const [dir,metric] of [['流入','in'],['流出','out']])table(cpSection,dir+'前20大对手方',cpHeaders,ranking(sortBy(cp.filter(x=>x[metric]>0),x=>x[metric]),externalTotals,20,cp.filter(x=>x[metric]<=0)));
- const relatedSection=section('related','2.2 关联方资金流水分析','关联组合按被审计单位公司名称＋关联方名称去重，不按关联关系类型或重复主档行重复计数。在已有主档组合基础上，自动补齐不同被审计单位之间的有向关联组合（X→Y和Y→X分别计一组），不自动增加自身组合，也不扩展第三方关系。组合数量使用“组”，不同关联方名称数量使用“个”。交易统计仍剔除合并范围内往来。');
+ const relatedSection=section('related','2.2 关联方资金流水分析（以下数据分析是依据系统中关联方主档名单进行汇总）','关联组合按被审计单位公司名称＋关联方名称去重，不按关联关系类型或重复主档行重复计数。在已有主档组合基础上，自动补齐不同被审计单位之间的有向关联组合（X→Y和Y→X分别计一组），不自动增加自身组合，也不扩展第三方关系。组合数量使用“组”，不同关联方名称数量使用“个”。交易统计仍剔除合并范围内往来。');
  const rels=[...related.values()];
  const masterRelatedNames=new Set(data[K.related].rows.map(r=>clean(r[1])).filter(Boolean));
  const relationPairs=new Map();
@@ -3073,7 +3073,7 @@ function sectionBody(s,m,continuations){
  }
  return tables.map(tableHTML).join('');
 }
-const chapterTitles={scope:'1 被审计单位资金流水数据总览',counterparties:'2 被审计单位资金流水按交易对手方分析总览',compliance:'2.3 交易对手方重点事项分析'};
+const chapterTitles={scope:'1 被审计单位资金流水数据总览（相关信息依据工作簿资金流水数据信息汇总）',counterparties:'2 被审计单位资金流水按交易对手方分析总览（以下数据分析已剔除被审计单位合并范围内各单位之间的交易往来）',compliance:'2.3 交易对手方重点事项分析（相关信息依据天眼查信息汇总，交易金额前20大见2.4，详细清单见<资金流水核查和工商信息汇总明细附件.excel>）'};
 function logicHTML(s){return renderForExport?'':'<details class="report-logic"><summary>查看统计逻辑</summary><p>'+esc(s.note)+'</p></details>';}
 function reportSection(s,m,continuations){
  const tag=s.id==='cover'?'h2':'h3';
@@ -26257,12 +26257,20 @@ function legendHex(value){
  else if(/^rgb/i.test(color)&&parts.length>=3)rgb=parts.slice(0,3);
  return rgb?rgb.map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join('').toUpperCase():theme.heading;
 }
+function cachedPageReference(entry){
+ // Keep a visible baseline page while Word recalculates its final layout.
+ const field=new D.XmlComponent('w:fldSimple');
+ class PageAttrs extends D.XmlAttributeComponent {
+  constructor(){super({instruction:' PAGEREF '+entry.href+' \\h ',dirty:true});this.xmlKeys={instruction:'w:instr',dirty:'w:dirty'};}
+ }
+ field.root.push(new PageAttrs());
+ field.root.push(new D.TextRun({text:String(entry.page),font,size:24,color:theme.ink}));
+ return field;
+}
 function wordContents(){
  const entries=reportTocEntries.map(entry=>new D.Paragraph({
   style:'TOC'+entry.level,tabStops:[{type:D.TabStopType.RIGHT,position:pageWidth,leader:D.LeaderType.DOT}],
-  // A dirty complex field asks Word to calculate the bookmark's actual page.
-  // Do not cache placeholder text: readers that defer field updates would print it.
-  children:[new D.InternalHyperlink({anchor:entry.href,children:[new D.TextRun({text:entry.title,font,size:24,bold:entry.level===1,color:theme.ink})]}),new D.TextRun({text:'\t',font}),new D.PageReference(entry.href,{hyperlink:true})]
+  children:[new D.InternalHyperlink({anchor:entry.href,children:[new D.TextRun({text:entry.title,font,size:24,bold:entry.level===1,color:theme.ink})]}),new D.TextRun({text:'\t',font}),cachedPageReference(entry)]
  }));
  return new ReportTableOfContents('报告目录',{hyperlink:true,headingStyleRange:'1-3',contentChildren:entries,beginDirty:true});
 }
@@ -26416,10 +26424,14 @@ async function report(model){
  container.innerHTML=g.AuditReport.render(model,{allRows:true,forExport:true});
  const pages=[...container.querySelectorAll('.report-sheet-content')];
  headingBookmarks=new WeakMap();reportTocEntries=[];
- pages.forEach((page,i)=>page.querySelectorAll('.report-chapter,.report-section > h3').forEach(node=>{
+ let bodyPage=0;
+ pages.forEach(page=>{
+  const front=page.dataset?.reportFront==='true'||!!page.querySelector?.('#report-cover,.report-toc');
+  if(!front)bodyPage++;
+  page.querySelectorAll('.report-chapter,.report-section > h3').forEach(node=>{
   const id='ReportHeading'+(reportTocEntries.length+1);headingBookmarks.set(node,id);
-  reportTocEntries.push({title:text(node),level:headingDepth(node),href:id});
- }));
+  reportTocEntries.push({title:text(node),level:headingDepth(node),href:id,page:bodyPage});
+ });});
  const run=t=>new D.TextRun({text:t,font,size:15,color:theme.muted});
  const header=new D.Header({children:[new D.Paragraph({
   spacing:{after:60},tabStops:[{type:D.TabStopType.RIGHT,position:pageWidth}],
@@ -27226,7 +27238,7 @@ if(id==='exportFilteredFlow')run(async()=>{
  const source=E.checksWorkbook(analysis);
  const names=['逐年异常覆盖','专项交易','缺失同名付款明细','余额断点','账号覆盖','核验口径'];
  X.download(new Blob([await X.workbook(Object.fromEntries(names.map(n=>[n,source[n]])))]),'测试数据场景检查.xlsx');
- });if(id==='generate')run(async()=>{const result=E.generate(generationInput(),{...config,rates:exchangeRates()});lastData=snapshot();data=result.data;sourceLabel='新生成 · '+config.seed;recalc();reportPeriod=config.includeForeign===false?{originalCurrency:'CNY'}:{};preview=K.flow;resetFlowFilters();navigate('preview');toast('测试数据已生成，可预览流水或继续导出。');});if(id==='refreshAnalysis')run(async()=>{analyzeConfig();render();toast('已按当前财年重新核验。');});if(id==='reportApply')run(async()=>{const from=$('#reportFrom').value,to=$('#reportTo').value;if(!from||!to||from>to||Number(to.slice(0,4))-Number(from.slice(0,4))>11)throw Error('请选择有效的开始和结束日期。');reportPeriod={...reportPeriod,from,to,fiscalYear:undefined};render();});if(id==='reportPrint'){if(!reportModel().sections.length)toast('请至少选择一个报告章节。',true);else window.print();}if(id==='reportWord')run(async()=>{const m=reportModel();if(!m.sections.length)throw Error('请至少选择一个报告章节。');X.download(await AuditWord.report(m),'综合分析报告_'+m.from+'_'+m.to+'_'+(m.originalCurrency||'CNY')+'.docx');toast('已导出当前报告期间的 Word 报告。');});if(id==='reportExport')run(async()=>{const m=reportModel();if(!m.sections.length)throw Error('请至少选择一个报告章节。');X.download(new Blob([await X.workbook(AuditReport.workbook(m))]),'综合分析报告核验_'+m.from+'_'+m.to+'_'+(m.originalCurrency||'CNY')+'.xlsx');});if(id==='exportZip')run(exportZip);if(id==='exportSingle')run(async()=>{const name=page==='master'?master:preview;X.download(new Blob([await X.workbook({[name]:data[name]})]),name+'.xlsx');});if(id==='undo'||id==='undoTop'){if(lastData){const next=lastData;lastData=snapshot();restoreRegistryDateState(next);data=next.data;generationSource=next.source;config.companyFlow=next.companyFlow;config.sampleNonMerchants=next.sampleNonMerchants;config.sampleAccountPlans=next.sampleAccountPlans;config.registryRecords=next.registryRecords;config.registryBounds=next.registryBounds;config.reportCriteria=next.reportCriteria;persist();sourceLabel=next.label;recalc();render();toast('已恢复到上次修改前的数据。');}}if(id==='reset'){if(confirm('恢复内置可优比版数据？建议先保存当前项目。')){lastData=snapshot();const fresh=defaultReportProject();data=fresh.data;generationSource=fresh.source;for(const key of Object.keys(config))delete config[key];Object.assign(config,fresh.config);reportPeriod={};persist();sourceLabel=defaultSourceLabel;recalc();render();toast('已恢复内置数据。');}}if(id==='addCompany'||id==='addRow'&&master===K.company)$('#companyModal').showModal();else if(id==='addRow')editRow(null);if(id==='closeCompany')$('#companyModal').close();if(id==='closeModal')$('#rowModal').close();});
+ });if(id==='generate')run(async()=>{const result=E.generate(generationInput(),{...config,rates:exchangeRates()});lastData=snapshot();data=result.data;sourceLabel='新生成 · '+config.seed;recalc();reportPeriod=config.includeForeign===false?{originalCurrency:'CNY'}:{};preview=K.flow;resetFlowFilters();navigate('preview');toast('测试数据已生成，可预览流水或继续导出。');});if(id==='refreshAnalysis')run(async()=>{analyzeConfig();render();toast('已按当前财年重新核验。');});if(id==='reportApply')run(async()=>{const from=$('#reportFrom').value,to=$('#reportTo').value;if(!from||!to||from>to||Number(to.slice(0,4))-Number(from.slice(0,4))>11)throw Error('请选择有效的开始和结束日期。');reportPeriod={...reportPeriod,from,to,fiscalYear:undefined};render();});if(id==='reportPrint'){if(!reportModel().sections.length)toast('请至少选择一个报告章节。',true);else window.print();}if(id==='reportWord')run(async()=>{const m=reportModel();if(!m.sections.length)throw Error('请至少选择一个报告章节。');X.download(await AuditWord.report(m),'综合分析报告_'+m.from+'_'+m.to+'_'+(m.originalCurrency||'CNY')+'.docx');toast('Word 已导出。目录初始页码按平台分页生成；如 Word 重新分页，请在目录中选择“更新整个目录”。');});if(id==='reportExport')run(async()=>{const m=reportModel();if(!m.sections.length)throw Error('请至少选择一个报告章节。');X.download(new Blob([await X.workbook(AuditReport.workbook(m))]),'综合分析报告核验_'+m.from+'_'+m.to+'_'+(m.originalCurrency||'CNY')+'.xlsx');});if(id==='exportZip')run(exportZip);if(id==='exportSingle')run(async()=>{const name=page==='master'?master:preview;X.download(new Blob([await X.workbook({[name]:data[name]})]),name+'.xlsx');});if(id==='undo'||id==='undoTop'){if(lastData){const next=lastData;lastData=snapshot();restoreRegistryDateState(next);data=next.data;generationSource=next.source;config.companyFlow=next.companyFlow;config.sampleNonMerchants=next.sampleNonMerchants;config.sampleAccountPlans=next.sampleAccountPlans;config.registryRecords=next.registryRecords;config.registryBounds=next.registryBounds;config.reportCriteria=next.reportCriteria;persist();sourceLabel=next.label;recalc();render();toast('已恢复到上次修改前的数据。');}}if(id==='reset'){if(confirm('恢复内置可优比版数据？建议先保存当前项目。')){lastData=snapshot();const fresh=defaultReportProject();data=fresh.data;generationSource=fresh.source;for(const key of Object.keys(config))delete config[key];Object.assign(config,fresh.config);reportPeriod={};persist();sourceLabel=defaultSourceLabel;recalc();render();toast('已恢复内置数据。');}}if(id==='addCompany'||id==='addRow'&&master===K.company)$('#companyModal').showModal();else if(id==='addRow')editRow(null);if(id==='closeCompany')$('#companyModal').close();if(id==='closeModal')$('#rowModal').close();});
 document.addEventListener('change',e=>{if(e.target.dataset.reportSection){const selected=reportModel().selectedSectionIds;config.reportSections=e.target.checked?[...new Set([...selected,e.target.dataset.reportSection])]:selected.filter(id=>id!==e.target.dataset.reportSection);const top=window.scrollY;persist();render();window.scrollTo(0,top);return;}if(e.target.form?.id==='registryFilter'&&e.target.name==='metric'){registryFilter={...Object.fromEntries(new FormData(e.target.form)),range:''};pageNo=1;render();return;}if(e.target.name==='currencyMode'){config.includeForeign=e.target.value==='all';persist();render();document.querySelector('input[name=currencyMode]:checked')?.focus({preventScroll:true});return;}if(e.target.dataset.config)updateSetting(e.target);if(e.target.dataset.config==='bigThreshold')recalc();if(e.target.dataset.companyMode!==undefined){const name=data[K.company].rows[Number(e.target.dataset.companyMode)][0];const modes={...(config.companyFlow||{})};if(e.target.value==='auto')delete modes[name];else Object.defineProperty(modes,name,{value:e.target.value==='true',enumerable:true,configurable:true});config.companyFlow=modes;persist();toast('已保存，下次生成流水时生效。');}if(e.target.id==='reportCurrency'){reportPeriod={...reportPeriod,originalCurrency:e.target.value};render();}if(e.target.id==='reportCut'){const cut=e.target.value;reportPeriod={...reportPeriod,cut,...(reportPeriod.fiscalYear?AuditReport.fiscalPeriod(reportPeriod.fiscalYear,cut):{})};render();}if(e.target.id==='reportPreset'&&e.target.value){const [from,to]=e.target.value.split('|');reportPeriod={...reportPeriod,from,to,fiscalYear:Number(e.target.selectedOptions[0].dataset.year)||undefined};render();}if(e.target.id==='previewSelect'){preview=e.target.value;pageNo=1;search='';render();}if(e.target.id==='fileInput'){const fs=[...e.target.files];run(()=>importFiles(fs));e.target.value='';}});
 document.addEventListener('input',e=>{if(e.target.dataset.annual){const {annual,year}=e.target.dataset;config.annualCounts??={};const counts=config.annualCounts[year]??={};if(e.target.value==='')delete counts[annual];else counts[annual]=Number(e.target.value);persist();}if(e.target.dataset.config)updateSetting(e.target);if(e.target.id==='search'){search=e.target.value;pageNo=1;const start=e.target.selectionStart;render();$('#search').focus();$('#search').setSelectionRange(start,start);}});
 recalc();render();

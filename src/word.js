@@ -19,12 +19,20 @@ function legendHex(value){
  else if(/^rgb/i.test(color)&&parts.length>=3)rgb=parts.slice(0,3);
  return rgb?rgb.map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join('').toUpperCase():theme.heading;
 }
+function cachedPageReference(entry){
+ // Keep a visible baseline page while Word recalculates its final layout.
+ const field=new D.XmlComponent('w:fldSimple');
+ class PageAttrs extends D.XmlAttributeComponent {
+  constructor(){super({instruction:' PAGEREF '+entry.href+' \\h ',dirty:true});this.xmlKeys={instruction:'w:instr',dirty:'w:dirty'};}
+ }
+ field.root.push(new PageAttrs());
+ field.root.push(new D.TextRun({text:String(entry.page),font,size:24,color:theme.ink}));
+ return field;
+}
 function wordContents(){
  const entries=reportTocEntries.map(entry=>new D.Paragraph({
   style:'TOC'+entry.level,tabStops:[{type:D.TabStopType.RIGHT,position:pageWidth,leader:D.LeaderType.DOT}],
-  // A dirty complex field asks Word to calculate the bookmark's actual page.
-  // Do not cache placeholder text: readers that defer field updates would print it.
-  children:[new D.InternalHyperlink({anchor:entry.href,children:[new D.TextRun({text:entry.title,font,size:24,bold:entry.level===1,color:theme.ink})]}),new D.TextRun({text:'\t',font}),new D.PageReference(entry.href,{hyperlink:true})]
+  children:[new D.InternalHyperlink({anchor:entry.href,children:[new D.TextRun({text:entry.title,font,size:24,bold:entry.level===1,color:theme.ink})]}),new D.TextRun({text:'\t',font}),cachedPageReference(entry)]
  }));
  return new ReportTableOfContents('报告目录',{hyperlink:true,headingStyleRange:'1-3',contentChildren:entries,beginDirty:true});
 }
@@ -178,10 +186,14 @@ async function report(model){
  container.innerHTML=g.AuditReport.render(model,{allRows:true,forExport:true});
  const pages=[...container.querySelectorAll('.report-sheet-content')];
  headingBookmarks=new WeakMap();reportTocEntries=[];
- pages.forEach((page,i)=>page.querySelectorAll('.report-chapter,.report-section > h3').forEach(node=>{
+ let bodyPage=0;
+ pages.forEach(page=>{
+  const front=page.dataset?.reportFront==='true'||!!page.querySelector?.('#report-cover,.report-toc');
+  if(!front)bodyPage++;
+  page.querySelectorAll('.report-chapter,.report-section > h3').forEach(node=>{
   const id='ReportHeading'+(reportTocEntries.length+1);headingBookmarks.set(node,id);
-  reportTocEntries.push({title:text(node),level:headingDepth(node),href:id});
- }));
+  reportTocEntries.push({title:text(node),level:headingDepth(node),href:id,page:bodyPage});
+ });});
  const run=t=>new D.TextRun({text:t,font,size:15,color:theme.muted});
  const header=new D.Header({children:[new D.Paragraph({
   spacing:{after:60},tabStops:[{type:D.TabStopType.RIGHT,position:pageWidth}],
