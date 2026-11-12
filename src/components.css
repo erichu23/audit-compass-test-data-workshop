@@ -929,3 +929,11 @@ body #content table thead th.ba-filtered .ba-filter-btn::before{background-image
 
 #randomCompanyPreview th:first-child,#randomCompanyPreview td:first-child{width:34px;text-align:center}
 #randomCompanyPreview small{display:block}#randomCompanyPreview td{line-height:1.65;vertical-align:top}
+
+.report-logic{margin:6px 0 12px;color:#526982;font-size:12px}
+.report-logic summary{display:inline-block;cursor:pointer;padding:4px 10px;border:1px solid #cad9ed;border-radius:5px;background:#f4f8ff;color:#2b609e;list-style:none}
+.report-logic summary::-webkit-details-marker{display:none}.report-logic p{padding:10px 12px;background:#f6f9fd;line-height:1.8;margin:7px 0}
+@media print{.report-logic{display:none!important}.report-sheet[data-report-front="true"]{page:report-front}.report-sheet[data-report-front="false"]{page:report-body}.report-sheet[data-report-body-first="true"]{page:report-body-first}}
+@page report-front{@bottom-right{content:none}}
+@page report-body-first{counter-reset:page 1;@bottom-right{content:"第 " counter(page) " 页"}}
+@page report-body{@bottom-right{content:"第 " counter(page) " 页"}}

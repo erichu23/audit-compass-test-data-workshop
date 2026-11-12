@@ -104,7 +104,6 @@ async function blocks(node,width,context={}){
   if(tag==='details'||child.matches('.report-extra'))continue;
   if(child.matches('.report-toc')){
    out.push(paragraph('报告目录',{bold:true,color:theme.navy,size:32}));
-   out.push(paragraph('页码按 Word 实际分页计算。若未刷新，请右键目录，选择“更新域／更新整个目录”。',{size:16,color:theme.muted}));
    out.push(wordContents());
    continue;
   }
@@ -189,14 +188,18 @@ async function report(model){
   spacing:{before:60},tabStops:[{type:D.TabStopType.CENTER,position:Math.floor(pageWidth/2)},{type:D.TabStopType.RIGHT,position:pageWidth}],
   border:{top:{style:D.BorderStyle.SINGLE,size:4,color:theme.border}},
   children:[run('审计项目资料'),run('\t'+model.from+' ～ '+model.to),run('\t第 '),
-   new D.TextRun({children:[D.PageNumber.CURRENT],font,size:15,color:theme.muted}),run(' / '),
-   new D.TextRun({children:[D.PageNumber.TOTAL_PAGES],font,size:15,color:theme.muted}),run(' 页')]
+   new D.TextRun({children:[D.PageNumber.CURRENT],font,size:15,color:theme.muted}),run(' 页')]
  })]});
- const sections=[];
- for(const page of pages)sections.push({
-  properties:{type:D.SectionType.NEXT_PAGE,page:{size:{width:11906,height:16838,orientation:D.PageOrientation.LANDSCAPE},margin:{top:850,right:567,bottom:850,left:567,header:300,footer:300}}},
-  headers:{default:header},footers:{default:footer},children:[...await blocks(page,pageWidth),new D.Paragraph({spacing:{before:0,after:0,line:20},children:[new D.TextRun({text:'',size:2})]})]
- });
+ const frontFooter=new D.Footer({children:[new D.Paragraph({spacing:{before:60},tabStops:[{type:D.TabStopType.CENTER,position:Math.floor(pageWidth/2)}],border:{top:{style:D.BorderStyle.SINGLE,size:4,color:theme.border}},children:[run('审计项目资料'),run('\t'+model.from+' ～ '+model.to)]})]});
+ const sections=[];let bodyStarted=false;
+ for(const page of pages){
+  const front=page.dataset?.reportFront==='true'||!!page.querySelector?.('#report-cover,.report-toc');
+  const restart=!front&&!bodyStarted;if(!front)bodyStarted=true;
+  sections.push({
+   properties:{type:D.SectionType.NEXT_PAGE,page:{size:{width:11906,height:16838,orientation:D.PageOrientation.LANDSCAPE},pageNumbers:restart?{start:1}:{},margin:{top:850,right:567,bottom:850,left:567,header:300,footer:300}}},
+   headers:{default:header},footers:{default:front?frontFooter:footer},children:[...await blocks(page,pageWidth),new D.Paragraph({spacing:{before:0,after:0,line:20},children:[new D.TextRun({text:'',size:2})]})]
+  });
+ }
  const wordDocument=new D.Document({
   features:{updateFields:true},creator:'Audit Compass',title:'综合分析报告（年审适用）',
   styles:{default:{document:{run:{font,size:18},paragraph:{spacing:{after:65}}}},paragraphStyles:[{id:'TOC1',name:'toc 1',basedOn:'Normal',run:{font,size:24,bold:true,color:theme.ink},paragraph:{spacing:{before:100,after:120,line:320}}},{id:'TOC2',name:'toc 2',basedOn:'Normal',run:{font,size:24,color:theme.ink},paragraph:{indent:{left:240},spacing:{after:120,line:320}}}]},
