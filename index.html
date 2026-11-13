@@ -1567,6 +1567,8 @@ body #content table thead th.ba-filtered .ba-filter-btn::before{background-image
 .report-document .report-toc .toc-level-1{padding-left:0;font-weight:700;margin-top:8px}
 .report-document .report-toc .toc-level-2{padding-left:18px;font-weight:400}
 .report-document .report-toc .toc-level-3{padding-left:36px;font-weight:400}
+
+.report-boundary-note{font-size:11px;line-height:1.6;color:#435976;margin:8px 0;white-space:normal;overflow-wrap:anywhere}
 </style></head><body>
 <header class="layout-header">
  <div class="layout-header-name">Audit Compass测试数据工作坊 <span class="layout-header-project" id="sourceLabel"></span></div>
@@ -2302,17 +2304,16 @@ function parseBounds(value,unit){
 }
 const boundsFor=(id,settings={})=>settings[id]||metrics.find(m=>m[0]===id)[3];
 function intervalLabels(bounds,id){
- if(id==='days'&&equalBounds(bounds,[365,730,1095]))return ['<1年','1~2年','2~3年','>3年','未提供'];
- if(id==='insured'&&equalBounds(bounds,[10,50,100]))return ['<10人','10~50人','50~100人','>100人','未提供'];
- if(id==='capital'){
-  const unit=n=>n>=1000000?n/1000000+'百万':n>=1000?n/1000+'k':String(n);
-  if(bounds.length===1)return ['≤'+unit(bounds[0]),'>'+unit(bounds[0]),'未提供'];
-  return ['<'+unit(bounds[0]),...bounds.slice(1).map((n,i)=>unit(bounds[i])+'–'+unit(n)),'>'+unit(bounds.at(-1)),'未提供'];
- }
- const fmt=n=>n.toLocaleString('zh-CN',{maximumFractionDigits:8});
- const inclusiveLast=['days','insured'].includes(id);
- return [(inclusiveLast&&bounds.length===1?'≤ ':'< ')+fmt(bounds[0]),...bounds.slice(1).map((n,i)=>'≥ '+fmt(bounds[i])+' 且 '+(inclusiveLast&&i===bounds.length-2?'≤ ':'< ')+fmt(n)),(inclusiveLast?'> ':'≥ ')+fmt(bounds.at(-1)),'未提供'];
+ if(id==='days'&&equalBounds(bounds,[365,730,1095]))return ['<1年','1–2年（含两端）','>2年且≤3年','>3年','未提供'];
+ if(id==='insured'&&equalBounds(bounds,[10,50,100]))return ['<10人','10–50人（含两端）','>50人且≤100人','>100人','未提供'];
+ const fmt=id==='capital'?(n=>n>=1000000?n/1000000+'百万':n>=1000?n/1000+'k':String(n)):(n=>n.toLocaleString('zh-CN',{maximumFractionDigits:8}));
+ const shared=['capital','days','insured'].includes(id);
+ // Labels mirror bucket(): first cut belongs to the second bucket; later cuts
+ // belong to the bucket ending at that cut. With one cut, equality is last.
+ if(bounds.length===1)return ['<'+fmt(bounds[0]),'≥'+fmt(bounds[0]),'未提供'];
+ return ['<'+fmt(bounds[0]),...bounds.slice(1).map((n,i)=>(shared&&i>0?'>':'≥')+fmt(bounds[i])+' 且 '+(shared?'≤':'<')+fmt(n)),(shared?'>':'≥')+fmt(bounds.at(-1)),'未提供'];
 }
+
 function value(record,id,asOf,rates={}){
  if(!record)return null;
  if(id==='days'){
@@ -2715,7 +2716,7 @@ function compute(data,settings={}){
   if(rs===big){card.condition=thresholdLabel;card.breakdown=groups.slice(0,2).map(([n,r])=>[n.includes('范围内')?'合并范围内':'合并范围外',involved(r,3),amount(turnover(sum(r))),r.length]);}
   return card;
  });
- const buckets=['<1百万','1～<5百万','5～<10百万','10～20百万','>20百万'];
+ const buckets=['<1百万','1～<5百万','5～<10百万','10～20百万（含两端）','>20百万'];
  for(const [name,rs] of [['合并范围内',groups[0][1]],['合并范围外',groups[1][1]]]){
   const parts=buckets.map(()=>aggregate());
   for(const r of rs){const m=amount(value(r,8,fx)+value(r,10,fx));add(parts[m<1?0:m<5?1:m<10?2:m<=20?3:4],r,fx);}
@@ -2864,6 +2865,7 @@ function compute(data,settings={}){
   }
   const name=label+'区间（'+unit+'）';
   stacked(compliance,name,labels.map((l,i)=>[l,groups[i].length,totals(groups[i])]));
+  compliance.charts.at(-1).boundaryNote='区间口径：'+labels.join('；')+'。每个有效数值只计入一档，缺失值不参与分布。'+(id==='days'?'1年按365天计算；经营天数＝工商计算截止日期－经营开始时间，不额外加一天。':id==='capital'?'按折算人民币的注册资本金额归档。':'');
   if(registryScreens[id]){
    const [predicate,description]=registryScreens[id];
    const hits=enterprise.filter(x=>{const v=R.value(profiles.get(x.name),id,registryEnd,rates);return v!=null&&predicate(v);});
@@ -2905,8 +2907,10 @@ function compute(data,settings={}){
   rs.forEach(x=>sets[classify(x)].push(x));
   stacked(follow,name,labels.map((n,i)=>[n,sets[i].length,totals(sets[i])]));
  }
- distribution('双向交易的收支重合区间',both,['低于20%','20%至低于50%','50%至低于80%','80%及以上'],x=>overlap(x)<.2?0:overlap(x)<.5?1:overlap(x)<.8?2:3);
- distribution('未识别客商的交易金额区间',unidentified,['低于5','5至低于10','10至20','超过20'],x=>{const m=amount(turnover(x));return m<5?0:m<10?1:m<=20?2:3;});
+ distribution('双向交易的收支重合区间',both,['<20%','20%～<50%','50%～<80%','≥80%'],x=>overlap(x)<.2?0:overlap(x)<.5?1:overlap(x)<.8?2:3);
+ follow.charts.at(-1).boundaryNote='区间边界：20%归入20%～<50%；50%归入50%～<80%；80%归入≥80%。比例＝流入、流出较小金额÷较大金额；只统计同时有收款和付款的对手方。';
+ distribution('未识别客商的交易金额区间',unidentified,['<5百万','5～<10百万','10～20百万（含两端）','>20百万'],x=>{const m=amount(turnover(x));return m<5?0:m<10?1:m<=20?2:3;});
+ follow.charts.at(-1).boundaryNote='区间边界：交易总额＝流入＋流出；5百万归入5～<10百万；10百万和20百万均归入10～20百万；超过20百万才进入最后一档。以上分布独立于下方系统筛选结果。';
 
  const focus=section('focus','2.4 重点关注对手方清单表','分别取2.3.1–2.3.3各识别结果交易总额前20大，再按名称取并集；并集全部展示，可能超过20个对手方。');
  const overlapNames=new Set(overlapList.map(x=>x.name)),unknownNames=new Set(unknownList.map(x=>x.name));
@@ -3010,7 +3014,7 @@ function chartAndTable(chart,tables,criteria){
  const screen=tables.find(t=>t.name===chart.name+'筛选结果');
  const filterGroup=chart.name.startsWith('经营天数')?'registryDays':chart.name.startsWith('参保人数')?'registryInsured':chart.name.startsWith('注册资本')?'registryCapital':'registryPaid';
  const results=screen?(()=>{const r=screen.rows[0];return '<div class="report-registry-screen"><h4>系统设定筛选条件</h4>'+(criteria?criteriaForm(filterGroup,criteria):'')+'<p class="report-note">'+esc(r[0])+'</p>'+tableHTML({name:'',hideHeader:true,headers:['指标','本期结果'],rows:[['识别对手方数',integer(r[1])],['识别流入金额/笔数',currency.format(r[2])+'百万/'+integer(r[3])+'笔'],['识别流出金额/笔数',currency.format(r[4])+'百万/'+integer(r[5])+'笔']]})+'</div>';})():'';
- return stackedHTML(chart)+(table?tableHTML(table):'')+results;
+ return stackedHTML(chart)+(table?tableHTML(table):'')+(chart.boundaryNote?'<p class="report-boundary-note">'+esc(chart.boundaryNote)+'</p>':'')+results;
 }
 function trendHTML(t){
  const width=Math.max(520,t.rows.length*30),height=185;
@@ -3078,7 +3082,7 @@ function sectionBody(s,m,continuations){
   };
   const breakdown=c=>{
    const total=c.rows.reduce((n,r)=>n+r[2]+r[5],0);
-   return stackedHTML(c)+tableHTML({name:'单笔交易金额分布',headers:['单笔交易','金额（百万元）','笔数','占比'],rows:c.rows.map(r=>[r[0],r[2]+r[5],r[3]+r[6],ratio(r[2]+r[5],total)])});
+   return stackedHTML(c)+tableHTML({name:'单笔交易金额分布',headers:['单笔交易','金额（百万元）','笔数','占比'],rows:c.rows.map(r=>[r[0],r[2]+r[5],r[3]+r[6],ratio(r[2]+r[5],total)])})+'<p class="report-boundary-note">区间边界：1百万归入1～&lt;5百万；5百万归入5～&lt;10百万；10百万及20百万均归入10～20百万；超过20百万才进入最后一档。先按大额阈值（含阈值）筛选，再做区间分布。</p>';
   };
   continuations.push(
    subhead('1.2.1 大额单笔交易分析')+detail(tables[3],'合并范围内')+detail(tables[4],'合并范围外'),

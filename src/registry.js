@@ -37,17 +37,16 @@ function parseBounds(value,unit){
 }
 const boundsFor=(id,settings={})=>settings[id]||metrics.find(m=>m[0]===id)[3];
 function intervalLabels(bounds,id){
- if(id==='days'&&equalBounds(bounds,[365,730,1095]))return ['<1年','1~2年','2~3年','>3年','未提供'];
- if(id==='insured'&&equalBounds(bounds,[10,50,100]))return ['<10人','10~50人','50~100人','>100人','未提供'];
- if(id==='capital'){
-  const unit=n=>n>=1000000?n/1000000+'百万':n>=1000?n/1000+'k':String(n);
-  if(bounds.length===1)return ['≤'+unit(bounds[0]),'>'+unit(bounds[0]),'未提供'];
-  return ['<'+unit(bounds[0]),...bounds.slice(1).map((n,i)=>unit(bounds[i])+'–'+unit(n)),'>'+unit(bounds.at(-1)),'未提供'];
- }
- const fmt=n=>n.toLocaleString('zh-CN',{maximumFractionDigits:8});
- const inclusiveLast=['days','insured'].includes(id);
- return [(inclusiveLast&&bounds.length===1?'≤ ':'< ')+fmt(bounds[0]),...bounds.slice(1).map((n,i)=>'≥ '+fmt(bounds[i])+' 且 '+(inclusiveLast&&i===bounds.length-2?'≤ ':'< ')+fmt(n)),(inclusiveLast?'> ':'≥ ')+fmt(bounds.at(-1)),'未提供'];
+ if(id==='days'&&equalBounds(bounds,[365,730,1095]))return ['<1年','1–2年（含两端）','>2年且≤3年','>3年','未提供'];
+ if(id==='insured'&&equalBounds(bounds,[10,50,100]))return ['<10人','10–50人（含两端）','>50人且≤100人','>100人','未提供'];
+ const fmt=id==='capital'?(n=>n>=1000000?n/1000000+'百万':n>=1000?n/1000+'k':String(n)):(n=>n.toLocaleString('zh-CN',{maximumFractionDigits:8}));
+ const shared=['capital','days','insured'].includes(id);
+ // Labels mirror bucket(): first cut belongs to the second bucket; later cuts
+ // belong to the bucket ending at that cut. With one cut, equality is last.
+ if(bounds.length===1)return ['<'+fmt(bounds[0]),'≥'+fmt(bounds[0]),'未提供'];
+ return ['<'+fmt(bounds[0]),...bounds.slice(1).map((n,i)=>(shared&&i>0?'>':'≥')+fmt(bounds[i])+' 且 '+(shared?'≤':'<')+fmt(n)),(shared?'>':'≥')+fmt(bounds.at(-1)),'未提供'];
 }
+
 function value(record,id,asOf,rates={}){
  if(!record)return null;
  if(id==='days'){
