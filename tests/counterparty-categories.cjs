@@ -24,5 +24,9 @@ const inflow=conc.tables.find(t=>t.name==='流入集中度'),allRows=inflow.rows
 const categorySum=i=>allRows.reduce((n,r)=>n+r[2+i*3],0);
 assert(Math.abs(categorySum(0)-.0004)<1e-12);assert(Math.abs(categorySum(1)-.0004)<1e-12);assert(Math.abs(categorySum(2)-.0002)<1e-12);
 assert.deepEqual(new Set(conc.tables.at(-1).rows.filter(r=>r[2]==='双重公司').map(r=>r[1])),new Set(['客户','供应商','客商一体']));
-const typeSummary=cp.tables[0].rows;assert.equal(typeSummary.find(r=>r[0]==='客户'&&r[1]==='交易总量')[2],.0002);
-console.log('PASS: concentration both-party amount counted in customer/supplier/both exactly once per column, 2.1 remains exclusive');
+const typeSummary=cp.tables[0].rows;assert.equal(typeSummary.find(r=>r[0]==='客户'&&r[1]==='交易总量')[2],.0004);
+console.log('PASS: concentration both-party amount counted in customer/supplier/both exactly once per column, 2.1 summary overlaps while its top20 list remains unique');
+
+for(const cat of ['客户','供应商','客商一体']){const row=typeSummary.find(r=>r[0]===cat&&r[1]==='交易总量');assert.equal(row[3],cat==='客商一体'?2:4);assert.equal(row[4],cat==='客商一体'?.2:.4);}
+const right=cp.tables.find(t=>t.headers.includes('客商分类'));assert.equal(right.rows.filter(r=>r[1]==='双重公司').length,1);
+const render=AuditReport.render(AuditReport.selectSections(m,['counterparties']),{allRows:true,forExport:true});assert(render.includes('分类交叉'));console.log('PASS: both directions share overlapping summary/chart data, original percentage denominator retained, right-side counterparty list unique, export disclosure present');
