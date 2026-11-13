@@ -14,7 +14,7 @@ const inc=detail.filter(r=>r[1]==='流入');assert.equal(inc.find(r=>r[3]==='【
 assert(!detail.some(r=>['本方乙','期间外'].includes(r[3])));
 assert(inc.filter(r=>r[3]==='【对手方名称为空】').every(r=>r[2]==='非客商'&&r[5]==='第三方'));
 assert.equal(new Set(inc.filter(r=>r[4]<=5).map(r=>r[3])).size,5);
-assert.equal(bands.filter(r=>r[1]==='流入'&&r[4]==='前5').reduce((n,r)=>n+r[6],0),7); // 5 names, 7 transactions
+assert.equal(bands.filter(r=>r[1]==='流入'&&r[4]==='前5').reduce((n,r)=>n+r[6],0),13); // 5 names / 7 real transactions; overlapping memberships produce 13 category entries
 for(const direction of ['流入','流出'])for(const cutoff of [5,10,20]){
  const expected=detail.filter(r=>r[1]===direction&&r[4]<=cutoff).reduce((n,r)=>n+r[6],0);
  const actual=bands.filter(r=>r[1]===direction&&r[4]==='前'+cutoff).reduce((n,r)=>n+r[5],0);

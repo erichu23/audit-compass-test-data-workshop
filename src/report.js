@@ -257,7 +257,7 @@ function compute(data,settings={}){
 
  }
 
- const concentration=section('concentration','1.3 资金流水集中度分析（以下数据分析已剔除被审计单位合并范围内各单位之间的交易往来）','剔除合并范围内单位之间的往来。先按对手方名称汇总，流入和流出分别在全体外部对手方中统一排名，再拆客商分类及关联方、第三方。客商类型按整套主档名称统一判断，同一名称只属于一类，客户与供应商均有时归客商一体。占比的分母是该方向、该客商分类的总金额。关联性质只按对手方名称匹配整套关联方主档，命中即为关联方，类型为空显示其他；不在清单为第三方。内部往来仍剔除。空白对手方合并为一个对象参与排名，归入非客商、第三方。');
+ const concentration=section('concentration','1.3 资金流水集中度分析（以下数据分析已剔除被审计单位合并范围内各单位之间的交易往来）','剔除合并范围内单位之间的往来。先按对手方名称汇总，流入和流出分别在全体外部对手方中统一排名，再拆客商分类及关联方、第三方。集中度分类按整套主档名称判断：客商一体同时计入客户、供应商、客商一体三列，各列不可直接相加。统一排名按对手方真实金额计算一次，不因分类交叉而重复。占比的分母是该方向、该客商分类的总金额。关联性质只按对手方名称匹配整套关联方主档，命中即为关联方，类型为空显示其他；不在清单为第三方。内部往来仍剔除。空白对手方合并为一个对象参与排名，归入非客商、第三方。');
  const months=new Map(),counterparties=new Map(),related=new Map(),relations=new Map(),people=new Map(),byCategory=new Map(),byCategoryRelated=new Map();
  const flagByName=new Map(),relationshipNames=new Map();
  for(const r of external){
@@ -265,7 +265,7 @@ function compute(data,settings={}){
   const category=categoryByName.get(clean(r[3]))||'非客商';
   const relationship=named?relatedByName.get(clean(r[3])):undefined;
   const name=clean(r[3])||'【对手方为空】';
-  group(months,key(day(r[5]).slice(0,7),category),{},r,fx);
+  for(const cat of category==='客商一体'?['客户','供应商','客商一体']:[category])group(months,key(day(r[5]).slice(0,7),cat),{},r,fx);
   group(byCategory,category,{},r,fx);
   const record=group(counterparties,name,{name,categories:new Set(),relationships:new Set(),black:black.has(name)},r,fx);
   record.categories.add(category);
@@ -611,7 +611,7 @@ function sectionBody(s,m,continuations){
   return sideBySide([cardHTML(s.cards[0]),...charts.map(breakdown)],'report-three')+
    sideBySide([...s.cards.slice(1).map(cardHTML),''],'report-three')+extra('流水性质汇总数据',tableHTML(tables[0]));
  }
- if(s.id==='concentration')return trendHTML(s.trend)+concentrationHTML(s)+extra('月度数据及集中度排名明细',tableHTML(tables[0])+tableHTML(tables.at(-1)));
+ if(s.id==='concentration')return '<p class="report-boundary-note">分类说明：同时在客户和供应商主档中的对手方，其金额和笔数同时计入客户、供应商及客商一体。各列与月度柱图存在交叉，不能相加作为去重后的交易总额；统一排名仍按每个对手方实际金额计算一次。</p>'+trendHTML(s.trend)+concentrationHTML(s)+extra('月度数据及集中度排名明细',tableHTML(tables[0])+tableHTML(tables.at(-1)));
  if(s.id==='counterparties'){
   const [inflow,outflow]=tables.slice(1).map((t,i)=>{
    const direction=i?'流出':'流入',offset=2+i*3;

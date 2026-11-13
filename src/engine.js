@@ -442,6 +442,7 @@ const ranking=[],concentration=[],concentrationDetail=[],counterparty=[],scope=[
 for(const period of p){const selected=flow.filter(r=>day(r[5])>=period.from&&day(r[5])<=period.to);const accs=new Map(),cp=new Map();for(const r of selected){const k=key(r[0],r[1]);if(!accs.has(k))accs.set(k,{name:r[0],account:r[1],count:0,total:0,balance:0,date:''});const a=accs.get(k);a.count++;a.total+=value(r,8)+value(r,10);const t=day(r[5])+' '+r[6];if(t>=a.date){a.date=t;a.balance=value(r,12);}if(ix.own.has(r[3]))continue;const mk=key(r[0],r[3]),category=categoryByName.get(String(r[3]??'').trim())||'非客商',relation=relatedByName.has(String(r[3]??'').trim())?'关联方':'第三方';const name=String(r[3]??'').trim(),ck=key(category,relation,name);if(!cp.has(ck))cp.set(ck,{name,category,relation,in:0,out:0,inCount:0,outCount:0});const b=cp.get(ck);b.in+=value(r,8);b.out+=value(r,10);b.inCount+=Number(money(value(r,8))>0);b.outCount+=Number(money(value(r,10))>0);}
 scope.push([period.name,period.from,period.to,selected.length,money(selected.reduce((s,r)=>s+value(r,8)+value(r,10),0)),period.partial?'数据仅覆盖部分财年':'']);
 for(const metric of ['total','balance']){const sorted=[...accs.values()].sort((a,b)=>b[metric]-a[metric]||String(a.account).localeCompare(String(b.account))),total=sorted.reduce((s,a)=>s+a[metric],0);for(const [label,rs]of [['合计',sorted],['前5',sorted.slice(0,5)],['前10',sorted.slice(0,10)],['前20',sorted.slice(0,20)],['其他',sorted.slice(20)]]){const value=rs.reduce((s,a)=>s+a[metric],0);ranking.push([period.name,metric==='total'?'交易额':'期末余额',label,money(value),rs.reduce((s,a)=>s+a.count,0),total?value/total:0]);}}
+const belongs=(part,cat)=>part.category===cat||(part.category==='客商一体'&&(cat==='客户'||cat==='供应商'));
 for(const dir of ['in','out']){
  const grouped=new Map();
  for(const part of cp.values()){
@@ -455,12 +456,12 @@ for(const dir of ['in','out']){
  const direction=dir==='in'?'流入':'流出';
  const bands=[['合计',ranked],['前5',ranked.slice(0,5)],['前10',ranked.slice(0,10)],['前20',ranked.slice(0,20)],['其他',ranked.slice(20)]];
  for(const cat of ['客户','供应商','客商一体','非客商']){
-  const den=ranked.reduce((n,x)=>n+x.parts.filter(p=>p.category===cat).reduce((sum,p)=>sum+p[dir],0),0);
+  const den=ranked.reduce((n,x)=>n+x.parts.filter(p=>belongs(p,cat)).reduce((sum,p)=>sum+p[dir],0),0);
   for(const [i,item] of ranked.entries()){
-   for(const part of item.parts.filter(p=>p.category===cat))concentrationDetail.push([period.name,direction,cat,item.name||'【对手方名称为空】',i+1,part.relation,money(part[dir]),part[dir+'Count'],den?part[dir]/den:0]);
+   for(const part of item.parts.filter(p=>belongs(p,cat)))concentrationDetail.push([period.name,direction,cat,item.name||'【对手方名称为空】',i+1,part.relation,money(part[dir]),part[dir+'Count'],den?part[dir]/den:0]);
   }
   for(const [label,subset] of bands)for(const rel of ['关联方','第三方']){
-   const parts=subset.flatMap(x=>x.parts).filter(x=>x.category===cat&&x.relation===rel);
+   const parts=subset.flatMap(x=>x.parts).filter(x=>belongs(x,cat)&&x.relation===rel);
    const amount=parts.reduce((n,x)=>n+x[dir],0),count=parts.reduce((n,x)=>n+x[dir+'Count'],0);
    concentration.push([period.name,direction,cat,rel,label,money(amount),count,den?amount/den:0]);
   }
