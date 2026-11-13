@@ -166,6 +166,7 @@ function compute(data,settings={}){
    section.tables.at(-1).grouped=true;
   }
  };
+ const relatedByName=E.counterpartyRelationships(data),categoryByName=E.counterpartyCategories(data);
  const masterSets=Object.fromEntries(['customer','supplier','employee','related'].map(k=>[k,new Map(data[K[k]].rows.map(r=>[key(r[0],r[k==='related'?1:2]),r]))]));
  const own=new Set(data[K.company].rows.map(r=>r[0]).filter(Boolean));
  const present=new Set(periodRows.map(r=>r[0]));
@@ -243,7 +244,7 @@ function compute(data,settings={}){
  const detailHeaders=['源Excel行','流水号','本方名称','本方账号','本方银行','对手方名称','对手方账号','交易日期','交易时间','币种','等值人民币流入金额（元）','等值人民币流出金额（元）','交易类型','摘要','关联关系','对手方类型'];
  const originalIndex=new Map(all.map((r,i)=>[r,i+2]));
  for(const [n,rs] of groups){
-  const total=sum(rs),detail=[...rs].sort((x,y)=>tradeAmount(y)-tradeAmount(x)||String(x[15]).localeCompare(String(y[15]))).map(r=>[originalIndex.get(r),r[15],...r.slice(0,5),day(r[5]),r[6],r[7],E.money(value(r,8,fx)),E.money(value(r,10,fx)),r[14],r[16],r[18],r[20]]);
+  const total=sum(rs),detail=[...rs].sort((x,y)=>tradeAmount(y)-tradeAmount(x)||String(x[15]).localeCompare(String(y[15]))).map(r=>[originalIndex.get(r),r[15],...r.slice(0,5),day(r[5]),r[6],r[7],E.money(value(r,8,fx)),E.money(value(r,10,fx)),r[14],r[16],relatedByName.get(clean(r[3]))||'第三方',categoryByName.get(clean(r[3]))||'非客商']);
   if(rs.length)detail.unshift(['','合计',...Array(8).fill(''),E.money(total.in),E.money(total.out)]);
   table(features,n,detailHeaders,detail,21);
   const t=features.tables.at(-1);
@@ -256,14 +257,13 @@ function compute(data,settings={}){
 
  }
 
- const concentration=section('concentration','1.3 资金流水集中度分析（以下数据分析已剔除被审计单位合并范围内各单位之间的交易往来）','剔除合并范围内单位之间的往来。先按对手方名称汇总，流入和流出分别在全体外部对手方中统一排名，再拆客商分类及关联方、第三方。客商类型按整套主档名称统一判断，同一名称只属于一类，客户与供应商均有时归客商一体。占比的分母是该方向、该客商分类的总金额。只有同一本方单位与对手方在关联方主档中匹配，才列为关联方；内部往来仍剔除。空白对手方合并为一个对象参与排名，归入非客商、第三方。');
- const categoryByName=E.counterpartyCategories(data);
+ const concentration=section('concentration','1.3 资金流水集中度分析（以下数据分析已剔除被审计单位合并范围内各单位之间的交易往来）','剔除合并范围内单位之间的往来。先按对手方名称汇总，流入和流出分别在全体外部对手方中统一排名，再拆客商分类及关联方、第三方。客商类型按整套主档名称统一判断，同一名称只属于一类，客户与供应商均有时归客商一体。占比的分母是该方向、该客商分类的总金额。关联性质只按对手方名称匹配整套关联方主档，命中即为关联方，类型为空显示其他；不在清单为第三方。内部往来仍剔除。空白对手方合并为一个对象参与排名，归入非客商、第三方。');
  const months=new Map(),counterparties=new Map(),related=new Map(),relations=new Map(),people=new Map(),byCategory=new Map(),byCategoryRelated=new Map();
  const flagByName=new Map(),relationshipNames=new Map();
  for(const r of external){
   const k=key(r[0],r[3]),named=!!clean(r[3]);
   const category=categoryByName.get(clean(r[3]))||'非客商';
-  const relationship=named?masterSets.related.get(k)?.[2]:undefined;
+  const relationship=named?relatedByName.get(clean(r[3])):undefined;
   const name=clean(r[3])||'【对手方为空】';
   group(months,key(day(r[5]).slice(0,7),category),{},r,fx);
   group(byCategory,category,{},r,fx);
@@ -279,7 +279,7 @@ function compute(data,settings={}){
    relationshipNames.get(relationship).add(name);
   }
   const employee=masterSets.employee.has(k);
-  const personType=E.isRelatedOfficer(name,relationship)?'董监高':employee?'员工':clean(r[3])&&[...name].length<=4?'其他个人':'';
+  const personType=String(relationship||'').split('、').some(role=>E.isRelatedOfficer(name,role))?'董监高':employee?'员工':clean(r[3])&&[...name].length<=4?'其他个人':'';
   if(personType){
    group(people,key(name,personType),{name,personType},r,fx);
    if(!flagByName.has(name))flagByName.set(name,new Set());
@@ -323,7 +323,7 @@ function compute(data,settings={}){
  ]));
  cpSection.tables.at(-1).grouped=true;
  for(const [dir,metric] of [['流入','in'],['流出','out']])table(cpSection,dir+'前20大对手方',cpHeaders,ranking(sortBy(cp.filter(x=>x[metric]>0),x=>x[metric]),externalTotals,20,cp.filter(x=>x[metric]<=0)));
- const relatedSection=section('related','2.2 关联方资金流水分析（以下数据分析是依据系统中关联方主档名单进行汇总）','关联组合按被审计单位公司名称＋关联方名称去重，不按关联关系类型或重复主档行重复计数。在已有主档组合基础上，自动补齐不同被审计单位之间的有向关联组合（X→Y和Y→X分别计一组），不自动增加自身组合，也不扩展第三方关系。组合数量使用“组”，不同关联方名称数量使用“个”。交易统计仍剔除合并范围内往来。');
+ const relatedSection=section('related','2.2 关联方资金流水分析（以下数据分析是依据系统中关联方主档名单进行汇总）','关联组合按被审计单位公司名称＋关联方名称去重，不按关联关系类型或重复主档行重复计数。在已有主档组合基础上，自动补齐不同被审计单位之间的有向关联组合（X→Y和Y→X分别计一组），不自动增加自身组合，也不扩展第三方关系。组合数量使用“组”，不同关联方名称数量使用“个”。交易按对手方名称匹配整套关联方主档，不要求本方公司一致；类型为空为其他。组合明细仅作完整性核验，不作为交易关联匹配条件。交易统计仍剔除合并范围内往来。');
  const rels=[...related.values()];
  const masterRelatedNames=new Set(data[K.related].rows.map(r=>clean(r[1])).filter(Boolean));
  const relationPairs=new Map();
