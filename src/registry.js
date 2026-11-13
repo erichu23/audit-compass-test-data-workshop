@@ -15,12 +15,12 @@ const metrics=[
 const clean=v=>String(v??'').trim();
 const date=v=>/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(v))&&new Date(v).toISOString().slice(0,10)===v;
 const oneDay=86400000;
-const INTERVAL_VERSION=2;
+const INTERVAL_VERSION=3;
 const equalBounds=(a,b)=>Array.isArray(a)&&a.length===b.length&&a.every((v,i)=>Number(v)===b[i]);
 function migrateSettings(settings={}){
  const next={...settings,registryBounds:{...settings.registryBounds}};
  const legacyCapital=[1000000,5000000,20000000,50000000];
- if((settings.registryIntervalVersion??0)<INTERVAL_VERSION&&equalBounds(next.registryBounds.capital,legacyCapital)){
+ if((settings.registryIntervalVersion??0)<2&&equalBounds(next.registryBounds.capital,legacyCapital)){
   next.registryBounds.capital=[100000,500000,1000000];
  }
  for(const [id,,unit,defaults] of metrics){
@@ -37,14 +37,10 @@ function parseBounds(value,unit){
 }
 const boundsFor=(id,settings={})=>settings[id]||metrics.find(m=>m[0]===id)[3];
 function intervalLabels(bounds,id){
- if(id==='days'&&equalBounds(bounds,[365,730,1095]))return ['<1年','1–2年（含两端）','>2年且≤3年','>3年','未提供'];
- if(id==='insured'&&equalBounds(bounds,[10,50,100]))return ['<10人','10–50人（含两端）','>50人且≤100人','>100人','未提供'];
- const fmt=id==='capital'?(n=>n>=1000000?n/1000000+'百万':n>=1000?n/1000+'k':String(n)):(n=>n.toLocaleString('zh-CN',{maximumFractionDigits:8}));
- const shared=['capital','days','insured'].includes(id);
- // Labels mirror bucket(): first cut belongs to the second bucket; later cuts
- // belong to the bucket ending at that cut. With one cut, equality is last.
- if(bounds.length===1)return ['<'+fmt(bounds[0]),'≥'+fmt(bounds[0]),'未提供'];
- return ['<'+fmt(bounds[0]),...bounds.slice(1).map((n,i)=>(shared&&i>0?'>':'≥')+fmt(bounds[i])+' 且 '+(shared?'≤':'<')+fmt(n)),(shared?'>':'≥')+fmt(bounds.at(-1)),'未提供'];
+ if(id==='days'&&equalBounds(bounds,[365,730,1095]))return ['<1年','1～<2年','2～<3年','≥3年','未提供'];
+ if(id==='insured'&&equalBounds(bounds,[10,50,100]))return ['<10人','10～<50人','50～<100人','≥100人','未提供'];
+ const fmt=id==='capital'?(n=>n/1000000+'百万'):(n=>n.toLocaleString('zh-CN',{maximumFractionDigits:8}));
+ return ['<'+fmt(bounds[0]),...bounds.slice(1).map((n,i)=>fmt(bounds[i])+'～<'+fmt(n)),'≥'+fmt(bounds.at(-1)),'未提供'];
 }
 
 function value(record,id,asOf,rates={}){
@@ -104,7 +100,7 @@ function riskTables(records,asOf){
 }
 function bucket(n,bounds,id){
  if(n==null||!Number.isFinite(n)||n<0)return bounds.length+1;
- const index=bounds.findIndex((edge,i)=>n<edge||(['capital','days','insured'].includes(id)&&i>0&&n===edge));
+ const index=bounds.findIndex(edge=>n<edge);
  return index<0?bounds.length:index;
 }
 function readRecord(input){

@@ -235,10 +235,10 @@ function compute(data,settings={}){
   if(rs===big){card.condition=thresholdLabel;card.breakdown=groups.slice(0,2).map(([n,r])=>[n.includes('范围内')?'合并范围内':'合并范围外',involved(r,3),amount(turnover(sum(r))),r.length]);}
   return card;
  });
- const buckets=['<1百万','1～<5百万','5～<10百万','10～20百万（含两端）','>20百万'];
+ const buckets=['<1百万','1～<5百万','5～<10百万','10～<20百万','≥20百万'];
  for(const [name,rs] of [['合并范围内',groups[0][1]],['合并范围外',groups[1][1]]]){
   const parts=buckets.map(()=>aggregate());
-  for(const r of rs){const m=amount(value(r,8,fx)+value(r,10,fx));add(parts[m<1?0:m<5?1:m<10?2:m<=20?3:4],r,fx);}
+  for(const r of rs){const m=amount(value(r,8,fx)+value(r,10,fx));add(parts[m<1?0:m<5?1:m<10?2:m<20?3:4],r,fx);}
   stacked(features,name+'大额交易金额分布',buckets.map((label,i)=>[label,parts[i].n,parts[i]]),{first:'单笔金额（百万元）',countLabel:'交易笔数'});
  }
  const detailHeaders=['源Excel行','流水号','本方名称','本方账号','本方银行','对手方名称','对手方账号','交易日期','交易时间','币种','等值人民币流入金额（元）','等值人民币流出金额（元）','交易类型','摘要','关联关系','对手方类型'];
@@ -345,7 +345,7 @@ function compute(data,settings={}){
  table(relatedSection,'关联组合明细',['被审计单位公司名称','关联方名称','组合来源'],[...relationPairs.values()]);
 
  const R=g.AuditRegistry;
- const compliance=section('compliance','2.3.1 交易对手方合规事项及工商信息分析','按对手方全称关联工商档案，只统计本期有交易的范围外企业。经营天数＝报告结束日期－导入的经营开始时间，按自然日日期差计算，不额外加一天；不读取导入原经营天数作为计算结果，不反推或修改经营开始时间，也不按经营结束时间截断。原经营天数仅保留供对照。经营日期独立于报告导出期间；共享端点归入前一档，首个端点归入第二档，经营时长按 365 天折算 1 年，恰好 3 年归入 2~3 年，恰好 100 人归入 50~100 人；注册资本按人民币归档；恰好 1百万 归入 500k–1百万，最后一档为 >1百万。工商区间图表仅统计对应字段有有效数值的本期范围外对手方，缺失或无效字段不参与该图的金额及占比计算。');
+ const compliance=section('compliance','2.3.1 交易对手方合规事项及工商信息分析','按对手方全称关联工商档案，只统计本期有交易的范围外企业。经营天数＝报告结束日期－导入的经营开始时间，按自然日日期差计算，不额外加一天；不读取导入原经营天数作为计算结果，不反推或修改经营开始时间，也不按经营结束时间截断。原经营天数仅保留供对照。经营日期独立于报告导出期间；所有区间统一包含下限、不包含上限，最后一档为大于等于最后分界值。经营时长按365天折算1年；恰好3年、100人和注册资本1百万分别归入最后一档。注册资本按人民币归档。工商区间图表仅统计对应字段有有效数值的本期范围外对手方，缺失或无效字段不参与该图的金额及占比计算。');
  const registryEnd=settings.registryAsOf||to;
  const registryHitGroups=[];
  const profiles=new Map((settings.registry||[]).map(r=>[clean(r.name),r]));
@@ -428,8 +428,8 @@ function compute(data,settings={}){
  }
  distribution('双向交易的收支重合区间',both,['<20%','20%～<50%','50%～<80%','≥80%'],x=>overlap(x)<.2?0:overlap(x)<.5?1:overlap(x)<.8?2:3);
  follow.charts.at(-1).boundaryNote='区间边界：20%归入20%～<50%；50%归入50%～<80%；80%归入≥80%。比例＝流入、流出较小金额÷较大金额；只统计同时有收款和付款的对手方。';
- distribution('未识别客商的交易金额区间',unidentified,['<5百万','5～<10百万','10～20百万（含两端）','>20百万'],x=>{const m=amount(turnover(x));return m<5?0:m<10?1:m<=20?2:3;});
- follow.charts.at(-1).boundaryNote='区间边界：交易总额＝流入＋流出；5百万归入5～<10百万；10百万和20百万均归入10～20百万；超过20百万才进入最后一档。以上分布独立于下方系统筛选结果。';
+ distribution('未识别客商的交易金额区间',unidentified,['<5百万','5～<10百万','10～<20百万','≥20百万'],x=>{const m=amount(turnover(x));return m<5?0:m<10?1:m<20?2:3;});
+ follow.charts.at(-1).boundaryNote='区间边界：交易总额＝流入＋流出；5百万归入5～<10百万；10百万归入10～<20百万；20百万归入≥20百万。以上分布独立于下方系统筛选结果。';
 
  const focus=section('focus','2.4 重点关注对手方清单表','分别取2.3.1–2.3.3各识别结果交易总额前20大，再按名称取并集；并集全部展示，可能超过20个对手方。');
  const overlapNames=new Set(overlapList.map(x=>x.name)),unknownNames=new Set(unknownList.map(x=>x.name));
@@ -601,7 +601,7 @@ function sectionBody(s,m,continuations){
   };
   const breakdown=c=>{
    const total=c.rows.reduce((n,r)=>n+r[2]+r[5],0);
-   return stackedHTML(c)+tableHTML({name:'单笔交易金额分布',headers:['单笔交易','金额（百万元）','笔数','占比'],rows:c.rows.map(r=>[r[0],r[2]+r[5],r[3]+r[6],ratio(r[2]+r[5],total)])})+'<p class="report-boundary-note">区间边界：1百万归入1～&lt;5百万；5百万归入5～&lt;10百万；10百万及20百万均归入10～20百万；超过20百万才进入最后一档。先按大额阈值（含阈值）筛选，再做区间分布。</p>';
+   return stackedHTML(c)+tableHTML({name:'单笔交易金额分布',headers:['单笔交易','金额（百万元）','笔数','占比'],rows:c.rows.map(r=>[r[0],r[2]+r[5],r[3]+r[6],ratio(r[2]+r[5],total)])})+'<p class="report-boundary-note">区间边界：1百万归入1～&lt;5百万；5百万归入5～&lt;10百万；10百万归入10～&lt;20百万；20百万归入≥20百万。先按大额阈值（含阈值）筛选，再做区间分布。</p>';
   };
   continuations.push(
    subhead('1.2.1 大额单笔交易分析')+detail(tables[3],'合并范围内')+detail(tables[4],'合并范围外'),
