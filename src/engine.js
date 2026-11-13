@@ -429,27 +429,31 @@ function analysis(d,opt={}){const fx=opt.rates??opt.fx??DEFAULT_FX,value=(r,i)=>
 for(const {r,i}of ordered){const k=key(r[0],String(r[1]));inc+=value(r,8);out+=value(r,10);if(ix.own.has(r[3]))internal++;if(!acct.has(k))acct.set(k,{name:r[0],account:String(r[1]),count:0,in:0,out:0,balance:0,last:null});const a=acct.get(k);if(a.last){const delta=cents(r[12])-cents(a.last[12])-cents(r[8])+cents(r[10]);if(delta)exceptions.push([i+2,r[15],r[0],r[1],day(r[5]),r[6],'余额不连续',money(delta)]);}a.last=r;a.count++;a.in+=value(r,8);a.out+=value(r,10);a.balance=value(r,12);const ownName=String(r[0]||'').trim(),cpName=String(r[3]||'').trim(),cpAccount=String(r[4]||'').trim();if(ix.own.has(r[0])&&cpName===ownName&&cpAccount&&cpAccount!==String(r[1]).trim()&&cents(r[10])>0){const ck=key(ownName,cpAccount);if(!same.has(ck))same.set(ck,{name:ownName,account:cpAccount,count:0,out:0,sources:new Set(),rows:[]});const s=same.get(ck);s.count++;s.out+=value(r,10);s.sources.add(String(r[1]));s.rows.push([ownName,String(r[1]),cpAccount,day(r[5]),r[15],r[7],r[10],money(value(r,10))]);}const dt=day(r[5]);if(!daily.has(dt))daily.set(dt,[dt,0,0,0,0]);const dy=daily.get(dt);dy[1]+=value(r,8);dy[2]+=value(r,10);dy[3]+=Number(money(value(r,8))>0);dy[4]+=Number(money(value(r,10))>0);const mon=day(r[5]).slice(0,7);if(!monthly.has(mon))monthly.set(mon,[mon,0,0,0,0]);const mo=monthly.get(mon);mo[1]+=value(r,8);mo[2]+=value(r,10);mo[3]+=Number(money(value(r,8))>0);mo[4]+=Number(money(value(r,10))>0);}
 const missing=[...same].filter(([k])=>!acct.has(k)).map(([,r])=>r);const flowOnly=[...acct].filter(([k])=>!known.has(k)&&!book.has(k)).map(([,r])=>r);const noflow=d[KEYS.bank].rows.filter(r=>!acct.has(key(r[2],String(r[0]))));
 const ranking=[],concentration=[],concentrationDetail=[],counterparty=[],scope=[];
-for(const period of p){const selected=flow.filter(r=>day(r[5])>=period.from&&day(r[5])<=period.to);const accs=new Map(),cp=new Map();for(const r of selected){const k=key(r[0],r[1]);if(!accs.has(k))accs.set(k,{name:r[0],account:r[1],count:0,total:0,balance:0,date:''});const a=accs.get(k);a.count++;a.total+=value(r,8)+value(r,10);const t=day(r[5])+' '+r[6];if(t>=a.date){a.date=t;a.balance=value(r,12);}if(ix.own.has(r[3]))continue;const mk=key(r[0],r[3]),c=ix.customers.has(mk),s=ix.suppliers.has(mk),category=c&&s?'客商一体':c?'客户':s?'供应商':'非客商',relation=ix.related.has(mk)?'关联方':'第三方';const name=String(r[3]??'').trim(),ck=key(category,relation,name);if(!cp.has(ck))cp.set(ck,{name,category,relation,in:0,out:0,inCount:0,outCount:0});const b=cp.get(ck);b.in+=value(r,8);b.out+=value(r,10);b.inCount+=Number(money(value(r,8))>0);b.outCount+=Number(money(value(r,10))>0);}
+for(const period of p){const selected=flow.filter(r=>day(r[5])>=period.from&&day(r[5])<=period.to);const accs=new Map(),cp=new Map();for(const r of selected){const k=key(r[0],r[1]);if(!accs.has(k))accs.set(k,{name:r[0],account:r[1],count:0,total:0,balance:0,date:''});const a=accs.get(k);a.count++;a.total+=value(r,8)+value(r,10);const t=day(r[5])+' '+r[6];if(t>=a.date){a.date=t;a.balance=value(r,12);}if(ix.own.has(r[3]))continue;const mk=key(r[0],r[3]),c=!!String(r[3]??'').trim()&&ix.customers.has(mk),s=!!String(r[3]??'').trim()&&ix.suppliers.has(mk),category=c&&s?'客商一体':c?'客户':s?'供应商':'非客商',relation=String(r[3]??'').trim()&&ix.related.has(mk)?'关联方':'第三方';const name=String(r[3]??'').trim(),ck=key(category,relation,name);if(!cp.has(ck))cp.set(ck,{name,category,relation,in:0,out:0,inCount:0,outCount:0});const b=cp.get(ck);b.in+=value(r,8);b.out+=value(r,10);b.inCount+=Number(money(value(r,8))>0);b.outCount+=Number(money(value(r,10))>0);}
 scope.push([period.name,period.from,period.to,selected.length,money(selected.reduce((s,r)=>s+value(r,8)+value(r,10),0)),period.partial?'数据仅覆盖部分财年':'']);
 for(const metric of ['total','balance']){const sorted=[...accs.values()].sort((a,b)=>b[metric]-a[metric]||String(a.account).localeCompare(String(b.account))),total=sorted.reduce((s,a)=>s+a[metric],0);for(const [label,rs]of [['合计',sorted],['前5',sorted.slice(0,5)],['前10',sorted.slice(0,10)],['前20',sorted.slice(0,20)],['其他',sorted.slice(20)]]){const value=rs.reduce((s,a)=>s+a[metric],0);ranking.push([period.name,metric==='total'?'交易额':'期末余额',label,money(value),rs.reduce((s,a)=>s+a.count,0),total?value/total:0]);}}
-for(const dir of ['in','out'])for(const cat of ['客户','供应商','客商一体','非客商']){
+for(const dir of ['in','out']){
  const grouped=new Map();
  for(const part of cp.values()){
-  if(part.category!==cat||part[dir]<=0)continue;
+  if(part[dir]<=0)continue;
   if(!grouped.has(part.name))grouped.set(part.name,{name:part.name,amount:0,parts:[]});
   const item=grouped.get(part.name);item.amount+=part[dir];item.parts.push(part);
  }
- const all=[...grouped.values()],den=all.reduce((n,x)=>n+x.amount,0);
- const ranked=all.filter(x=>x.name).sort((a,b)=>b.amount-a.amount||a.name.localeCompare(b.name,'zh-CN'));
+ // Rank the whole external counterparty population before splitting categories.
+ // A blank name is one counterparty and participates in the same ranking.
+ const ranked=[...grouped.values()].sort((a,b)=>b.amount-a.amount||a.name.localeCompare(b.name,'zh-CN'));
  const direction=dir==='in'?'流入':'流出';
- for(const [i,item] of [...ranked,...all.filter(x=>!x.name)].entries()){
-  for(const part of item.parts)concentrationDetail.push([period.name,direction,cat,item.name||'【对手方名称为空】',item.name?i+1:null,part.relation,money(part[dir]),part[dir+'Count'],den?part[dir]/den:0]);
- }
- const bands=[['合计',all],['前5',ranked.slice(0,5)],['前10',ranked.slice(0,10)],['前20',ranked.slice(0,20)],['其他',[...ranked.slice(20),...all.filter(x=>!x.name)]]];
- for(const [label,subset] of bands)for(const rel of ['关联方','第三方']){
-  const parts=subset.flatMap(x=>x.parts).filter(x=>x.relation===rel);
-  const amount=parts.reduce((n,x)=>n+x[dir],0),count=parts.reduce((n,x)=>n+x[dir+'Count'],0);
-  concentration.push([period.name,direction,cat,rel,label,money(amount),count,den?amount/den:0]);
+ const bands=[['合计',ranked],['前5',ranked.slice(0,5)],['前10',ranked.slice(0,10)],['前20',ranked.slice(0,20)],['其他',ranked.slice(20)]];
+ for(const cat of ['客户','供应商','客商一体','非客商']){
+  const den=ranked.reduce((n,x)=>n+x.parts.filter(p=>p.category===cat).reduce((sum,p)=>sum+p[dir],0),0);
+  for(const [i,item] of ranked.entries()){
+   for(const part of item.parts.filter(p=>p.category===cat))concentrationDetail.push([period.name,direction,cat,item.name||'【对手方名称为空】',i+1,part.relation,money(part[dir]),part[dir+'Count'],den?part[dir]/den:0]);
+  }
+  for(const [label,subset] of bands)for(const rel of ['关联方','第三方']){
+   const parts=subset.flatMap(x=>x.parts).filter(x=>x.category===cat&&x.relation===rel);
+   const amount=parts.reduce((n,x)=>n+x[dir],0),count=parts.reduce((n,x)=>n+x[dir+'Count'],0);
+   concentration.push([period.name,direction,cat,rel,label,money(amount),count,den?amount/den:0]);
+  }
  }
 }
 const all=new Map();for(const b of cp.values()){if(!all.has(b.name))all.set(b.name,{...b});else{const t=all.get(b.name);for(const k of ['in','out','inCount','outCount'])t[k]+=b[k];}}for(const dir of ['in','out'])[...all.values()].filter(a=>a[dir]>0).sort((a,b)=>b[dir]-a[dir]||a.name.localeCompare(b.name)).slice(0,20).forEach((a,i)=>counterparty.push([period.name,dir==='in'?'流入':'流出',i+1,a.name||'【对手方为空】',money(a.in),a.inCount,money(a.out),a.outCount]));}
@@ -478,7 +482,7 @@ function checksWorkbook(a){return{
 '专项交易':{headers:['类型','流水号','本方公司','本方账号','对手名称','对手账号','日期','时间','币种','等值人民币流入金额','等值人民币流出金额','摘要'],rows:a.special},
 '账户排名':{headers:['期间','排名依据','分布','金额','笔数','占比'],rows:a.ranking},
 '集中度报告对照':{headers:['期间','方向','客商分类','关联性质','分布','金额','笔数','占比'],rows:a.concentration},
-'集中度排名明细':{headers:['期间','方向','客商分类','对手方名称','分类内排名','关联性质','等值人民币金额','交易笔数','金额占比'],rows:a.concentrationDetail},
+'集中度排名明细':{headers:['期间','方向','客商分类','对手方名称','全体对手方排名','关联性质','等值人民币金额','交易笔数','金额占比'],rows:a.concentrationDetail},
 '对手方前20':{headers:['期间','方向','排名','名称','流入金额','流入笔数','流出金额','流出笔数'],rows:a.counterparty},
 '缺失同名账户':{headers:['被审计单位','缺失账号B','已上传付款账号A','付款笔数','等值人民币付款金额','跟进建议'],rows:a.missing.map(x=>[x.name,x.account,[...x.sources].join('、'),x.count,money(x.out),'向客户取得B账号及流水，或检查B是否已上传至其他工作簿'])},
 '缺失同名付款明细':{headers:['公司','付款账号A','收款账号B','交易日期','流水号','币种','原币付款金额','等值人民币付款金额'],rows:a.missing.flatMap(x=>x.rows)},
