@@ -256,12 +256,13 @@ function compute(data,settings={}){
 
  }
 
- const concentration=section('concentration','1.3 资金流水集中度分析（以下数据分析已剔除被审计单位合并范围内各单位之间的交易往来）','剔除合并范围内单位之间的往来。先按对手方名称汇总，流入和流出分别在全体外部对手方中统一排名，再拆客商分类及关联方、第三方。占比的分母是该方向、该客商分类的总金额。只有同一本方单位与对手方在关联方主档中匹配，才列为关联方；内部往来仍剔除。空白对手方合并为一个对象参与排名，归入非客商、第三方。');
+ const concentration=section('concentration','1.3 资金流水集中度分析（以下数据分析已剔除被审计单位合并范围内各单位之间的交易往来）','剔除合并范围内单位之间的往来。先按对手方名称汇总，流入和流出分别在全体外部对手方中统一排名，再拆客商分类及关联方、第三方。客商类型按整套主档名称统一判断，同一名称只属于一类，客户与供应商均有时归客商一体。占比的分母是该方向、该客商分类的总金额。只有同一本方单位与对手方在关联方主档中匹配，才列为关联方；内部往来仍剔除。空白对手方合并为一个对象参与排名，归入非客商、第三方。');
+ const categoryByName=E.counterpartyCategories(data);
  const months=new Map(),counterparties=new Map(),related=new Map(),relations=new Map(),people=new Map(),byCategory=new Map(),byCategoryRelated=new Map();
  const flagByName=new Map(),relationshipNames=new Map();
  for(const r of external){
-  const k=key(r[0],r[3]),named=!!clean(r[3]),c=named&&masterSets.customer.has(k),s=named&&masterSets.supplier.has(k);
-  const category=c&&s?'客商一体':c?'客户':s?'供应商':'非客商';
+  const k=key(r[0],r[3]),named=!!clean(r[3]);
+  const category=categoryByName.get(clean(r[3]))||'非客商';
   const relationship=named?masterSets.related.get(k)?.[2]:undefined;
   const name=clean(r[3])||'【对手方为空】';
   group(months,key(day(r[5]).slice(0,7),category),{},r,fx);
@@ -306,7 +307,7 @@ function compute(data,settings={}){
  table(concentration,'集中度排名明细',['方向','客商分类','对手方名称','全体对手方排名','关联性质','等值人民币金额（百万元）','交易笔数','金额占比'],
   a.concentrationDetail.filter(r=>r[0]==='所选合计').map(r=>[...r.slice(1,6),r[6]/1e6,r[7],r[8]]));
 
- const cpSection=section('counterparties','2.1 资金流水按交易对手方类型分析','剔除合并范围内往来。按对手方名称汇总；同名对手方在不同主档中有多种分类时一并显示。空白名称统一分组。');
+ const cpSection=section('counterparties','2.1 资金流水按交易对手方类型分析','剔除合并范围内往来。按对手方名称汇总；按整套客户、供应商主档的对手方名称统一分类，与本方公司无关。两表都有为客商一体，仅客户为客户，仅供应商为供应商，两表都没有为非客商。同一名称只属于一类。空白名称统一分组。');
  const cp=[...counterparties.values()];
  const cpHeaders=['排名','对手方名称','客商分类','关联关系','模拟黑名单','流入金额（百万元）','流入笔数','流入占比','流出金额（百万元）','流出笔数','流出占比','交易金额（百万元）','交易笔数','交易金额占比'];
  function totals(items){return items.reduce((acc,x)=>{for(const k of ['in','out','ins','outs','n'])acc[k]+=x[k];return acc;},aggregate());}
