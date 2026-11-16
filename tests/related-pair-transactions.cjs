@@ -1,0 +1,11 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');global.window=global;for(const n of ['baseline','engine','registry','report'])vm.runInThisContext(fs.readFileSync('src/'+n+'.js','utf8'));const E=AuditEngine,K=E.KEYS,d=Object.fromEntries(Object.entries(BASELINE).map(([k,t])=>[k,{headers:t.headers,rows:[]}]));d[K.company].rows=[['甲',null,null,'母公司'],['乙',null,null,'子公司']];
+for(let i=1;i<=25;i++){const name='交易企业'+String(i).padStart(2,'0');d[K.related].rows.push(['甲',name,'董事']);for(const own of ['甲','乙']){const incoming=own==='甲'?i*100:(26-i)*10000,r=Array(d[K.flow].headers.length).fill(null);Object.assign(r,{0:own,1:'001',2:'银行',3:name,5:'2025-01-01',6:'12:00:00',7:'CNY',8:incoming,9:incoming,10:incoming/10,11:incoming/10,12:0,13:0});d[K.flow].rows.push(r);}}
+d[K.related].rows.push(['甲','交易企业25','董事'],['甲','交易企业25','监事'],['甲','交易企业25',null]);const before=JSON.stringify(d);
+const m=AuditReport.compute(d,{from:'2025-01-01',to:'2025-12-31'}),s=m.sections.find(x=>x.id==='related'),summary=s.tables[0].rows[0],list=s.tables.find(t=>t.headers.includes('客商分类'));
+assert.equal(summary[1],25);assert.equal(summary[2],.0325);assert.equal(summary[3],25);assert.equal(summary[5],.00325);assert.equal(summary[6],25);
+assert.equal(list.rows[1][1],'交易企业25');assert.equal(list.rows[1][5],.0025);assert.equal(list.rows[1][6],1);assert.equal(list.rows.find(r=>r[1]==='其他')[6],5);
+const chart=s.charts[0];assert.deepEqual(new Set(chart.rows.map(r=>r[0])),new Set(['董事','监事','其他']));
+const director=chart.rows.find(r=>r[0]==='董事'),supervisor=chart.rows.find(r=>r[0]==='监事');assert.equal(director[2],.0325);assert.equal(director[3],25);assert.equal(director[4],1);assert.equal(supervisor[2],.0025);assert(Math.abs(supervisor[4]-1/13)<1e-12);
+const c=m.sections.find(s=>s.id==='counterparties');assert.equal(c.tables.find(t=>t.headers.includes('客商分类')).rows[1][1],'交易企业01');
+assert.equal(JSON.stringify(d),before);assert(AuditReport.render(AuditReport.selectSections(m,['related']),{allRows:true,forExport:true}).includes('不拼接'));
+console.log('PASS: only matched entity transactions included, filtering before top20 ranking, in/out and counts correct, duplicate type dedup, multi-types separate, type denominator unique total, 2.1 unchanged, source unchanged, exported explanation');

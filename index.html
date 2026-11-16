@@ -2646,8 +2646,8 @@ function compute(data,settings={}){
  const table=(s,name,headers,rows,limit)=>s.tables.push({name,headers:headers.map((h,i)=>reportHeader(i===0&&h==='区间'&&/比例|重合/.test(name)?h+'（%）':h)),rows,limit});
  const directionHeaders=['流入金额（百万元）','流入笔数','流入占比','流出金额（百万元）','流出笔数','流出占比'];
  const directions=(x,total)=>[amount(x.in),x.ins,ratio(x.in,total.in),amount(x.out),x.outs,ratio(x.out,total.out)];
- const stacked=(section,name,items,{detail=true,first='区间',countLabel='对手方数量'}={})=>{
-  const total=totals(items.map(x=>x[2]));
+ const stacked=(section,name,items,{detail=true,first='区间',countLabel='对手方数量',denominator}={})=>{
+  const total=denominator||totals(items.map(x=>x[2]));
   const rows=items.map(([label,n,x])=>[label,n,...directions(x,total)]);
   section.charts.push({name,kind:'stacked',rows});
   if(detail){
@@ -2656,6 +2656,8 @@ function compute(data,settings={}){
   }
  };
  const relatedByName=E.counterpartyRelationships(data),categoryByName=E.counterpartyCategories(data);
+ const relatedPairTypes=new Map();
+ for(const row of data[K.related].rows){if(!clean(row[0])||!clean(row[1]))continue;const pair=key(row[0],row[1]);if(!relatedPairTypes.has(pair))relatedPairTypes.set(pair,new Set());for(const role of (clean(row[2])||'其他').split('、').map(clean).filter(Boolean))relatedPairTypes.get(pair).add(role);}
  const masterSets=Object.fromEntries(['customer','supplier','employee','related'].map(k=>[k,new Map(data[K[k]].rows.map(r=>[key(r[0],r[k==='related'?1:2]),r]))]));
  const own=new Set(data[K.company].rows.map(r=>r[0]).filter(Boolean));
  const present=new Set(periodRows.map(r=>r[0]));
@@ -2761,11 +2763,16 @@ function compute(data,settings={}){
   if(relationship){
    for(const cat of category==='客商一体'?['客户','供应商','客商一体']:[category])group(byCategoryRelated,cat,{},r,fx);
    record.relationships.add(relationship);
+  }
+  const pairTypes=named?relatedPairTypes.get(k):undefined;
+  if(pairTypes){
    const rel=group(related,name,{name,categories:new Set(),relationships:new Set(),black:black.has(name)},r,fx);
-   rel.categories.add(category);rel.relationships.add(relationship);
-   group(relations,relationship,{},r,fx);
-   if(!relationshipNames.has(relationship))relationshipNames.set(relationship,new Set());
-   relationshipNames.get(relationship).add(name);
+   rel.categories.add(category);
+   for(const role of pairTypes){
+    rel.relationships.add(role);group(relations,role,{},r,fx);
+    if(!relationshipNames.has(role))relationshipNames.set(role,new Set());
+    relationshipNames.get(role).add(name);
+   }
   }
   const employee=masterSets.employee.has(k);
   const personType=String(relationship||'').split('、').some(role=>E.isRelatedOfficer(name,role))?'董监高':employee?'员工':clean(r[3])&&[...name].length<=4?'其他个人':'';
@@ -2812,7 +2819,7 @@ function compute(data,settings={}){
  ]));
  cpSection.tables.at(-1).grouped=true;
  for(const [dir,metric] of [['流入','in'],['流出','out']])table(cpSection,dir+'前20大对手方',cpHeaders,ranking(sortBy(cp.filter(x=>x[metric]>0),x=>x[metric]),externalTotals,20,cp.filter(x=>x[metric]<=0)));
- const relatedSection=section('related','2.2 关联方资金流水分析（以下数据分析是依据系统中关联方主档名单进行汇总）','关联组合按被审计单位公司名称＋关联方名称去重，不按关联关系类型或重复主档行重复计数。在已有主档组合基础上，自动补齐不同被审计单位之间的有向关联组合（X→Y和Y→X分别计一组），不自动增加自身组合，也不扩展第三方关系。组合数量使用“组”，不同关联方名称数量使用“个”。交易按对手方名称匹配整套关联方主档，不要求本方公司一致；类型为空为其他。组合明细仅作完整性核验，不作为交易关联匹配条件。交易统计仍剔除合并范围内往来。');
+ const relatedSection=section('related','2.2 关联方资金流水分析（以下数据分析是依据系统中关联方主档名单进行汇总）','关联组合按被审计单位公司名称＋关联方名称去重，不按关联关系类型或重复主档行重复计数。在已有主档组合基础上，自动补齐不同被审计单位之间的有向关联组合（X→Y和Y→X分别计一组），不自动增加自身组合，也不扩展第三方关系。组合数量使用“组”，不同关联方名称数量使用“个”。本节交易按本方被审计单位名称＋对手方名称匹配主档，未命中的本方交易不计入。先筛选命中流水，再按对手方汇总并取前20大。类型为空为其他；同一组合多种类型分别计入对应类型，交易合计和排名不重复。交易统计仍剔除合并范围内往来。');
  const rels=[...related.values()];
  const masterRelatedNames=new Set(data[K.related].rows.map(r=>clean(r[1])).filter(Boolean));
  const relationPairs=new Map();
@@ -2828,7 +2835,8 @@ function compute(data,settings={}){
  }
  relatedSection.relationStats={masterNames:masterRelatedNames.size,masterPairs:masterPairCount,addedPairs:relationPairs.size-masterPairCount,effectivePairs:relationPairs.size};
  table(relatedSection,'3.2.1 关联方交易汇总',['有效关联组合数量（组）','本期交易关联方数量',...cpHeaders.slice(5)],[[relationPairs.size,rels.length,...cpAmounts(totals(rels),externalTotals)]]);
- stacked(relatedSection,'关联关系类型流入流出分布',[...relations].sort(([a],[b])=>a.localeCompare(b,'zh-CN')).map(([n,x])=>[n,relationshipNames.get(n).size,x]),{first:'关联方类型'});
+ stacked(relatedSection,'关联关系类型流入流出分布',[...relations].sort(([a],[b])=>a.localeCompare(b,'zh-CN')).map(([n,x])=>[n,relationshipNames.get(n).size,x]),{first:'关联方类型',denominator:totals(rels)});
+ relatedSection.charts.at(-1).boundaryNote='本节仅统计本方单位与对手方组合命中的流水。关联类型分别展示，不拼接；同一组合有多种类型，其交易分别计入各类型，分类金额和笔数存在交叉，不可相加作为去重交易总额；各类型金额占比分母为本节同方向去重关联交易总额。';
  table(relatedSection,'3.2.2 已知关联方交易清单',cpHeaders,ranking(sortBy(rels,turnover),totals(rels)));
  table(relatedSection,'关联组合数量核验',['指标','数量'],[['主档不同关联方名称数量（个）',masterRelatedNames.size],['主档去重关联组合数量（组）',masterPairCount],['自动补齐被审计单位间组合（组）',relationPairs.size-masterPairCount],['有效关联组合数量（组）',relationPairs.size]]);
  table(relatedSection,'关联组合明细',['被审计单位公司名称','关联方名称','组合来源'],[...relationPairs.values()]);
