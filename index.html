@@ -2760,7 +2760,7 @@ function compute(data,settings={}){
   for(const cat of category==='客商一体'?['客户','供应商','客商一体']:[category])group(byCategory,cat,{},r,fx);
   const record=group(counterparties,name,{name,categories:new Set(),relationships:new Set(),black:black.has(name)},r,fx);
   record.categories.add(category);
-  if(named&&!masterSets.customer.has(k)&&!masterSets.supplier.has(k)){const unknown=group(unidentifiedByName,name,{name,categories:new Set(['非客商']),relationships:new Set(),black:black.has(name)},r,fx);if(relationship)unknown.relationships.add(relationship);}
+  if(!named||(!masterSets.customer.has(k)&&!masterSets.supplier.has(k))){const unknown=group(unidentifiedByName,name,{name,categories:new Set(['非客商']),relationships:new Set(),black:black.has(name)},r,fx);if(relationship)unknown.relationships.add(relationship);}
   if(relationship){
    for(const cat of category==='客商一体'?['客户','供应商','客商一体']:[category])group(byCategoryRelated,cat,{},r,fx);
    record.relationships.add(relationship);
@@ -2898,9 +2898,9 @@ function compute(data,settings={}){
  table(persons,'个人交易汇总',['个人类型','人数',...moneyHeaders],[['合计',individuals],...['员工','董监高','其他个人'].map(n=>[n,individuals.filter(x=>x.personType===n)])].map(([n,rs])=>[n,new Set(rs.map(x=>x.name)).size,...financial(totals(rs))]));
  table(persons,'个人交易明细',['姓名','个人类型',...moneyHeaders],sortBy(individuals,turnover).map(x=>[x.name,x.personType,...financial(x)]));
 
- const follow=section('follow','2.3.3 已识别有待进一步分析的交易对手方的分析','收支重合和未识别客商关系的全部统计、区间及筛选结果均已剔除集团合并单位内的交易。柱图与区间表展示完整候选分布。下方筛选结果仅统计符合所设条件的对手方。收支重合比例＝较小方向金额 ÷ 较大方向金额，包含单向交易并按0归第一档。未识别客商逐笔按本方单位＋对手方匹配，只汇总客户、供应商主档均未命中的那部分流水。空白对手方不参与这两块。代表性结果来自筛选命中项；重合比例并列时取交易总额较高者，总额仍并列时按名称排序。');
+ const follow=section('follow','2.3.3 已识别有待进一步分析的交易对手方的分析','收支重合和未识别客商关系的全部统计、区间及筛选结果均已剔除集团合并单位内的交易。柱图与区间表展示完整候选分布。下方筛选结果仅统计符合所设条件的对手方。收支重合比例＝较小方向金额 ÷ 较大方向金额，包含单向交易并按0归第一档。未识别客商逐笔按本方单位＋对手方匹配，只汇总客户、供应商主档均未命中的那部分流水。空白对手方合并为一个对象参与两块统计，并作为未匹配客商处理。代表性结果来自筛选命中项；重合比例并列时取交易总额较高者，总额仍并列时按名称排序。');
  const overlap=x=>ratio(Math.min(x.in,x.out),Math.max(x.in,x.out));
- const overlapCandidates=cp.filter(x=>x.name!=='【对手方为空】'&&(x.in>0||x.out>0));
+ const overlapCandidates=cp.filter(x=>x.in>0||x.out>0);
  const overlapList=overlapCandidates.filter(x=>turnover(x)>=E.cents(criteria.overlapAmount)&&overlap(x)>=criteria.overlapPercent/100);
  const unidentified=[...unidentifiedByName.values()];
  const unknownList=unidentified.filter(x=>turnover(x)>=E.cents(criteria.unknownAmount));
@@ -2925,9 +2925,9 @@ function compute(data,settings={}){
   stacked(follow,name,labels.map((n,i)=>[n,sets[i].length,totals(sets[i])]));
  }
  distribution('收支重合比例区间',overlapCandidates,['<20%','20%～<50%','50%～<80%','≥80%'],x=>overlap(x)<.2?0:overlap(x)<.5?1:overlap(x)<.8?2:3);
- follow.charts.at(-1).boundaryNote='区间边界：20%归入20%～<50%；50%归入50%～<80%；80%归入≥80%。比例＝流入、流出较小金额÷较大金额；包含单向交易，单向交易重合比例按0计入第一档；流入流出均为0的对象不参与。';
+ follow.charts.at(-1).boundaryNote='区间边界：20%归入20%～<50%；50%归入50%～<80%；80%归入≥80%。比例＝流入、流出较小金额÷较大金额；包含空白对手方及单向交易，空白名称合并统计；单向交易重合比例按0计入第一档；流入流出均为0的对象不参与。';
  distribution('未识别客商的交易金额区间',unidentified,['<5百万','5～<10百万','10～<20百万','≥20百万'],x=>{const m=amount(turnover(x));return m<5?0:m<10?1:m<20?2:3;});
- follow.charts.at(-1).boundaryNote='区间边界：交易总额＝流入＋流出；5百万归入5～<10百万；10百万归入10～<20百万；20百万归入≥20百万。先按本方单位＋对手方组合排除已匹配客户或供应商的流水，再按对手方名称汇总未匹配部分。以上分布独立于下方系统筛选结果。';
+ follow.charts.at(-1).boundaryNote='区间边界：交易总额＝流入＋流出；5百万归入5～<10百万；10百万归入10～<20百万；20百万归入≥20百万。先按本方单位＋对手方组合排除已匹配客户或供应商的流水，再按对手方名称汇总未匹配部分；空白名称合并为一个未识别对象参与统计。以上分布独立于下方系统筛选结果。';
 
  const focus=section('focus','2.4 重点关注对手方清单表','分别取2.3.1–2.3.3各识别结果交易总额前20大，再按名称取并集；并集全部展示，可能超过20个对手方。');
  const overlapNames=new Set(overlapList.map(x=>x.name)),unknownNames=new Set(unknownList.map(x=>x.name));

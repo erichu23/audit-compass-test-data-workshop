@@ -1,11 +1,13 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert');global.window=global;for(const n of ['baseline','engine','registry','report'])vm.runInThisContext(fs.readFileSync('src/'+n+'.js','utf8'));const E=AuditEngine,K=E.KEYS,d=Object.fromEntries(Object.entries(BASELINE).map(([k,t])=>[k,{headers:t.headers,rows:[]}]));d[K.company].rows=[['甲',null,null,'母公司'],['乙',null,null,'子公司']];d[K.customer].rows=[['甲',null,'部分匹配企业']];
 function add(own,name,input,output){const r=Array(d[K.flow].headers.length).fill(null);Object.assign(r,{0:own,1:'001',2:'银行',3:name,5:'2025-01-01',6:'12:00:00',7:'CNY',8:input,9:input,10:output,11:output,12:0,13:0});d[K.flow].rows.push(r);}
 add('甲','单向收款企业',1000000,0);add('甲','单向付款企业',0,2000000);add('甲','重合边界企业',1000000,200000);add('甲','部分匹配企业',30000000,10000000);add('乙','部分匹配企业',1000000,200000);add('甲','零金额企业',0,0);add('甲','',9000000,0);add('甲','乙',99000000,0);
+for(let i=0;i<37;i++)add(i%2?'甲':'乙',i%2?null:'  ',0,1000);
 const before=JSON.stringify(d),settings={from:'2025-01-01',to:'2025-12-31',criteria:{overlapAmount:0,overlapPercent:0,unknownAmount:0}},m=AuditReport.compute(d,settings),s=m.sections.find(s=>s.id==='follow'),over=s.charts[0],unknown=s.charts[1];
-assert.equal(over.rows[0][1],2);assert.equal(over.rows[0][2],1);assert.equal(over.rows[0][5],2);assert.equal(over.rows[1][1],2);
+assert.equal(over.rows[0][1],3);assert.equal(over.rows[0][2],10);assert.equal(over.rows[0][5],2.037);assert.equal(over.rows[0][6],38);assert.equal(over.rows[1][1],2);
 const unknownList=s.tables.find(t=>t.name==='未识别客商关系明细'),partial=unknownList.rows.find(r=>r[0]==='部分匹配企业');assert.equal(partial[2],1);assert.equal(partial[3],1);assert.equal(partial[4],.2);assert.equal(partial[5],1);
-assert.equal(unknown.rows.at(-1)[1],0);assert.equal(unknown.rows[0][1],5); // includes named zero, excludes blank and internal
+assert.equal(unknown.rows.at(-1)[1],0);assert.equal(unknown.rows[0][1],5); assert.equal(unknown.rows[1][1],1); // blank aggregated into one object in 5-10m; internal excluded
+const empty=unknownList.rows.find(r=>r[0]==='【对手方为空】');assert.equal(empty[2],9);assert.equal(empty[3],1);assert.equal(empty[4],.037);assert.equal(empty[5],37);
 const hit=s.tables.find(t=>t.name==='收支重合明细');assert(hit.rows.some(r=>r[0]==='单向收款企业'&&r[1]===0));
-const defaults=AuditReport.compute(d,{from:'2025-01-01',to:'2025-12-31'}).sections.find(s=>s.id==='follow');assert.equal(defaults.charts[0].rows[0][1],2);assert(!defaults.tables.find(t=>t.name==='收支重合明细').rows.some(r=>r[0]==='单向收款企业'));
+const defaults=AuditReport.compute(d,{from:'2025-01-01',to:'2025-12-31'}).sections.find(s=>s.id==='follow');assert.equal(defaults.charts[0].rows[0][1],3);assert(!defaults.tables.find(t=>t.name==='收支重合明细').rows.some(r=>r[0]==='单向收款企业'));
 const html=AuditReport.render(AuditReport.selectSections(m,['follow']),{allRows:true,forExport:true});assert(html.includes('包含单向交易')&&html.includes('组合匹配'));assert.equal(JSON.stringify(d),before);
-console.log('PASS: one-way ratio zero in first band, zero-only/blank/internal excluded from overlap, pair-matched flows excluded before unknown aggregation, independent filters, boundary 20%, raw rows unchanged, exported descriptions');
+console.log('PASS: one-way ratio zero in first band, blank names/null/spaces aggregated with all counts; zero-only/internal excluded from overlap, pair-matched flows excluded before unknown aggregation, independent filters, boundary 20%, raw rows unchanged, exported descriptions');
