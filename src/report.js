@@ -259,13 +259,14 @@ function compute(data,settings={}){
 
  }
 
- const concentration=section('concentration','1.3 资金流水集中度分析（以下数据分析已剔除被审计单位合并范围内各单位之间的交易往来）','剔除合并范围内单位之间的往来。先按对手方名称汇总，流入和流出分别在全体外部对手方中统一排名，再拆客商分类及关联方、第三方。集中度分类按整套主档名称判断：客商一体同时计入客户、供应商、客商一体三列，各列不可直接相加。统一排名按对手方真实金额计算一次，不因分类交叉而重复。占比的分母是该方向、该客商分类的总金额。关联性质只按对手方名称匹配整套关联方主档，命中即为关联方，类型为空显示其他；不在清单为第三方。内部往来仍剔除。空白对手方合并为一个对象参与排名，归入非客商、第三方。');
+ const concentration=section('concentration','1.3 资金流水集中度分析（以下数据分析已剔除被审计单位合并范围内各单位之间的交易往来）','剔除合并范围内单位之间的往来。先按对手方名称汇总，流入和流出分别在全体外部对手方中统一排名，再拆客商分类及关联方、第三方。集中度分类按整套主档名称判断：客商一体同时计入客户、供应商、客商一体三列，各列不可直接相加。统一排名按对手方真实金额计算一次，不因分类交叉而重复。占比的分母是该方向、该客商分类的总金额。关联性质按本方被审计单位＋对手方组合逐笔匹配关联方主档，命中为关联方，类型为空显示其他；该组合未命中为第三方。内部往来仍剔除。空白对手方合并为一个对象参与排名，归入非客商、第三方。');
  const months=new Map(),counterparties=new Map(),related=new Map(),relations=new Map(),people=new Map(),byCategory=new Map(),byCategoryRelated=new Map(),unidentifiedByName=new Map();
  const flagByName=new Map(),relationshipNames=new Map();
  for(const r of external){
   const k=key(r[0],r[3]),named=!!clean(r[3]);
   const category=categoryByName.get(clean(r[3]))||'非客商';
-  const relationship=named?relatedByName.get(clean(r[3])):undefined;
+  const pairTypes=named?relatedPairTypes.get(k):undefined;
+  const relationship=pairTypes?[...pairTypes].join('、'):undefined;
   const name=clean(r[3])||'【对手方为空】';
   for(const cat of category==='客商一体'?['客户','供应商','客商一体']:[category])group(months,key(day(r[5]).slice(0,7),cat),{},r,fx);
   for(const cat of category==='客商一体'?['客户','供应商','客商一体']:[category])group(byCategory,cat,{},r,fx);
@@ -276,7 +277,6 @@ function compute(data,settings={}){
    for(const cat of category==='客商一体'?['客户','供应商','客商一体']:[category])group(byCategoryRelated,cat,{},r,fx);
    record.relationships.add(relationship);
   }
-  const pairTypes=named?relatedPairTypes.get(k):undefined;
   if(pairTypes){
    const rel=group(related,name,{name,categories:new Set(),relationships:new Set(),black:black.has(name)},r,fx);
    rel.categories.add(category);
@@ -315,7 +315,7 @@ function compute(data,settings={}){
  table(concentration,'集中度排名明细',['方向','客商分类','对手方名称','全体对手方排名','关联性质','等值人民币金额（百万元）','交易笔数','金额占比'],
   a.concentrationDetail.filter(r=>r[0]==='所选合计').map(r=>[...r.slice(1,6),r[6]/1e6,r[7],r[8]]));
 
- const cpSection=section('counterparties','2.1 资金流水按交易对手方类型分析','剔除合并范围内往来。按对手方名称汇总；按整套客户、供应商主档的对手方名称统一分类，与本方公司无关。两表都有为客商一体，仅客户为客户，仅供应商为供应商，两表都没有为非客商。右侧清单同一名称只列一次，客商一体标为客商一体；左侧分类表和柱图允许交叉，客商一体同时计入客户、供应商及客商一体。空白名称统一分组。');
+ const cpSection=section('counterparties','2.1 资金流水按交易对手方类型分析','剔除合并范围内往来。按对手方名称汇总；按整套客户、供应商主档的对手方名称统一分类，与本方公司无关。两表都有为客商一体，仅客户为客户，仅供应商为供应商，两表都没有为非客商。右侧清单同一名称只列一次，客商一体标为客商一体；左侧分类表和柱图允许交叉，客商一体同时计入客户、供应商及客商一体。客商类型按名称，关联性质按本方单位＋对手方组合逐笔判断。空白名称统一分组。');
  const cp=[...counterparties.values()];
  const cpHeaders=['排名','对手方名称','客商分类','关联关系','模拟黑名单','流入金额（百万元）','流入笔数','流入占比','流出金额（百万元）','流出笔数','流出占比','交易金额（百万元）','交易笔数','交易金额占比'];
  function totals(items){return items.reduce((acc,x)=>{for(const k of ['in','out','ins','outs','n'])acc[k]+=x[k];return acc;},aggregate());}
@@ -630,7 +630,7 @@ function sectionBody(s,m,continuations){
     return [isRelated?'':cat,isRelated?'关联方':'第三方',...(isRelated?values:row.slice(offset,offset+3).map((v,k)=>v-values[k]))];
    });
    const summary={name:'全部交易对手方',headers:['对手方类型','性质',direction+'金额（百万元）','笔数','占比'],rows};
-   return '<div class="report-direction"><b class="report-direction-tag">'+direction+'</b><div class="report-direction-summary">'+stackedHTML({...charts[0],name:'对手方分类（含交叉）'},i)+tableHTML(summary)+'<p class="report-boundary-note">分类交叉：客商一体同时计入客户、供应商及客商一体。分类金额、笔数及占比不可直接相加；柱图底部为含交叉的分类合计。表内占比分母为本期剔除内部往来后的该方向交易总额，右侧清单按对手方去重展示。</p>'+'</div><div class="report-wide-detail">'+tableHTML({...t,limit:23})+'</div></div>';
+   return '<div class="report-direction"><b class="report-direction-tag">'+direction+'</b><div class="report-direction-summary">'+stackedHTML({...charts[0],name:'对手方分类（含交叉）'},i)+tableHTML(summary)+'<p class="report-boundary-note">匹配口径：客商类型按对手方名称，关联性质按本方单位＋对手方组合逐笔判断。分类交叉：客商一体同时计入客户、供应商及客商一体。分类金额、笔数及占比不可直接相加；柱图底部为含交叉的分类合计。表内占比分母为本期剔除内部往来后的该方向交易总额，右侧清单按对手方去重展示。</p>'+'</div><div class="report-wide-detail">'+tableHTML({...t,limit:23})+'</div></div>';
   });
   continuations.push(subhead('2.1 资金流水按交易对手方类型分析（续）')+outflow);
   return inflow;
