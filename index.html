@@ -2857,14 +2857,16 @@ function compute(data,settings={}){
  const penalties=knownPenalties.filter(x=>profiles.get(x.name).penalties>0);
  const dishonest=knownDishonest.filter(x=>profiles.get(x.name).dishonest==='是');
  const lawsuits=knownCases.filter(x=>profiles.get(x.name).cases>0);
+ const lawsuitCaseCount=knownCases.length?lawsuits.reduce((n,x)=>n+profiles.get(x.name).cases,0):missingValue;
+ compliance.lawsuitCaseCount=lawsuitCaseCount;
  const profileSummary=(name,items,known,note)=>[name,known.length?items.length:missingValue,known.length?amount(turnover(totals(items))):missingValue,note+'；有数据 '+known.length+' 家'];
- table(compliance,'合规及工商信息',['指标','对手方数量','交易金额（百万元）','说明'],[
+ table(compliance,'合规及工商信息',['指标','对手方数量','交易金额（百万元）','说明','诉讼案件数量（个）'],[
   ['模拟黑名单',flagged.length,amount(turnover(totals(flagged))),'按本期有交易的对手方名称去重'],
   profileSummary('失信被执行人',dishonest,knownDishonest,'命中为是'),
   profileSummary('诉讼对手方及案件数',lawsuits,knownCases,'已知案件 '+knownCases.reduce((n,x)=>n+profiles.get(x.name).cases,0)+' 件'),
   profileSummary('行政处罚',penalties,knownPenalties,'处罚 '+knownPenalties.reduce((n,x)=>n+profiles.get(x.name).penalties,0)+' 件'),
   ['工商档案匹配',matched.length,amount(turnover(totals(matched))),'本期企业 '+enterprise.length+' 家，未匹配 '+(enterprise.length-matched.length)+' 家']
- ]);
+ ].map(row=>[...row,row[0]==='诉讼对手方及案件数'?lawsuitCaseCount:null]));
  table(compliance,'模拟黑名单命中明细',cpHeaders,ranking(sortBy(flagged,turnover),externalTotals,Infinity));
  const registryScreens={
   days:[v=>v>=criteria.daysMin&&v<=criteria.daysMax,'经营天数 '+criteria.daysMin+'–'+criteria.daysMax+' 天（含边界）'],
@@ -3134,7 +3136,7 @@ function sectionBody(s,m,continuations){
  }
  if(s.id==='compliance'){
   const [summary,details]=tables;
-  const cards=summary.rows.slice(0,4).map(([label,count,amount])=>metricHTML(label,typeof count==='number'?count+' 家 / '+currency.format(amount)+' 百万元':missingValue));
+  const cards=summary.rows.slice(0,4).map(([label,count,amount])=>metricHTML(label,label==='诉讼对手方及案件数'?(typeof count==='number'&&typeof s.lawsuitCaseCount==='number'?integer(count)+' 家 / '+integer(s.lawsuitCaseCount)+' 个':missingValue):(typeof count==='number'?count+' 家 / '+currency.format(amount)+' 百万元':missingValue)));
   const main=charts.slice(0,3),more=charts.filter(c=>!main.includes(c));
   return sideBySide(cards,'report-four')+sideBySide(main.map(c=>chartAndTable(c,tables,m.criteria)),'report-three')+extra('合规汇总',tableHTML(summary))+extra('注册资本金额及诉讼数量区间',sideBySide(more.map(c=>chartAndTable(c,tables,m.criteria))))+extra('本期工商匹配明细',tableHTML(tables.at(-1)))+extra('模拟黑名单命中明细',tableHTML(details));
  }
