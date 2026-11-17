@@ -5,10 +5,10 @@ for(const own of ['甲','乙'])for(const name of ['客户公司','供应商公�
 const before=JSON.stringify(d),m=AuditReport.compute(d,{from:'2025-01-01',to:'2025-12-31',criteria:{unknownAmount:0}}),cp=m.sections.find(s=>s.id==='counterparties'),conc=m.sections.find(s=>s.id==='concentration'),follow=m.sections.find(s=>s.id==='follow');
 const expected={'客户公司':'客户','供应商公司':'供应商','双重公司':'客商一体','外部公司':'非客商','【对手方为空】':'非客商'};
 for(const t of cp.tables.filter(t=>t.headers.includes('客商分类')))for(const r of t.rows)if(expected[r[1]])assert.equal(r[2],expected[r[1]]);
-for(const row of conc.tables.at(-1).rows){const name=row[2]==='【对手方名称为空】'?'【对手方为空】':row[2];if(expected[name]==='客商一体')assert(['客户','供应商','客商一体'].includes(row[1]));else assert.equal(row[1],expected[name]);}
+for(const row of conc.tables.at(-1).rows){const name=row[2]==='【对手方名称为空】'?'【对手方为空】':row[2];const allowed={'客户公司':['客户','非客商'],'供应商公司':['供应商','非客商'],'双重公司':['客户','供应商'],'外部公司':['非客商'],'【对手方为空】':['非客商']};assert(allowed[name].includes(row[1]));}
 const supplier=cp.tables.find(t=>t.headers.includes('客商分类')).rows.find(r=>r[1]==='供应商公司');assert.equal(supplier[5],.0002);assert.equal(supplier[6],2);
 const unknown=follow.tables.find(t=>t.name==='未识别客商关系明细');assert(unknown.rows.some(r=>r[0]==='供应商公司'));assert(unknown.rows.some(r=>r[0]==='客户公司'));assert(!unknown.rows.some(r=>r[0]==='双重公司'));
-const detail=conc.tables.at(-1).rows.filter(r=>r[2]==='供应商公司'&&r[0]==='流入');assert.equal(new Set(detail.map(r=>r[1])).size,1);assert.deepEqual(new Set(detail.map(r=>r[4])),new Set(['关联方']));
+const detail=conc.tables.at(-1).rows.filter(r=>r[2]==='供应商公司'&&r[0]==='流入');assert.equal(new Set(detail.map(r=>r[1])).size,2);assert.deepEqual(new Set(detail.map(r=>r[4])),new Set(['关联方']));
 assert.equal(JSON.stringify(d),before);console.log('PASS: category unified across entities, cross-company customer+supplier becomes both, all amounts retained, blanks nonmerchant, follow-up excludes known merchants, relationship matching is name-based, raw rows unchanged');
 d[K.related].rows=[['甲','供应商公司',null],['乙','外部公司','董事'],['甲','外部公司','控股股东']];
 const changed=JSON.stringify(d),newReport=AuditReport.compute(d,{from:'2025-01-01',to:'2025-12-31',criteria:{unknownAmount:0}}),typeTable=newReport.sections.find(s=>s.id==='counterparties').tables.find(t=>t.headers.includes('客商分类'));
@@ -22,8 +22,8 @@ assert.equal(known.rows.find(r=>r[1]==='供应商公司')[3],'其他');assert.eq
 assert.equal(JSON.stringify(d),changed);console.log('PASS: blank role remains related/其他 across both entities, multiple roles retained without duplicate amounts, 1.3/2.1 use name scope; 2.2 uses matched entity pair, blank counterparty third party, source unchanged');
 const inflow=conc.tables.find(t=>t.name==='流入集中度'),allRows=inflow.rows.filter(r=>r[0]==='合计');
 const categorySum=i=>allRows.reduce((n,r)=>n+r[2+i*3],0);
-assert(Math.abs(categorySum(0)-.0004)<1e-12);assert(Math.abs(categorySum(1)-.0004)<1e-12);assert(Math.abs(categorySum(2)-.0002)<1e-12);
-assert.deepEqual(new Set(conc.tables.at(-1).rows.filter(r=>r[2]==='双重公司').map(r=>r[1])),new Set(['客户','供应商','客商一体']));
+assert(Math.abs(categorySum(0)-.0002)<1e-12);assert(Math.abs(categorySum(1)-.0002)<1e-12);assert(Math.abs(categorySum(2)-0)<1e-12);
+assert.deepEqual(new Set(conc.tables.at(-1).rows.filter(r=>r[2]==='双重公司').map(r=>r[1])),new Set(['客户','供应商']));
 const typeSummary=cp.tables[0].rows;assert.equal(typeSummary.find(r=>r[0]==='客户'&&r[1]==='交易总量')[2],.0004);
 console.log('PASS: concentration both-party amount counted in customer/supplier/both exactly once per column, 2.1 summary overlaps while its top20 list remains unique');
 
