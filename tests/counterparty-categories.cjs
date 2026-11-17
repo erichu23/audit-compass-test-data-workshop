@@ -24,9 +24,12 @@ const inflow=conc.tables.find(t=>t.name==='流入集中度'),allRows=inflow.rows
 const categorySum=i=>allRows.reduce((n,r)=>n+r[2+i*3],0);
 assert(Math.abs(categorySum(0)-.0002)<1e-12);assert(Math.abs(categorySum(1)-.0002)<1e-12);assert(Math.abs(categorySum(2)-0)<1e-12);
 assert.deepEqual(new Set(conc.tables.at(-1).rows.filter(r=>r[2]==='双重公司').map(r=>r[1])),new Set(['客户','供应商']));
-const typeSummary=cp.tables[0].rows;assert.equal(typeSummary.find(r=>r[0]==='客户'&&r[1]==='交易总量')[2],.0004);
+const typeSummary=cp.tables[0].rows;assert.equal(typeSummary.find(r=>r[0]==='客户'&&r[1]==='交易总量')[2],.0002);
 console.log('PASS: concentration both-party amount counted in customer/supplier/both exactly once per column, 2.1 summary overlaps while its top20 list remains unique');
 
-for(const cat of ['客户','供应商','客商一体']){const row=typeSummary.find(r=>r[0]===cat&&r[1]==='交易总量');assert.equal(row[3],cat==='客商一体'?2:4);assert.equal(row[4],cat==='客商一体'?.2:.4);}
+for(const cat of ['客户','供应商','客商一体']){const row=typeSummary.find(r=>r[0]===cat&&r[1]==='交易总量');assert.equal(row[3],cat==='客商一体'?0:2);assert.equal(row[4],cat==='客商一体'?0:.2);}
 const right=cp.tables.find(t=>t.headers.includes('客商分类'));assert.equal(right.rows.filter(r=>r[1]==='双重公司').length,1);
-const render=AuditReport.render(AuditReport.selectSections(m,['counterparties']),{allRows:true,forExport:true});assert(render.includes('分类交叉'));console.log('PASS: both directions share overlapping summary/chart data, original percentage denominator retained, right-side counterparty list unique, export disclosure present');
+const render=AuditReport.render(AuditReport.selectSections(m,['counterparties']),{allRows:true,forExport:true});assert(render.includes('组合匹配')||render.includes('组合命中'));console.log('PASS: both directions share overlapping summary/chart data, original percentage denominator retained, right-side counterparty list unique, export disclosure present');
+
+for(const data of [d,{...d,[K.supplier]:{...d[K.supplier],rows:[...d[K.supplier].rows,['甲',null,'双重公司']]}}]){const mm=AuditReport.compute(data,{from:'2025-01-01',to:'2025-12-31'}),cc=mm.sections.find(s=>s.id==='concentration'),pp=mm.sections.find(s=>s.id==='counterparties');for(const [i,cat] of ['客户','供应商','客商一体','非客商'].entries())for(const [j,dir] of ['流入','流出'].entries()){const row=pp.tables[0].rows.find(r=>r[0]===cat&&r[1]==='交易总量'),cr=cc.tables.find(t=>t.name===dir+'集中度').rows.filter(r=>r[0]==='合计');assert(Math.abs(row[2+j*3]-cr.reduce((n,r)=>n+r[2+i*3],0))<1e-12);assert.equal(row[3+j*3],cr.reduce((n,r)=>n+r[3+i*3],0));}const both=pp.tables[0].rows.find(r=>r[0]==='客商一体'&&r[1]==='交易总量');assert.equal(both[3],data===d?0:1);}
+console.log('PASS: 2.1 left chart/table match 1.3 category amounts and counts for both directions; true same-pair dual roles overlap; right lists retain global-name categories');
