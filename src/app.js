@@ -489,7 +489,7 @@ function generationScope(){
 }
 function generateBar(){return `<div class="generate-bar"><div><b>准备生成 <span data-planned-count>${num(config.count)}</span> 笔流水</b><small><span id="generationScope">${h(generationScope())}</span>。生成后先预览流水，可撤销。</small></div><div class="actions"><button data-nav="rules">返回流水规则</button><button id="preflight">预检生成设置</button><button class="primary" id="generate">生成测试数据 <span>→</span></button></div></div>`;}
 function anomalies(){
- const items=[['大额交易（不含单次大额）','big'],['对手方名称及账号均为空','blankCP'],['摘要为空','blankSummary'],['植入余额错误','balanceErrors'],['同账号同日同时间（组）','sameTime'],['缺失同名账户（个）','sameMissing'],['非员工个人交易','person'],['全期仅往来一次的大额交易','once'],['模拟黑名单企业（家）','blacklist'],
+ const items=[['大额交易（不含单次大额）','big'],['对手方名称为空','blankCP'],['摘要为空','blankSummary'],['植入余额错误','balanceErrors'],['同账号同日同时间（组）','sameTime'],['缺失同名账户（个）','sameMissing'],['非员工个人交易','person'],['全期仅往来一次的大额交易','once'],['模拟黑名单企业（家）','blacklist'],
  ['仅客户双向往来（组）','customerPairs'],['仅供应商双向往来（组）','supplierPairs'],['客商重合双向往来（组）','bothPairs'],['非客商双向往来（组）','nonPairs'],['关联企业双向往来（组）','relatedPairs'],['客户关联方双向往来（组）','relatedCustomerPairs'],['供应商关联方双向往来（组）','relatedSupplierPairs'],['客商重合关联方双向往来（组）','relatedBothPairs'],['非客商关联方双向往来（组）','relatedNonPairs'],['合并范围内大额划拨（组）','internalBig'],['员工工资（笔）','employeeRows'],['董监高津贴（笔）','officerRows']];
  const from=Number(config.start.slice(0,4)),to=Number(config.end.slice(0,4));
  const years=Array.from({length:from>0&&to>=from&&to-from<=10?to-from+1:0},(_,i)=>from+i);

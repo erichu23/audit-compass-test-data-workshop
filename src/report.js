@@ -225,10 +225,10 @@ function compute(data,settings={}){
  }
 
  const thresholdLabel='大额单笔交易人民币['+thresholdInWan.format(threshold/10000)+']万元以上'+(threshold===50000?'【系统默认】':'【项目自定义】');
- const features=section('features','1.2 资金流水 – 资金流水性质分析',thresholdLabel+'（含阈值）。范围内外柱图与区间表基于同一批命中流水，方向占比分母为该范围内同方向的大额金额。');
+ const features=section('features','1.2 资金流水 – 资金流水性质分析',thresholdLabel+'（含阈值）。范围内外柱图与区间表基于同一批命中流水，方向占比分母为该范围内同方向的大额金额。对手方为空仅判断对手方名称为空（含纯空格），账号有值仍计入。');
  const tradeAmount=r=>value(r,8,fx)+value(r,10,fx);
  const big=rows.filter(r=>value(r,8,rates)+value(r,10,rates)>=E.cents(threshold));
- const blank=rows.filter(r=>!clean(r[3])&&!clean(r[4]));
+ const blank=rows.filter(r=>!clean(r[3]));
  const blankSummary=rows.filter(r=>!clean(r[16]));
  const groups=[['2.2.1 合并范围内大额',big.filter(r=>own.has(r[3]))],['2.2.1 合并范围外大额',big.filter(r=>!own.has(r[3]))],['2.2.2 对手方信息为空',blank],['2.2.3 摘要信息为空',blankSummary]];
  const overview=[['大额单笔交易',big],...groups];
