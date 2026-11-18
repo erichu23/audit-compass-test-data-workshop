@@ -22,12 +22,14 @@ const currencyCode=v=>String(v??'').trim().toUpperCase();
 const rmbRate=(r,fx)=>{
  const code=currencyCode(r[7]);
  if(code==='CNY'||code==='RMB')return 1;
+ if(fx?.dailyFx)return g.AuditDailyFx.resolve(fx,r[5],code).rate;
  const rate=typeof fx==='number'?(code==='USD'?fx:null):fx?.[code];
  return Number.isFinite(rate)&&rate>0?rate:null;
 };
 function rmbCents(r,index,fx=DEFAULT_FX){
  if(fx?.original)return cents(r[index]);
  const rate=rmbRate(r,fx);
+ if(rate===null&&fx?.dailyFx)throw Error('每日汇率缺失：'+String(r[5]).slice(0,10)+' '+currencyCode(r[7])+'，请补齐或选择原币缺失处理。');
  return rate===null?cents(r[index+1]):Math.round(cents(r[index])*rate);
 }
 function convertRow(r,fx=DEFAULT_FX){

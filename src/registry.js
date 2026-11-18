@@ -52,7 +52,7 @@ function value(record,id,asOf,rates={}){
  }
  if(id==='paidRatio')return record.capital>0&&record.paidIn!=null?record.paidIn*100/record.capital:null;
  if(id==='capital'||id==='paidIn'){
-  const code=clean(record.currency).toUpperCase(),rate=['CNY','RMB'].includes(code)?1:rates[code];
+  const code=clean(record.currency).toUpperCase(),hit=rates.dailyFx?g.AuditDailyFx.resolve(rates,asOf,code):null,rate=['CNY','RMB'].includes(code)?1:hit?(hit.source.includes('未折算')?null:hit.rate):rates[code];
   return record[id]!=null&&Number.isFinite(rate)&&rate>0?Math.round(record[id]*rate*100)/100:null;
  }
  return record[id]??null;

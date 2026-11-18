@@ -139,17 +139,20 @@ function compute(data,settings={}){
  const currencies=[...new Set(all.map(r=>E.currencyCode(r[7])).filter(code=>/^[A-Z]{3}$/.test(code)).map(code=>code==='RMB'?'CNY':code))].sort();
  const originalCurrency=currencies.includes(settings.originalCurrency)?settings.originalCurrency:'';
  const fx=originalCurrency?{...rates,original:true}:rates;
- const fxLabel=Object.entries(rates).map(([code,rate])=>'1 '+code+' = '+formatRate(rate)+' CNY').join('；');
+ const fixedFxLabel=Object.entries(rates).map(([code,rate])=>'1 '+code+' = '+formatRate(rate)+' CNY').join('；');
+ const fxLabel=rates.dailyFx?g.AuditDailyFx.describe(rates):fixedFxLabel;
  const sum=rows=>rows.reduce((a,r)=>add(a,r,fx),aggregate());
  const cut=settings.cut||'12-31';
  const periodRows=all.filter(r=>day(r[5])>=from&&day(r[5])<=to);
  const matchesCurrency=r=>!originalCurrency||(E.currencyCode(r[7])==='RMB'?'CNY':E.currencyCode(r[7]))===originalCurrency;
  const rows=periodRows.filter(matchesCurrency);
+ if(!originalCurrency&&rates.dailyFx)g.AuditDailyFx.assertCoverage(rows,rates);
  const selectedDates=rows.map(r=>day(r[5])).sort();
  const unknown=[...new Set(periodRows.map(r=>E.currencyCode(r[7])).filter(code=>code&&!['CNY','RMB'].includes(code)&&!rates[code]))];
  const yearStart=Number(from.slice(0,4)),yearEnd=Number(to.slice(0,4));
  const a=E.analysis({...data,[K.flow]:{...source,rows}},{cut:'12-31',first:yearStart,last:yearEnd,threshold,fx});
  const model={from,to,minimum,maximum,threshold,criteria,registryBounds:settings.registryBounds,rates,fxLabel,originalCurrency,currencies,cut,sections:[],flow:{headers:source.headers,rows:rows.map(r=>E.convertRow([...r],rates))}};
+ if(rates.dailyFx){model.fxTables={'每日汇率主档':g.AuditDailyFx.table(rates.dailyFx.records),'逐笔汇率换算明细':g.AuditDailyFx.trace(rows,rates,all)};model.mixedFx=!originalCurrency&&rows.some(r=>g.AuditDailyFx.resolve(rates,r[5],r[7]).source.includes('未折算'));}
  const section=(id,title,note='')=>{
   const item={id,title,note,tables:[],charts:[]};
   model.sections.push(item);return item;
@@ -729,7 +732,7 @@ function reportPages(m){
  pieces.forEach((content,i)=>{for(const match of content.matchAll(/<(?:h2|h3)[^>]*>([^<]+)<\/(?:h2|h3)>/g))if(!tocPages.has(match[1]))tocPages.set(match[1],bodyNumbers[i]);});
  for(let i=0;i<pieces.length;i++)if(pieces[i].includes('class="report-toc"'))pieces[i]=pieces[i].replace(/(<li[^>]*><a[^>]*>)([^<]+)(<\/a>)(<\/li>)/g,(_,open,title,close,end)=>open+title+close+'<span class="report-toc-dots"></span><span class="report-toc-page">'+(tocPages.get(title)||'')+'</span>'+end);
  return pieces.map((content,i)=>'<div class="report-sheet" data-report-front="'+front[i]+'"'+(bodyNumbers[i]===1?' data-report-body-first="true"':'')+'>'+'<div class="report-sheet-header"><span>毕马威审计罗盘</span><span>综合分析报告（年审适用）</span></div>'+
-  '<div class="report-sheet-content" data-report-front="'+front[i]+'">'+content+'</div><footer class="report-sheet-footer"><span>审计项目资料</span><span>'+esc(rangeLabel(m.from,m.to))+'</span><span>'+(front[i]?'':'第 '+bodyNumbers[i]+' 页')+'</span></footer></div>').join('');
+  '<div class="report-sheet-content" data-report-front="'+front[i]+'">'+(m.mixedFx?'<p class="report-boundary-note">金额为人民币与缺失汇率时未折算原币的混合口径；详见逐笔汇率换算明细。</p>':'')+content+'</div><footer class="report-sheet-footer"><span>审计项目资料</span><span>'+esc(rangeLabel(m.from,m.to))+'</span><span>'+(front[i]?'':'第 '+bodyNumbers[i]+' 页')+'</span></footer></div>').join('');
 }
 function render(m,{allRows=false,forExport=false}={}){
  renderAllRows=allRows;renderForExport=forExport;
@@ -743,7 +746,7 @@ function render(m,{allRows=false,forExport=false}={}){
  }
  const current=m.from+'|'+m.to;
  const output='<section class="panel report-controls"><div class="panel-heading"><h3>选择分析与导出期间</h3><div class="actions"><button id="reportPrint"'+(m.sections.length?'':' disabled')+'>打印横版报告</button><button id="reportWord"'+(m.sections.length?'':' disabled')+'>下载 Word 报告</button><button class="primary" id="reportExport"'+(m.sections.length?'':' disabled')+'>下载本期核验 Excel</button></div></div><div class="report-inputs"><label>金额口径<select id="reportCurrency"><option value="">折算人民币（CNY）</option>'+m.currencies.map(code=>'<option value="'+code+'"'+(code===m.originalCurrency?' selected':'')+'>原币 · '+code+'</option>').join('')+'</select></label><label>财年截止日<select id="reportCut">'+['03-31','06-30','09-30','12-31'].map(c=>'<option'+(c===m.cut?' selected':'')+'>'+c+'</option>').join('')+'</select></label><label>期间快捷选择<select id="reportPreset"><option value="">自定义日期</option>'+presets.map(([label,value,year])=>'<option value="'+esc(value)+'"'+(year?' data-year="'+year+'"':'')+(value===current?' selected':'')+'>'+esc(label)+'</option>').join('')+'</select></label><label>开始日期<input id="reportFrom" type="date" value="'+esc(m.from)+'"></label><label>结束日期<input id="reportTo" type="date" value="'+esc(m.to)+'"></label><button id="reportApply">应用区间</button></div><p class="muted">Word 目录需在打开后更新域，页码按正文重新计算，封面和目录不编号。日期包含首尾两天。财年按结束年份命名；导出使用已应用的期间，含核验表及本期流水。上传整套数据请使用「测试数据生成 → 导出测试数据」。</p>'+ '<details class="report-macro-tools"><summary>目录更新宏设置（首次配置后，允许宏时打开报告自动弹窗）</summary><p>先下载配置包，在 Word 中保存宏模板，再导入此处。导入后下载的报告为 .docm；未导入时仍为 .docx。宏受 Word 安全设置控制。</p><div class="actions"><button id="reportMacroKit">下载宏代码与设置说明</button><button id="reportMacroTemplate">导入宏模板（.docm / .dotm）</button><span>'+ (g.AuditWord?.hasMacroTemplate()?'本次会话已加载宏模板':'尚未加载宏模板')+'</span></div></details>'+sectionPicker(m)+'<nav class="report-index" aria-label="报告章节">'+m.sections.filter(s=>s.id!=='background').map(s=>'<a href="#report-'+s.id+'">'+esc(s.title.startsWith('综合')?'封面':s.title.split(' ').slice(0,2).join(' '))+'</a>').join('')+'</nav></section>'+
- '<article class="report-document" aria-label="综合分析报告预览">'+(m.sections.length?amountLabels(reportPages(m),m.originalCurrency):'<p class="empty">请至少勾选一个报告章节，预览和导出将按所选内容生成。</p>')+'</article>';
+ '<article class="report-document" aria-label="综合分析报告预览">'+(m.mixedFx?'<p class="report-boundary-note"><strong>金额口径：本报告包含缺少当日汇率、按原币数值计入的交易，属于人民币与未折算原币的混合口径。请结合逐笔汇率换算明细核验。</strong></p>':'')+(m.sections.length?amountLabels(reportPages(m),m.originalCurrency):'<p class="empty">请至少勾选一个报告章节，预览和导出将按所选内容生成。</p>')+'</article>';
  renderAllRows=false;renderForExport=false;
  return output;
 }
@@ -755,7 +758,7 @@ function workbook(m){
    if(!tables[c.name])tables[c.name]=exportReportTable({headers:['类别','对手方数量','流入金额（百万元）','流入笔数','流入占比','流出金额（百万元）','流出笔数','流出占比'],rows:c.rows},m.originalCurrency);
   }
  }
- return {...tables,'核验口径':{headers:['章节','口径'],rows:[...m.sections.map(s=>[s.title,amountLabels(s.note,m.originalCurrency)]),...m.sections.flatMap(s=>s.tables.filter(t=>t.note).map(t=>[t.name,amountLabels(t.note,m.originalCurrency)])),['分析期间',rangeLabel(m.from,m.to)],['金额口径',m.originalCurrency?'原币 '+m.originalCurrency:'折算人民币'],['测试汇率',m.fxLabel],['大额判断阈值（CNY）',currency.format(m.threshold)]]},'本期流水明细':m.flow};
+ return {...tables,...m.fxTables,'核验口径':{headers:['章节','口径'],rows:[...m.sections.map(s=>[s.title,amountLabels(s.note,m.originalCurrency)]),...m.sections.flatMap(s=>s.tables.filter(t=>t.note).map(t=>[t.name,amountLabels(t.note,m.originalCurrency)])),['分析期间',rangeLabel(m.from,m.to)],['金额口径',m.originalCurrency?'原币 '+m.originalCurrency:m.mixedFx?'混合口径（缺失汇率时原币数值计入）':'折算人民币'],['测试汇率',m.fxLabel],['大额判断阈值（CNY）',currency.format(m.threshold)]]},'本期流水明细':m.flow};
 }
 g.AuditReport={theme,compute,render,workbook,selectSections,fiscalPeriod,mountPagers,parseCriteria,formatTables};
 })(globalThis);
