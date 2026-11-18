@@ -107,3 +107,5 @@
 
 
 .daily-fx-records{max-height:480px;overflow:auto}.daily-fx-records thead th{position:sticky;top:0;z-index:2;background:#edf3fb}.daily-fx-records td{font-variant-numeric:tabular-nums}
+
+.hero .home-secondary-actions{margin-top:14px;gap:14px}.hero .home-secondary-actions .text{padding:4px 0}.hero .actions{flex-wrap:wrap}.sidebar .sidebar-foot button{display:block;width:100%;text-align:left}
