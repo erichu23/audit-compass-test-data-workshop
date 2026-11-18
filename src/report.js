@@ -148,7 +148,7 @@ function compute(data,settings={}){
  const rows=periodRows.filter(matchesCurrency);
  if(!originalCurrency&&rates.dailyFx)g.AuditDailyFx.assertCoverage(rows,rates);
  const selectedDates=rows.map(r=>day(r[5])).sort();
- const unknown=[...new Set(periodRows.map(r=>E.currencyCode(r[7])).filter(code=>code&&!['CNY','RMB'].includes(code)&&!rates[code]))];
+ const unknown=[...new Set(periodRows.map(r=>E.currencyCode(r[7])).filter(code=>!rates.dailyFx&&code&&!['CNY','RMB'].includes(code)&&!rates[code]))];
  const yearStart=Number(from.slice(0,4)),yearEnd=Number(to.slice(0,4));
  const a=E.analysis({...data,[K.flow]:{...source,rows}},{cut:'12-31',first:yearStart,last:yearEnd,threshold,fx});
  const model={from,to,minimum,maximum,threshold,criteria,registryBounds:settings.registryBounds,rates,fxLabel,originalCurrency,currencies,cut,sections:[],flow:{headers:source.headers,rows:rows.map(r=>E.convertRow([...r],rates))}};
