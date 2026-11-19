@@ -26,13 +26,28 @@ const rmbRate=(r,fx)=>{
  const rate=typeof fx==='number'?(code==='USD'?fx:null):fx?.[code];
  return Number.isFinite(rate)&&rate>0?rate:null;
 };
+const importedRmbFields=[[9,'流入'],[11,'流出'],[13,'余额']];
+function assertImportedRmb(rows){
+ let missing=0,first;
+ rows.forEach((row,i)=>{
+  for(const [column,label] of importedRmbFields){
+   const value=row[column];
+   if((typeof value==='number'||typeof value==='string'&&value.trim()!=='')&&Number.isFinite(Number(value)))continue;
+   if(!first)first='第 '+(i+1)+' 笔流水缺少有效的等值人民币'+label+'金额';
+   missing++;
+  }
+ });
+ if(missing)throw Error(first+'，共 '+missing+' 个金额缺失或无效。请在流水文件补齐金额（无发生额填 0）。');
+}
 function rmbCents(r,index,fx=DEFAULT_FX){
  if(fx?.original)return cents(r[index]);
+ if(fx?.importedRmb)return cents(r[index+1]);
  const rate=rmbRate(r,fx);
  if(rate===null&&fx?.dailyFx)throw Error('每日汇率缺失：'+String(r[5]).slice(0,10)+' '+currencyCode(r[7])+'，请补齐或选择原币缺失处理。');
  return rate===null?cents(r[index+1]):Math.round(cents(r[index])*rate);
 }
 function convertRow(r,fx=DEFAULT_FX){
+ if(fx?.importedRmb)return r;
  if(rmbRate(r,fx)!==null)for(const i of [8,10,12])r[i+1]=money(rmbCents(r,i,fx));
  return r;
 }
@@ -504,5 +519,5 @@ function checksWorkbook(a){return{
 '每日趋势':{headers:['交易日期','流入金额','流出金额','流入笔数','流出笔数'],rows:a.daily},
 '月度趋势':{headers:['月份','流入金额','流出金额','流入笔数','流出笔数'],rows:a.monthly},
 '核验口径':{headers:['项目','说明'],rows:[['金额','金额折算为人民币后加总；逐笔折算保留两位小数。'],['折算汇率（CNY/原币）',Object.entries(typeof a.fx==='number'?{USD:a.fx}:a.fx).filter(([k])=>k!=='original').map(([k,v])=>k+' '+v).join('；')],['余额','账户余额取该期间最后一笔交易后等值人民币余额，不加总年度余额。'],['集中度','先按每个客商分类的对手方金额排名，再拆关联方/第三方。占比按该客商分类方向总金额。空白名称金额及笔数归入合计和其他，跳过排名。'],['内部交易','被审计单位之间往来从集中度、对手方前20剔除。'],['个人识别','按员工名单及简短姓名作测试标签，不替代真实个人识别。'],['余额断点','比较同账号上一笔余额＋本笔流入－流出；不验证每账号首笔期初。'],['资料性质','全部银行账户、人员关系和交易为测试资料，不表示真实企业事实。']]}};}
-g.AuditEngine={KEYS,counterpartyCategories,counterpartyRelationships,copy,rename,annotate,validate,generate,generationAccounts,addCompany,removeCompany,previewFlowRows,masterSamples,MASTER_GROUPS,ACCOUNT_GROUPS,companyCatalog,companyGroups,availableCompanyGroups,analysis,checksWorkbook,periods,accountList,randomCompanies,currencyCode,cents,money,isRelatedOfficer,DEFAULT_FX,rmbCents,convertRow,blacklist:Object.freeze(blacklist)};
+g.AuditEngine={KEYS,counterpartyCategories,counterpartyRelationships,copy,rename,annotate,validate,generate,generationAccounts,addCompany,removeCompany,previewFlowRows,masterSamples,MASTER_GROUPS,ACCOUNT_GROUPS,companyCatalog,companyGroups,availableCompanyGroups,analysis,checksWorkbook,periods,accountList,randomCompanies,currencyCode,cents,money,isRelatedOfficer,DEFAULT_FX,rmbCents,convertRow,assertImportedRmb,blacklist:Object.freeze(blacklist)};
 })(globalThis);
