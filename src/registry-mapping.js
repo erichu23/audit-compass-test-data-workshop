@@ -7,14 +7,22 @@ function preset(headers,map,options){return {type:'AuditCompass.RegistryMapping'
 function scaleFor(header){const s=String(header||'');return s.includes('亿元')?1e8:s.includes('万元')?1e4:s.includes('百万')?1e6:1;}
 function normalizeDate(v,epoch=25569){if(typeof v==='number')return new Date(Math.round((v-epoch)*86400000)).toISOString().slice(0,10);let s=String(v).trim().replace(/年|月/g,'-').replace(/日/g,'').replace(/\//g,'-');s=s.split(/[T\s]/)[0];const m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);return m?m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0'):s;}
 function convert(table,map,options={}){
- if(!Number.isInteger(map.name)||map.name<0||map.name>=table.headers.length)throw Error('必须映射“对手方名称”。');
  const errors=[],warnings=[],found=new Map(),duplicates=options.duplicates||'error';if(!['error','first','last'].includes(duplicates))throw Error('重复名称处理方式无效。');
  for(const id of ['capital','paidIn'])if(![1,10000,1000000,100000000].includes(Number(options[id+'Scale']||1)))throw Error('资本单位设置无效。');
+ if(!Number.isInteger(map.name)||map.name<0||map.name>=table.headers.length){
+  return {records:[],errors,warnings:['请选择企业名称对应的来源列后再导入。'],sourceRows:table.rows.length};
+ }
+ let skipped=0;
  for(const [i,row] of table.rows.entries()){
+  if(!R.hasImportName(row[map.name])){skipped++;continue;}
   try{
    const input={};for(const [id,label,type] of R.fields){const c=map[id];if(c!==undefined&&c!==-1&&(!Number.isInteger(c)||c<0||c>=table.headers.length))throw Error(label+'的映射列无效');let v=c===undefined||c===-1?null:row[c]??null;
     if(v==null||String(v).trim()===''||['-','—','未提供','不详'].includes(String(v).trim()))v=null;
     else if(['credit','tax'].includes(id)&&typeof v==='number'&&!Number.isSafeInteger(v))throw Error(label+'超过Excel数字精度，请在来源文件中使用文本');
+    else if(id==='end'){
+     if(typeof v==='number'&&Number.isFinite(new Date(Math.round((v-(options.epoch||25569))*86400000)).getTime()))v=normalizeDate(v,options.epoch||25569);
+     else if(/^\s*\d{4}[-/年]\d{1,2}[-/月]\d{1,2}(?:日|\s|T|$)/.test(String(v)))v=normalizeDate(v,options.epoch||25569);
+    }
     else if(type==='date')v=normalizeDate(v,options.epoch||25569);
     else if(type==='integer'||type==='number'){v=typeof v==='string'?v.trim().replace(/[,，]/g,''):v;v=Number(v);if(id==='capital'||id==='paidIn')v*=Number(options[id+'Scale']||1);}
     else if(type==='flag'){const raw=String(v).trim().toLowerCase();v=['是','yes','true','有'].includes(raw)||/^\d+$/.test(raw)&&Number(raw)>0?'是':['否','no','false','无','0'].includes(raw)?'否':v;}
@@ -25,6 +33,7 @@ function convert(table,map,options={}){
    found.set(r.name,r);
   }catch(e){errors.push('第'+(i+2)+'行：'+e.message);}
  }
+ if(skipped)warnings.unshift('已跳过 '+skipped+' 行没有对手方名称的记录。');
  if(!table.rows.length)errors.push('所选工作表没有数据行。');
  return {records:[...found.values()],errors,warnings,sourceRows:table.rows.length};
 }

@@ -2253,7 +2253,7 @@ types+=`<Override PartName="/xl/worksheets/sheet${index}.xml" ContentType="appli
 const styles=`<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="${ns}"><numFmts count="2"><numFmt numFmtId="164" formatCode="#,##0"/><numFmt numFmtId="165" formatCode="0.###############"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Arial"/><color rgb="FF20334A"/></font><font><b/><sz val="11"/><name val="Arial"/><color rgb="FFFFFFFF"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF193E58"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left style="thin"><color rgb="FFD0DCE4"/></left><right style="thin"><color rgb="FFD0DCE4"/></right><top style="thin"><color rgb="FFD0DCE4"/></top><bottom style="thin"><color rgb="FFD0DCE4"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="7"><xf numFmtId="49" fontId="0" fillId="0" borderId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="49" fontId="1" fillId="2" borderId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="4" fontId="0" fillId="0" borderId="0"/><xf numFmtId="1" fontId="0" fillId="0" borderId="0"/><xf numFmtId="10" fontId="0" fillId="0" borderId="0"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
 z.file('xl/styles.xml',styles);z.file('xl/workbook.xml',`<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${ns}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets}</sheets></workbook>`);z.file('xl/_rels/workbook.xml.rels',`<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels}<Relationship Id="rId${index+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);z.file('_rels/.rels','<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');z.file('[Content_Types].xml',`<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${types}</Types>`);return z.generateAsync({type:'uint8array',compression:'DEFLATE'});}
 function xml(s){const d=new DOMParser().parseFromString(s,'application/xml');if(d.querySelector('parsererror'))throw Error('Excel内部XML格式有误');return d;}
-async function read(file){const z=await JSZip.loadAsync(file);const shared=z.file('xl/sharedStrings.xml')?Array.from(xml(await z.file('xl/sharedStrings.xml').async('string')).getElementsByTagName('si')).map(e=>[...e.getElementsByTagName('t')].map(t=>t.textContent).join('')):[];const wb=xml(await z.file('xl/workbook.xml').async('string')),rel=xml(await z.file('xl/_rels/workbook.xml.rels').async('string'));const excelEpoch=['1','true'].includes(wb.getElementsByTagName('workbookPr')[0]?.getAttribute('date1904'))?24107:25569;const paths=new Map([...rel.getElementsByTagName('Relationship')].map(e=>[e.getAttribute('Id'),e.getAttribute('Target')]));const result={};for(const sheet of wb.getElementsByTagName('sheet')){const name=sheet.getAttribute('name'),id=sheet.getAttribute('r:id'),target=paths.get(id);if(!target)continue;const path=target.startsWith('/')?target.slice(1):'xl/'+target.replace(/^\.\//,'');if(!z.file(path))continue;const doc=xml(await z.file(path).async('string')),rows=[];for(const el of doc.getElementsByTagName('row')){const row=[];for(const c of el.getElementsByTagName('c')){const addr=c.getAttribute('r')||'',letters=addr.match(/^[A-Z]+/)?.[0]||'A';let j=0;for(const s of letters)j=j*26+s.charCodeAt(0)-64;j--;const type=c.getAttribute('t'),v=c.getElementsByTagName('v')[0]?.textContent;row[j]=type==='s'?shared[Number(v)]:type==='inlineStr'?[...c.getElementsByTagName('t')].map(t=>t.textContent).join(''):type==='b'?v==='1':v===undefined?null:type==='str'?v:Number.isFinite(Number(v))?Number(v):v;}if(row.some(v=>v!==null&&v!==''&&v!==undefined))rows.push(row);}if(!rows.length)continue;const headers=rows.shift().map(String),data=rows.map(r=>headers.map((h,j)=>{let v=r[j]??null;if(typeof v==='number'&&/日期|经营开始时间|经营结束时间|开立时间|注销时间|入职|离职|批准|无效|期间\d+_[从到]/.test(h))v=new Date(Math.round((v-excelEpoch)*86400000)).toISOString().slice(0,10);if(typeof v==='number'&&h==='交易时间'){let s=Math.round(v*86400)%86400;v=[Math.floor(s/3600),Math.floor(s/60)%60,s%60].map(n=>String(n).padStart(2,'0')).join(':');}if(v!==null&&/账号|员工ID|编号|税号|流水识别号/.test(h)){if(typeof v==='number'&&!Number.isSafeInteger(v))throw Error(name+'的'+h+'超过Excel数字精度，请将原始数据中的该列设为文本后重试。');v=String(v);}return v;}));result[name]={headers,rows:data};}return result;}
+async function read(file){const z=await JSZip.loadAsync(file);const shared=z.file('xl/sharedStrings.xml')?Array.from(xml(await z.file('xl/sharedStrings.xml').async('string')).getElementsByTagName('si')).map(e=>[...e.getElementsByTagName('t')].map(t=>t.textContent).join('')):[];const wb=xml(await z.file('xl/workbook.xml').async('string')),rel=xml(await z.file('xl/_rels/workbook.xml.rels').async('string'));const excelEpoch=['1','true'].includes(wb.getElementsByTagName('workbookPr')[0]?.getAttribute('date1904'))?24107:25569;const paths=new Map([...rel.getElementsByTagName('Relationship')].map(e=>[e.getAttribute('Id'),e.getAttribute('Target')]));const result={};for(const sheet of wb.getElementsByTagName('sheet')){const name=sheet.getAttribute('name'),id=sheet.getAttribute('r:id'),target=paths.get(id);if(!target)continue;const path=target.startsWith('/')?target.slice(1):'xl/'+target.replace(/^\.\//,'');if(!z.file(path))continue;const doc=xml(await z.file(path).async('string')),rows=[];for(const el of doc.getElementsByTagName('row')){const row=[];for(const c of el.getElementsByTagName('c')){const addr=c.getAttribute('r')||'',letters=addr.match(/^[A-Z]+/)?.[0]||'A';let j=0;for(const s of letters)j=j*26+s.charCodeAt(0)-64;j--;const type=c.getAttribute('t'),v=c.getElementsByTagName('v')[0]?.textContent;row[j]=type==='s'?shared[Number(v)]:type==='inlineStr'?[...c.getElementsByTagName('t')].map(t=>t.textContent).join(''):type==='b'?v==='1':v===undefined?null:type==='str'?v:Number.isFinite(Number(v))?Number(v):v;}if(row.some(v=>v!==null&&v!==''&&v!==undefined))rows.push(row);}if(!rows.length)continue;const headers=rows.shift().map(String),data=rows.map(r=>headers.map((h,j)=>{let v=r[j]??null;if(typeof v==='number'&&/日期|经营开始时间|经营结束时间|开立时间|注销时间|入职|离职|批准|无效|期间\d+_[从到]/.test(h)){const parsedDate=new Date(Math.round((v-excelEpoch)*86400000));if(h.trim()!=='经营结束时间'||Number.isFinite(parsedDate.getTime()))v=parsedDate.toISOString().slice(0,10);}if(typeof v==='number'&&h==='交易时间'){let s=Math.round(v*86400)%86400;v=[Math.floor(s/3600),Math.floor(s/60)%60,s%60].map(n=>String(n).padStart(2,'0')).join(':');}if(v!==null&&/账号|员工ID|编号|税号|流水识别号/.test(h)){if(typeof v==='number'&&!Number.isSafeInteger(v))throw Error(name+'的'+h+'超过Excel数字精度，请将原始数据中的该列设为文本后重试。');v=String(v);}return v;}));result[name]={headers,rows:data};}return result;}
 function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);}
 g.AuditExcel={workbook,read,download};
 })(globalThis);
@@ -2504,19 +2504,31 @@ function bucket(n,bounds,id){
  const index=bounds.findIndex(edge=>n<edge);
  return index<0?bounds.length:index;
 }
+function hasImportName(value){
+ const name=clean(value);
+ return name!==''&&!['-','—','未提供','不详'].includes(name);
+}
+function importRecords(inputs){
+ const records=[];
+ let skipped=0;
+ for(const input of inputs){
+  if(!hasImportName(input.name)){skipped++;continue;}
+  records.push(readRecord(input));
+ }
+ return {records,skipped};
+}
 function readRecord(input){
  const out={};
  for(const [k,label,type] of fields){
   const v=clean(input[k]);
   if(!v){out[k]=null;continue;}
-  if(type==='date'&&!date(v))throw Error(label+'请输入有效日期。');
+  if(type==='date'&&k!=='end'&&!date(v))throw Error(label+'请输入有效日期。');
   if(type==='integer'||type==='number'){
    if(!Number.isFinite(Number(v))||Number(v)<0||type==='integer'&&!Number.isInteger(Number(v)))throw Error(label+'请输入非负'+(type==='integer'?'整数':'数值')+'。');
    out[k]=Number(v);
   }else out[k]=v;
  }
  if(!out.name)throw Error('请填写对手方名称。');
- if(out.start&&out.end&&out.end<out.start)throw Error('经营结束时间不能早于经营开始时间。');
  if(out.currency){out.currency=out.currency.toUpperCase();if(!/^[A-Z]{3}$/.test(out.currency))throw Error('注册资本币种请填写三位代码。');}
  if(out.dishonest&&!['是','否'].includes(out.dishonest))throw Error('失信被执行人请填写是或否。');
  return out;
@@ -2552,7 +2564,7 @@ function generate(names,asOf,settings={},offset=0){
 function table(records,asOf,rates){
  return {headers:fields.map(x=>x[1]),rows:records.map(r=>fields.map(([k])=>r[k]))};
 }
-g.AuditRegistry={INTERVAL_VERSION,migrateSettings,fields,metrics,boundsFor,intervalLabels,value,bucket,readRecord,parseBounds,generate,table,automaticDates,dayCalculationTable,riskCounts,riskTables};
+g.AuditRegistry={INTERVAL_VERSION,migrateSettings,fields,metrics,boundsFor,intervalLabels,value,bucket,readRecord,hasImportName,importRecords,parseBounds,generate,table,automaticDates,dayCalculationTable,riskCounts,riskTables};
 })(globalThis);
 </script><script>(function(g){
 'use strict';
@@ -2563,14 +2575,22 @@ function preset(headers,map,options){return {type:'AuditCompass.RegistryMapping'
 function scaleFor(header){const s=String(header||'');return s.includes('亿元')?1e8:s.includes('万元')?1e4:s.includes('百万')?1e6:1;}
 function normalizeDate(v,epoch=25569){if(typeof v==='number')return new Date(Math.round((v-epoch)*86400000)).toISOString().slice(0,10);let s=String(v).trim().replace(/年|月/g,'-').replace(/日/g,'').replace(/\//g,'-');s=s.split(/[T\s]/)[0];const m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);return m?m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0'):s;}
 function convert(table,map,options={}){
- if(!Number.isInteger(map.name)||map.name<0||map.name>=table.headers.length)throw Error('必须映射“对手方名称”。');
  const errors=[],warnings=[],found=new Map(),duplicates=options.duplicates||'error';if(!['error','first','last'].includes(duplicates))throw Error('重复名称处理方式无效。');
  for(const id of ['capital','paidIn'])if(![1,10000,1000000,100000000].includes(Number(options[id+'Scale']||1)))throw Error('资本单位设置无效。');
+ if(!Number.isInteger(map.name)||map.name<0||map.name>=table.headers.length){
+  return {records:[],errors,warnings:['请选择企业名称对应的来源列后再导入。'],sourceRows:table.rows.length};
+ }
+ let skipped=0;
  for(const [i,row] of table.rows.entries()){
+  if(!R.hasImportName(row[map.name])){skipped++;continue;}
   try{
    const input={};for(const [id,label,type] of R.fields){const c=map[id];if(c!==undefined&&c!==-1&&(!Number.isInteger(c)||c<0||c>=table.headers.length))throw Error(label+'的映射列无效');let v=c===undefined||c===-1?null:row[c]??null;
     if(v==null||String(v).trim()===''||['-','—','未提供','不详'].includes(String(v).trim()))v=null;
     else if(['credit','tax'].includes(id)&&typeof v==='number'&&!Number.isSafeInteger(v))throw Error(label+'超过Excel数字精度，请在来源文件中使用文本');
+    else if(id==='end'){
+     if(typeof v==='number'&&Number.isFinite(new Date(Math.round((v-(options.epoch||25569))*86400000)).getTime()))v=normalizeDate(v,options.epoch||25569);
+     else if(/^\s*\d{4}[-/年]\d{1,2}[-/月]\d{1,2}(?:日|\s|T|$)/.test(String(v)))v=normalizeDate(v,options.epoch||25569);
+    }
     else if(type==='date')v=normalizeDate(v,options.epoch||25569);
     else if(type==='integer'||type==='number'){v=typeof v==='string'?v.trim().replace(/[,，]/g,''):v;v=Number(v);if(id==='capital'||id==='paidIn')v*=Number(options[id+'Scale']||1);}
     else if(type==='flag'){const raw=String(v).trim().toLowerCase();v=['是','yes','true','有'].includes(raw)||/^\d+$/.test(raw)&&Number(raw)>0?'是':['否','no','false','无','0'].includes(raw)?'否':v;}
@@ -2581,6 +2601,7 @@ function convert(table,map,options={}){
    found.set(r.name,r);
   }catch(e){errors.push('第'+(i+2)+'行：'+e.message);}
  }
+ if(skipped)warnings.unshift('已跳过 '+skipped+' 行没有对手方名称的记录。');
  if(!table.rows.length)errors.push('所选工作表没有数据行。');
  return {records:[...found.values()],errors,warnings,sourceRows:table.rows.length};
 }
@@ -2593,7 +2614,7 @@ const norm=s=>String(s??'').replace(/[\s*＊]/g,'').replace(/（/g,'(').replace(
 function prepare(entries,current,mode='new'){
  if(!['new','replace'].includes(mode))throw Error('请选择有效的导入方式。');
  const schema=g.BASELINE||g.AuditBaseline,keys=Object.keys(schema),data=mode==='replace'?g.AuditEngine.copy(current):Object.fromEntries(keys.map(k=>[k,{headers:[...schema[k].headers],rows:[]}]));
- const summaries=[],warnings=[],ignored=[],received=new Map();let registry=null,rawRegistry=null;
+ const summaries=[],warnings=[],ignored=[],received=new Map();let registry=null,rawRegistry=null,registrySkipped=false;
  function appendRegistry(existing,records){if(existing===null)return records;const seen=new Set(existing.map(r=>JSON.stringify(r))),fresh=records.filter(r=>!seen.has(JSON.stringify(r)));if(fresh.length<records.length)warnings.push('工商档案：跨文件相同记录 '+(records.length-fresh.length)+' 条仅导入一次。');return existing.concat(fresh);}
  for(const {file,name,table:t} of entries){
   if(/(?:^|\/)核验资料\//.test(file)||/核验预期值/.test(file)){ignored.push(file+' / '+name);continue;}
@@ -2604,8 +2625,15 @@ function prepare(entries,current,mode='new'){
   let key=keys.find(k=>norm(k)===norm(name)||norm(k)===norm(base));
   const raw=name==='导入原始工商档案',reg=raw||name==='对手方工商档案'||(!key&&column.has(norm('对手方名称'))&&column.has(norm('经营开始时间'))&&column.has(norm('注册资本')));
   if(reg){
-   if(!column.has(norm('对手方名称')))throw Error(file+' / '+name+'缺少对手方名称列。');
-   const records=t.rows.map(row=>g.AuditRegistry.readRecord(Object.fromEntries(g.AuditRegistry.fields.map(([id,label])=>[id,row[column.get(norm(label))]]))));
+   if(!column.has(norm('对手方名称'))){
+    warnings.push(file+' / '+name+'：未找到名称列。可在工商数据导入页面手动映射。');
+    registrySkipped=true;
+    continue;
+   }
+   const R=g.AuditRegistry;
+   const {records,skipped}=R.importRecords(t.rows.map(row=>Object.fromEntries(R.fields.map(([id,label])=>[id,row[column.get(norm(label))]]))));
+   if(skipped)warnings.push(file+' / '+name+'：已跳过 '+skipped+' 行没有对手方名称的记录。');
+   if(skipped&&!records.length){registrySkipped=true;continue;}
    if(raw)rawRegistry=appendRegistry(rawRegistry,records);else registry=appendRegistry(registry,records);
    summaries.push({file,sheet:name,target:raw?'工商原始档案':'对手方工商档案',count:records.length});continue;
   }
@@ -2634,12 +2662,13 @@ function prepare(entries,current,mode='new'){
   data[key].rows.push(...rows);received.set(key,received.get(key)+rows.length);
   summaries.push({file,sheet:name,target:key,count:rows.length});
  }
- if(!received.size&&registry===null&&rawRegistry===null)throw Error('没有识别到平台模板。请使用平台导出的Excel列名，或先下载空白模板填写。');
+ const noUsableData=!received.size&&registry===null&&rawRegistry===null;
+ if(noUsableData&&!registrySkipped)throw Error('没有识别到平台模板。请使用平台导出的Excel列名，或先下载空白模板填写。');
  if(rawRegistry!==null){registry=rawRegistry;warnings.push('工商数据优先使用“导入原始工商档案”，未将计算后的工商档案重复导入。');}
  const missing=keys.filter(k=>!received.has(k));
  const validation=g.AuditEngine.validate(data);
  const flow=data[g.AuditEngine.KEYS.flow],di=flow.headers.indexOf('交易日期'),dates=flow.rows.map(r=>String(r[di]||'').slice(0,10)).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
- return {data,registry,summaries,warnings:[...warnings,...validation.warnings],errors:validation.errors,ignored,missing,mode,from:dates[0]||'',to:dates.at(-1)||''};
+ return {data,registry,noUsableData,summaries,warnings:[...warnings,...validation.warnings],errors:validation.errors,ignored,missing,mode,from:dates[0]||'',to:dates.at(-1)||''};
 }
 g.AuditTemplateImport={prepare};
 })(globalThis);
@@ -26827,9 +26856,9 @@ function templatePage({draft:d,mode,imported,read,keys}){
  const recognized=new Map();for(const s of d?.summaries||[])recognized.set(s.target,(recognized.get(s.target)||0)+s.count);
  const guide=`<details class="ui-guide" ${d?'':'open'}><summary>支持哪些文件？查看9类主档／流水及示例文件名</summary>${filesGuide(keys)}<div class="ui-guide-note">工商标准模板：对手方工商档案.xlsx。表头不同请使用“工商数据导入”；每日汇率请使用独立的“每日汇率”入口。支持表名、文件名或完整模板表头识别，文件名不要求完全一致。</div><div class="actions"><button id="downloadImportTemplate">下载全部空白模板</button><button data-nav="registryMap">工商数据导入</button><button data-nav="dailyFx">每日汇率</button></div></details>`;
  const files=read.files?.length?`<details class="ui-selected-files" ${read.phase==='reading'?'open':''}><summary>本次选择 ${number(read.files.length)} 个文件 · 查看文件列表</summary>${read.files.map(f=>`<div><span class="ui-file-icon">${f.name.toLowerCase().endsWith('.zip')?'ZIP':'X'}</span><b>${esc(f.name)}</b><small>${(f.size/1024).toLocaleString('zh-CN',{maximumFractionDigits:1})} KB</small>${tag(read.phase==='reading'?'读取中':read.phase==='error'?'检查未完成':d?'已读取':'待检查',read.phase==='error'?'error':d?'success':'neutral')}</div>`).join('')}</details>`:'';
- let feedback='';if(read.phase==='reading')feedback=notice('info','正在读取并检查文件','正在读取Excel工作表和模板字段，请稍候。');else if(read.phase==='error')feedback=notice('error','本次导入未完成',read.error);else if(imported)feedback=notice('success','数据已导入当前项目','可以直接进入功能验证，或到生成／修改数据中继续编辑；修改会沿用当前项目。下次打开JSON可恢复完整项目。');else if(d)feedback=notice(d.errors.length?'error':'info',d.errors.length?'请先处理格式错误':'文件已读取，等待确认',d.errors.length?'下方列出具体原因，修正来源文件后重新选择。':'当前项目尚未改变。确认导入后才会载入以下数据。');
+ let feedback='';if(read.phase==='reading')feedback=notice('info','正在读取并检查文件','正在读取Excel工作表和模板字段，请稍候。');else if(read.phase==='error')feedback=notice('error','本次导入未完成',read.error);else if(imported)feedback=notice('success','数据已导入当前项目','可以直接进入功能验证，或到生成／修改数据中继续编辑；修改会沿用当前项目。下次打开JSON可恢复完整项目。');else if(d?.noUsableData)feedback=notice('info','没有可导入的记录','请补齐对手方名称，或到工商数据导入页面映射名称列。');else if(d)feedback=notice(d.errors.length?'error':'info',d.errors.length?'请先处理格式错误':'文件已读取，等待确认',d.errors.length?'下方列出具体原因，修正来源文件后重新选择。':'当前项目尚未改变。确认导入后才会载入以下数据。');
  const selection=`<section class="panel"><div class="panel-heading"><div><h3>选择主档与流水文件</h3><p class="muted">Excel、多个工作表或ZIP均可；单个文件不超过40MB。</p></div>${tag('仅在浏览器内处理')}</div><div class="ui-upload-card"><span class="ui-upload-symbol" aria-hidden="true">↥</span><div><h4>${d?'需要调整文件？可重新选择':'从你的Excel开始核验'}</h4><p>可以一次选择多个.xlsx，或选择一个包含Excel的.zip。</p></div><button class="primary" id="chooseTemplateFiles">${d?'重新选择文件':'选择 Excel / ZIP'}</button></div><div class="ui-mode"><label>导入方式<select id="templateImportMode"><option value="new" ${mode==='new'?'selected':''}>创建新项目</option><option value="replace" ${mode==='replace'?'selected':''}>更新当前项目</option></select></label><p>${mode==='new'?'确认后以本次文件创建数据；未提供的主档／流水表留空。':'确认后仅替换已识别的数据类型；未提供的表保留当前内容。'}</p></div>${feedback}${files}${guide}<details class="ui-guide"><summary>填写及导入规则</summary><p>账号、税号、员工编号请按文本填写。日期、金额、空白字段和余额异常按原规则保留。同类表分在多个文件中会合并，不自动去重。完整恢复生成规则、汇率及报告设置，请使用右上角“打开项目”导入JSON。</p></details></section>`;
- const manifest=d?`<section class="panel"><div class="panel-heading"><div><h3>本次识别结果</h3><p class="muted">逐项核对将载入的表及记录数。未提供不等于错误。</p></div>${tag(imported?'已导入':d.errors.length?'需要修正':'待确认',imported?'success':d.errors.length?'error':'info')}</div><div class="ui-import-metrics"><div><small>识别工作表</small><strong>${number(d.summaries.length)}</strong></div><div><small>识别记录</small><strong>${number(total)}</strong></div><div><small>格式错误</small><strong>${number(d.errors.length)}</strong></div><div><small>数据提醒</small><strong>${number(d.warnings.length)}</strong></div></div><div class="ui-manifest">${Object.values(keys).map(name=>{const received=recognized.has(name);return `<div><div><b>${esc(name)}</b><small>${received?number(recognized.get(name))+' 条记录':d.mode==='new'?'确认后该表留空':'保留当前表'}</small></div>${tag(received?imported?'已导入':'已识别':'未提供',received?'success':'neutral')}</div>`;}).join('')}${d.registry!==null?`<div><div><b>对手方工商档案</b><small>${number(d.registry.length)} 份档案</small></div>${tag(imported?'已导入':'已识别','success')}</div>`:''}</div><p class="ui-date-range">流水日期 <b>${esc(d.from||'无流水日期')}${d.to?' ～ '+esc(d.to):''}</b></p><details class="ui-guide"><summary>查看来源文件与工作表（${number(d.summaries.length)}）</summary><div class="table-scroll"><table><thead><tr><th>来源文件</th><th>工作表</th><th>识别类型</th><th>记录数</th></tr></thead><tbody>${d.summaries.map(x=>`<tr><td>${esc(x.file)}</td><td>${esc(x.sheet)}</td><td>${esc(x.target)}</td><td>${number(x.count)}</td></tr>`).join('')}</tbody></table></div></details>${d.ignored.length?`<details class="ui-guide"><summary>未识别或辅助工作表 ${number(d.ignored.length)} 张</summary>${d.ignored.map(x=>'<p>'+esc(x)+'</p>').join('')}</details>`:''}${d.errors.length?`<div class="ui-issue-list"><h4>需要修正</h4>${d.errors.slice(0,100).map(x=>notice('error','格式错误',x)).join('')}</div>`:''}${d.warnings.length?`<details class="ui-guide"><summary>查看 ${number(d.warnings.length)} 项数据提醒（按现有规则可继续导入）</summary>${d.warnings.slice(0,100).map(x=>'<p class="ui-warning-line">'+esc(x)+'</p>').join('')}${d.warnings.length>100?'<p>提醒较多，此处展示前100项。</p>':''}</details>`:''}<div class="ui-confirm-bar"><div><b>${imported?'已载入当前项目':d.mode==='new'?'确认创建新项目':'确认更新已识别的数据表'}</b><small>${imported?'请保存JSON以便下次继续使用。':'导入前建议保存当前项目；导入后仍可使用撤销。'}</small></div><div class="actions">${imported?'<button id="saveProject">保存项目JSON</button><button data-nav="master">继续修改数据</button><button class="primary" data-nav="validation">进入功能验证 →</button>':`<button class="primary" id="applyTemplateImport" ${d.errors.length?'disabled':''}>确认导入</button>`}</div></div></section>`:`<section class="panel ui-empty-panel"><span aria-hidden="true">▤</span><h3>识别结果会显示在这里</h3><p>选择文件后，查看各类资料的记录数、缺失情况和具体校验提示。</p></section>`;
+ const manifest=d?`<section class="panel"><div class="panel-heading"><div><h3>本次识别结果</h3><p class="muted">逐项核对将载入的表及记录数。未提供不等于错误。</p></div>${tag(imported?'已导入':d.errors.length?'需要修正':'待确认',imported?'success':d.errors.length?'error':'info')}</div><div class="ui-import-metrics"><div><small>识别工作表</small><strong>${number(d.summaries.length)}</strong></div><div><small>识别记录</small><strong>${number(total)}</strong></div><div><small>格式错误</small><strong>${number(d.errors.length)}</strong></div><div><small>数据提醒</small><strong>${number(d.warnings.length)}</strong></div></div><div class="ui-manifest">${Object.values(keys).map(name=>{const received=recognized.has(name);return `<div><div><b>${esc(name)}</b><small>${received?number(recognized.get(name))+' 条记录':d.mode==='new'?'确认后该表留空':'保留当前表'}</small></div>${tag(received?imported?'已导入':'已识别':'未提供',received?'success':'neutral')}</div>`;}).join('')}${d.registry!==null?`<div><div><b>对手方工商档案</b><small>${number(d.registry.length)} 份档案</small></div>${tag(imported?'已导入':'已识别','success')}</div>`:''}</div><p class="ui-date-range">流水日期 <b>${esc(d.from||'无流水日期')}${d.to?' ～ '+esc(d.to):''}</b></p><details class="ui-guide"><summary>查看来源文件与工作表（${number(d.summaries.length)}）</summary><div class="table-scroll"><table><thead><tr><th>来源文件</th><th>工作表</th><th>识别类型</th><th>记录数</th></tr></thead><tbody>${d.summaries.map(x=>`<tr><td>${esc(x.file)}</td><td>${esc(x.sheet)}</td><td>${esc(x.target)}</td><td>${number(x.count)}</td></tr>`).join('')}</tbody></table></div></details>${d.ignored.length?`<details class="ui-guide"><summary>未识别或辅助工作表 ${number(d.ignored.length)} 张</summary>${d.ignored.map(x=>'<p>'+esc(x)+'</p>').join('')}</details>`:''}${d.errors.length?`<div class="ui-issue-list"><h4>需要修正</h4>${d.errors.slice(0,100).map(x=>notice('error','格式错误',x)).join('')}</div>`:''}${d.warnings.length?`<details class="ui-guide"><summary>查看 ${number(d.warnings.length)} 项数据提醒（按现有规则可继续导入）</summary>${d.warnings.slice(0,100).map(x=>'<p class="ui-warning-line">'+esc(x)+'</p>').join('')}${d.warnings.length>100?'<p>提醒较多，此处展示前100项。</p>':''}</details>`:''}<div class="ui-confirm-bar"><div><b>${imported?'已载入当前项目':d.mode==='new'?'确认创建新项目':'确认更新已识别的数据表'}</b><small>${imported?'请保存JSON以便下次继续使用。':'导入前建议保存当前项目；导入后仍可使用撤销。'}</small></div><div class="actions">${imported?'<button id="saveProject">保存项目JSON</button><button data-nav="master">继续修改数据</button><button class="primary" data-nav="validation">进入功能验证 →</button>':`<button class="primary" id="applyTemplateImport" ${d.errors.length||d.noUsableData?'disabled':''}>确认导入</button>`}</div></div></section>`:`<section class="panel ui-empty-panel"><span aria-hidden="true">▤</span><h3>识别结果会显示在这里</h3><p>选择文件后，查看各类资料的记录数、缺失情况和具体校验提示。</p></section>`;
  return steps(active)+selection+manifest;
 }
 g.AuditWorkspaceUI={tag,notice,steps,filesGuide,templatePage};
@@ -27281,14 +27310,14 @@ function masters(){const keys=Object.values(K).filter(k=>k!==K.flow);return `${c
 let registryMapDraft=null;
 function registryMappingOptions(){return {duplicates:'error',capitalScale:1,paidInScale:1,defaultCurrency:'',mode:'update'};}
 function registryMappingPage(){const d=registryMapDraft,t=d?.tables[d.sheet],result=d?.result;
- return `<section class="panel"><h3>1. 上传工商Excel</h3><p>适用于表头与平台不同的工商文件，请将来源Excel第一行设为表头。选择来源工作表后，把每个来源列映射到平台字段；对手方名称必选，其他字段可不导入；更新已有档案时保留未映射字段，新增档案对应字段留空。主档与银行流水不受影响。</p><div class="actions"><button class="primary" id="registryMapUpload">选择工商 Excel</button></div>${d?`<p>文件：${h(d.fileName)}</p><label>工作表 <select id="registryMapSheet">${Object.keys(d.tables).map(name=>`<option value="${h(name)}" ${name===d.sheet?'selected':''}>${h(name)}</option>`).join('')}</select></label>`:''}</section>`+
+ return `<section class="panel"><h3>1. 上传工商Excel</h3><p>适用于表头与平台不同的工商文件，请将来源Excel第一行设为表头。选择来源工作表后，把每个来源列映射到平台字段；有对手方名称的记录会导入，名称为空的行会跳过，其他字段可不导入；更新已有档案时保留未映射字段，新增档案对应字段留空。主档与银行流水不受影响。</p><div class="actions"><button class="primary" id="registryMapUpload">选择工商 Excel</button></div>${d?`<p>文件：${h(d.fileName)}</p><label>工作表 <select id="registryMapSheet">${Object.keys(d.tables).map(name=>`<option value="${h(name)}" ${name===d.sheet?'selected':''}>${h(name)}</option>`).join('')}</select></label>`:''}</section>`+
  (d?`<section class="panel"><h3>2. 设置表头映射</h3><p>已按标准名称、常见别名或上次保存的映射推荐，请逐项确认。资本单位只转换资本金额，不代表币种换算；空白、未提供不补0。</p><form id="registryMappingForm"><table><thead><tr><th>平台字段</th><th>来源列</th><th>来源示例</th></tr></thead><tbody>${R.fields.map(([id,label])=>{const i=d.mapping[id],sample=i>=0?t.rows.find(r=>r[i]!=null&&String(r[i]).trim()!=='')?.[i]:'';return `<tr><td>${h(label)}${id==='name'?' *':''}</td><td><select name="${id}" data-registry-map="${id}"><option value="-1">不导入（更新时保留原值）</option>${t.headers.map((v,j)=>`<option value="${j}" ${i===j?'selected':''}>第${j+1}列 · ${h(v)}</option>`).join('')}</select></td><td>${h(sample??'')}</td></tr>`;}).join('')}</tbody></table><div class="form-grid">${['capital','paidIn'].map(id=>`<label class="field"><span>${id==='capital'?'注册':'实缴'}资本来源单位</span><select data-registry-option="${id}Scale">${[[1,'元'],[10000,'万元'],[1000000,'百万'],[100000000,'亿元']].map(([v,label])=>`<option value="${v}" ${Number(d.options[id+'Scale'])===v?'selected':''}>${label}</option>`).join('')}</select></label>`).join('')}<label class="field"><span>资本币种为空时</span><select data-registry-option="defaultCurrency">${[['','保留为空'],['CNY','明确按人民币CNY'],['USD','明确按美元USD'],['HKD','明确按港币HKD'],['JPY','明确按日元JPY'],['EUR','明确按欧元EUR']].map(([v,label])=>`<option value="${v}" ${d.options.defaultCurrency===v?'selected':''}>${label}</option>`).join('')}</select></label><label class="field"><span>文件中名称重复时</span><select data-registry-option="duplicates">${[['error','提示错误，先确认重复'],['first','保留第一条'],['last','保留最后一条']].map(([v,label])=>`<option value="${v}" ${d.options.duplicates===v?'selected':''}>${label}</option>`).join('')}</select></label><label class="field"><span>导入方式（仅工商档案）</span><select data-registry-option="mode"><option value="update" ${d.options.mode==='update'?'selected':''}>按名称更新映射字段并新增，保留其余字段／档案</option><option value="replace" ${d.options.mode==='replace'?'selected':''}>替换全部工商档案</option></select></label></div><p class="muted">失信标记支持是／否、true／false、0／正整数。日期支持日期文本或Excel日期。数值列请提供纯数值（可带千分符）；如来源列是万元／亿元，请在这里选择对应单位。经营天数按平台既有日期规则重算，导入原值仅供对照。确认前不会修改项目。</p><div class="actions"><button type="submit" class="primary">检查并预览转换结果</button><button type="button" id="registryMapRemember">记住此映射</button></div></form></section>`:'')+
- (result?`<section class="panel"><h3>3. 预览并确认</h3><p>来源 ${num(result.sourceRows)} 行，可转换 ${num(result.records.length)} 份，错误 ${num(result.errors.length)} 项。${d.applied?'本次已导入。':''}</p>${[...result.errors,...result.warnings].slice(0,50).map(x=>'<p class="'+(result.errors.includes(x)?'ui-inline-error':'ui-warning-line')+'">'+h(x)+'</p>').join('')}<div class="table-scroll"><table><thead><tr>${R.fields.map(([,label])=>'<th>'+h(label)+'</th>').join('')}</tr></thead><tbody>${result.records.slice(0,10).map(r=>'<tr>'+R.fields.map(([id])=>'<td>'+h(r[id]??'')+'</td>').join('')+'</tr>').join('')}</tbody></table></div><p>预览前10份转换记录，确认时导入全部。更新模式下未映射的旧字段保留，来源已映射但为空的字段会清空；有错误时不会部分导入。</p><div class="actions"><button class="primary" id="registryMapApply" ${result.errors.length||d.applied?'disabled':''}>确认导入工商档案</button><button id="registryMapStandard" ${result.errors.length?'disabled':''}>下载转换后的标准Excel</button>${d.applied?'<button id="saveProject">保存项目JSON</button><button data-nav="report">查看综合分析报告核验</button>':''}</div></section>`:'');
+ (result?`<section class="panel"><h3>3. 预览并确认</h3><p>来源 ${num(result.sourceRows)} 行，可转换 ${num(result.records.length)} 份，错误 ${num(result.errors.length)} 项。${d.applied?'本次已导入。':''}</p>${[...result.errors,...result.warnings].slice(0,50).map(x=>'<p class="'+(result.errors.includes(x)?'ui-inline-error':'ui-warning-line')+'">'+h(x)+'</p>').join('')}<div class="table-scroll"><table><thead><tr>${R.fields.map(([,label])=>'<th>'+h(label)+'</th>').join('')}</tr></thead><tbody>${result.records.slice(0,10).map(r=>'<tr>'+R.fields.map(([id])=>'<td>'+h(r[id]??'')+'</td>').join('')+'</tr>').join('')}</tbody></table></div><p>预览前10份转换记录，确认时导入全部。更新模式下未映射的旧字段保留，来源已映射但为空的字段会清空；有错误时不会部分导入。</p><div class="actions"><button class="primary" id="registryMapApply" ${result.errors.length||!result.records.length||d.applied?'disabled':''}>确认导入工商档案</button><button id="registryMapStandard" ${result.errors.length?'disabled':''}>下载转换后的标准Excel</button>${d.applied?'<button id="saveProject">保存项目JSON</button><button data-nav="report">查看综合分析报告核验</button>':''}</div></section>`:'');
 }
 function setRegistryMappingSheet(name){const d=registryMapDraft;d.sheet=name;let saved=null;try{saved=JSON.parse(localStorage.getItem('ac-registry-header-mapping')||'null');}catch{}d.mapping=AuditRegistryMapping.recommend(d.tables[name].headers,saved);d.options={...registryMappingOptions(),...saved?.options};for(const id of ['capital','paidIn'])if(!saved)d.options[id+'Scale']=AuditRegistryMapping.scaleFor(d.tables[name].headers[d.mapping[id]]);d.options.epoch=d.epoch;d.result=null;d.applied=false;}
 function chooseRegistryMappingFile(){const picker=document.createElement('input');picker.type='file';picker.accept='.xlsx';picker.onchange=()=>run(async()=>{const f=picker.files[0];if(!f)return;if(f.size>40*1024*1024)throw Error('单个文件请小于40MB。');const bytes=await f.arrayBuffer(),tables=await X.read(bytes),names=Object.keys(tables);if(!names.length)throw Error('未找到有表头的工作表。');const zip=await JSZip.loadAsync(bytes),wb=await zip.file('xl/workbook.xml').async('string');registryMapDraft={fileName:f.name,tables,epoch:/date1904=["'](?:1|true)["']/.test(wb)?24107:25569};setRegistryMappingSheet(names[0]);navigate('registryMap');});picker.click();}
 document.addEventListener('submit',e=>{if(e.target.id!=='registryMappingForm')return;e.preventDefault();run(async()=>{const d=registryMapDraft;d.result=AuditRegistryMapping.convert(d.tables[d.sheet],d.mapping,d.options);d.applied=false;render();});});
-function applyRegistryMapping(){const d=registryMapDraft;if(!d?.result||d.result.errors.length||d.applied)throw Error('请先检查映射并修正错误。');const mappedFields=R.fields.filter(([id])=>d.mapping[id]>=0).map(([id])=>id);if(d.options.defaultCurrency&&!mappedFields.includes('currency'))mappedFields.push('currency');const next=AuditRegistryMapping.merge(rawRegistry(),d.result.records,d.options.mode,mappedFields);lastData=snapshot();config.registryRecords=next;registryFilter.range='';persist();recalc({preserveRows:true});d.applied=true;render();toast('工商档案已导入，银行流水和其他主档未改写；请保存项目JSON。');}
+function applyRegistryMapping(){const d=registryMapDraft;if(!d?.result||d.result.errors.length||!d.result.records.length||d.applied)throw Error('请先检查映射并修正错误。');const mappedFields=R.fields.filter(([id])=>d.mapping[id]>=0).map(([id])=>id);if(d.options.defaultCurrency&&!mappedFields.includes('currency'))mappedFields.push('currency');const next=AuditRegistryMapping.merge(rawRegistry(),d.result.records,d.options.mode,mappedFields);lastData=snapshot();config.registryRecords=next;registryFilter.range='';persist();recalc({preserveRows:true});d.applied=true;render();toast('工商档案已导入，银行流水和其他主档未改写；请保存项目JSON。');}
 let dailyFxDraft=null,dailyFxCheck=null,dailyFxImport=null;
 let dailyFxFlowFilters={page:1,size:50},dailyFxPreviewStale=false,dailyFxEditingValues={},dailyFxUiRecords=null,dailyFxUiFlow=null;
 function dailyFxRows(){return dailyFxImport&&!dailyFxImport.ready?[]:dailyFxDraft?.records||config.dailyFx||[];}
@@ -27498,7 +27527,7 @@ function registryPage(){
 function openRegistry(name=null){
  const record=rawRegistry().find(r=>r.name===name)||{};
  editingRegistry=name;
- $('#registryFields').innerHTML=R.fields.map(([key,label,type])=>`<label class="field"><span>${label}${key==='days'?'（导入原值，仅供对照）':''}</span>${type==='flag'?`<select name="${key}"><option value="">未提供</option>${['是','否'].map(v=>`<option ${record[key]===v?'selected':''}>${v}</option>`).join('')}</select>`:`<input name="${key}" type="${type==='date'?'date':type==='integer'||type==='number'?'number':'text'}" ${type==='integer'||type==='number'?`min="0" step="${type==='integer'?'1':'any'}"`:''} ${key==='name'?'required':''} value="${h(record[key]??'')}">`}</label>`).join('');
+ $('#registryFields').innerHTML=R.fields.map(([key,label,type])=>`<label class="field"><span>${label}${key==='days'?'（导入原值，仅供对照）':''}</span>${type==='flag'?`<select name="${key}"><option value="">未提供</option>${['是','否'].map(v=>`<option ${record[key]===v?'selected':''}>${v}</option>`).join('')}</select>`:`<input name="${key}" type="${type==='date'&&key!=='end'?'date':type==='integer'||type==='number'?'number':'text'}" ${type==='integer'||type==='number'?`min="0" step="${type==='integer'?'1':'any'}"`:''} ${key==='name'?'required':''} value="${h(record[key]??'')}">`}</label>`).join('');
  $('#registryModal').showModal();
 }
 document.addEventListener('submit',e=>{
@@ -27598,7 +27627,7 @@ let workspaceTemplateRead={phase:'idle',files:[],error:''},workspaceProjectNotic
 function templateImportPage(){return AuditWorkspaceUI.templatePage({draft:templateDraft,mode:templateMode,imported:templateImported,read:workspaceTemplateRead,keys:K});}
 async function readTemplateWithFeedback(files){if(!files.length)return;workspaceTemplateRead={phase:'reading',files:files.map(f=>({name:f.name,size:f.size})),error:''};try{await prepareTemplateFiles(files);workspaceTemplateRead.phase='ready';render();}catch(error){workspaceTemplateRead.phase='error';workspaceTemplateRead.error=error.message||String(error);render();throw error;}}
 async function confirmTemplateWithFeedback(){try{applyTemplateImport();workspaceProjectNotice={title:'Excel数据已导入',message:'已载入 '+num(data[K.flow].rows.length)+' 笔流水，可直接进入功能验证，也可继续修改数据；请保存项目JSON。'};}catch(error){workspaceTemplateRead.phase='error';workspaceTemplateRead.error=error.message||String(error);render();throw error;}}
-async function readProjectWithFeedback(files){try{await importFiles(files);workspaceProjectNotice={title:'项目已打开',message:'已载入 '+num(data[K.flow].rows.length)+' 笔流水。可进入功能验证，或在生成／修改数据中继续编辑当前资料。'};navigate('overview');}catch(error){workspaceProjectNotice={error:true,title:'项目未能打开',message:error.message||String(error)};navigate('overview');throw error;}}
+async function readProjectWithFeedback(files){try{if(await importFiles(files)===false)return;workspaceProjectNotice={title:'项目已打开',message:'已载入 '+num(data[K.flow].rows.length)+' 笔流水。可进入功能验证，或在生成／修改数据中继续编辑当前资料。'};navigate('overview');}catch(error){workspaceProjectNotice={error:true,title:'项目未能打开',message:error.message||String(error)};navigate('overview');throw error;}}
 
 async function prepareTemplateFiles(files){
  if(!files.length)return;
@@ -27616,7 +27645,7 @@ async function prepareTemplateFiles(files){
  templateDraft=draft;templateImported=false;navigate('templateImport');
 }
 function applyTemplateImport(){
- const d=templateDraft;if(!d||d.errors.length||templateImported)throw Error('请先选择文件并修正格式错误。');
+ const d=templateDraft;if(!d||d.noUsableData||d.errors.length||templateImported)throw Error('请先选择文件并修正格式错误。');
  if(d.mode!=='new'&&config.fxMode==='imported')E.assertImportedRmb(d.data[K.flow].rows);
  if(d.mode!=='new'&&config.fxMode==='daily')AuditDailyFx.assertCoverage(d.data[K.flow].rows,exchangeRates());
  lastData=snapshot();data=E.copy(d.data);generationSource=E.copy(data);
@@ -27633,7 +27662,7 @@ function applyTemplateImport(){
 }
 async function importFiles(files){
  const staged=E.copy(data);
- let n=0,project=null,importedRegistry=null,importedRawRegistry=null;
+ let n=0,project=null,importedRegistry=null,importedRawRegistry=null,skippedRegistry=0;
  const readProject=text=>{
   const saved=JSON.parse(text);
   if(!saved.data)throw Error('请选择本工具保存的项目JSON。');
@@ -27654,8 +27683,10 @@ async function importFiles(files){
    for(const [name,t] of Object.entries(tables)){
     if(name==='对手方工商档案'||name==='导入原始工商档案'){
      const columns=new Map(t.headers.map((value,i)=>[value.trim(),i]));
-     if(!columns.has('对手方名称'))throw Error('工商档案缺少对手方名称列。');
-     const records=t.rows.map(row=>R.readRecord(Object.fromEntries(R.fields.map(([id,label])=>[id,row[columns.get(label)]]))));
+     if(!columns.has('对手方名称')){skippedRegistry+=Math.max(t.rows.length,1);continue;}
+     const {records,skipped}=R.importRecords(t.rows.map(row=>Object.fromEntries(R.fields.map(([id,label])=>[id,row[columns.get(label)]]))));
+     skippedRegistry+=skipped;
+     if(skipped&&!records.length)continue;
      if(name==='导入原始工商档案')importedRawRegistry=records;else importedRegistry=records;
      continue;
     }
@@ -27668,6 +27699,7 @@ async function importFiles(files){
   }
  }
  if(importedRawRegistry!==null)importedRegistry=importedRawRegistry;
+ if(!n&&!project&&importedRegistry===null&&skippedRegistry){toast('没有可匹配名称的工商记录。可到工商数据导入页面映射名称列。');return false;}
  if(!n&&!project&&importedRegistry===null)throw Error('未找到可识别的上传模板、工商档案或项目文件。');
  const next=project?.data||staged,v=E.validate(next);
  if(v.errors.length)throw Error(v.errors.slice(0,3).join('；'));
@@ -27685,7 +27717,7 @@ async function importFiles(files){
  if(importedRegistry!==null&&!project?.config.registryRecords)config.registryRecords=importedRegistry;
  config.registryIntervalVersion=R.INTERVAL_VERSION;registryFilter.range='';
  registryMapDraft=null;dailyFxDraft=null;dailyFxCheck=null;dailyFxImport=null;persist();sourceLabel=project?.label||'已导入 · '+n+'个文件';recalc({preserveRows:!!project});randomCompanyProposal=null;projectCheckpoint=makeProjectCheckpoint(project?'项目导入时基线':'文件导入时基线');checkpointComparison=null;render();
- toast(project?'已打开保存的项目，旧版默认区间已兼容新版报告。':'已导入数据，并按当前区间重新统计。');
+ toast((project?'已打开保存的项目，旧版默认区间已兼容新版报告。':'已导入数据，并按当前区间重新统计。')+(skippedRegistry?' 已跳过 '+skippedRegistry+' 行无名称的工商记录。':''));
 }
 function editRow(index){const tableName=page==='preview'?preview:master;const isNew=index===null,r=isNew?[]:data[tableName].rows[index];$('#modalTitle').textContent=isNew?'新增记录':'编辑第'+(index+1)+'条记录';$('#modalFields').innerHTML=data[tableName].headers.map((hd,j)=>`<label class="field"><span>${h(hd)}</span><input data-cell="${j}" value="${h(r[j]??'')}" ${/日期|期间\d+_[从到]|开立时间|注销时间/.test(hd)?'placeholder="yyyy-mm-dd"':''}></label>`).join('');$('#rowForm').onsubmit=e=>{e.preventDefault();try{const newRow=[...$('#modalFields').querySelectorAll('input')].map((el,j)=>{const val=el.value,head=data[tableName].headers[j];if(!val)return null;if(/金额|余额|发生额|限额|_PM|_AMPT/.test(head)&&!/账号|编号/.test(head)){if(!Number.isFinite(Number(val)))throw Error(head+'必须是数字');return Number(val);}if(/对账年份|总交易行数/.test(head)){if(!/^\d+$/.test(val))throw Error(head+'必须是整数');return Number(val);}return val;});if(tableName===K.company){newRow[0]=String(newRow[0]??'').trim();if(!newRow[0]||!String(newRow[3]??'').trim())throw Error('公司名称和公司职能为必填项。');}if(tableName===K.flow&&config.fxMode==='imported')E.assertImportedRmb([newRow]);if(tableName===K.flow&&config.fxMode==='daily'){const proposal=E.copy(data[K.flow].rows);if(isNew)proposal.push(newRow);else proposal[index]=newRow;AuditDailyFx.assertCoverage(proposal,exchangeRates());}lastData=snapshot();if(!isNew&&tableName===K.company&&r[0]!==newRow[0]){renameCompanies(data,[[r[0],newRow[0]]]);}if(isNew)data[tableName].rows.push(newRow);else data[tableName].rows[index]=newRow;E.annotate(data);generationSource=E.copy(data);recalc();$('#rowModal').close();render();toast('已保存记录并更新匹配标签。');}catch(e){toast(e.message,true);}};$('#rowModal').showModal();}
 function deleteCompany(index){

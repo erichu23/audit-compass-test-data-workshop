@@ -103,19 +103,31 @@ function bucket(n,bounds,id){
  const index=bounds.findIndex(edge=>n<edge);
  return index<0?bounds.length:index;
 }
+function hasImportName(value){
+ const name=clean(value);
+ return name!==''&&!['-','—','未提供','不详'].includes(name);
+}
+function importRecords(inputs){
+ const records=[];
+ let skipped=0;
+ for(const input of inputs){
+  if(!hasImportName(input.name)){skipped++;continue;}
+  records.push(readRecord(input));
+ }
+ return {records,skipped};
+}
 function readRecord(input){
  const out={};
  for(const [k,label,type] of fields){
   const v=clean(input[k]);
   if(!v){out[k]=null;continue;}
-  if(type==='date'&&!date(v))throw Error(label+'请输入有效日期。');
+  if(type==='date'&&k!=='end'&&!date(v))throw Error(label+'请输入有效日期。');
   if(type==='integer'||type==='number'){
    if(!Number.isFinite(Number(v))||Number(v)<0||type==='integer'&&!Number.isInteger(Number(v)))throw Error(label+'请输入非负'+(type==='integer'?'整数':'数值')+'。');
    out[k]=Number(v);
   }else out[k]=v;
  }
  if(!out.name)throw Error('请填写对手方名称。');
- if(out.start&&out.end&&out.end<out.start)throw Error('经营结束时间不能早于经营开始时间。');
  if(out.currency){out.currency=out.currency.toUpperCase();if(!/^[A-Z]{3}$/.test(out.currency))throw Error('注册资本币种请填写三位代码。');}
  if(out.dishonest&&!['是','否'].includes(out.dishonest))throw Error('失信被执行人请填写是或否。');
  return out;
@@ -151,5 +163,5 @@ function generate(names,asOf,settings={},offset=0){
 function table(records,asOf,rates){
  return {headers:fields.map(x=>x[1]),rows:records.map(r=>fields.map(([k])=>r[k]))};
 }
-g.AuditRegistry={INTERVAL_VERSION,migrateSettings,fields,metrics,boundsFor,intervalLabels,value,bucket,readRecord,parseBounds,generate,table,automaticDates,dayCalculationTable,riskCounts,riskTables};
+g.AuditRegistry={INTERVAL_VERSION,migrateSettings,fields,metrics,boundsFor,intervalLabels,value,bucket,readRecord,hasImportName,importRecords,parseBounds,generate,table,automaticDates,dayCalculationTable,riskCounts,riskTables};
 })(globalThis);

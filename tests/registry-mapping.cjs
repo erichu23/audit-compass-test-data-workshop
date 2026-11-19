@@ -2,8 +2,20 @@ const fs=require('fs'),vm=require('vm'),assert=require('assert');global.window=g
 const t={headers:['企业名称','成立时间','经营起始日期','社保人数','注册资本（万元）','诉讼案件数量','是否失信','资本币种'],rows:[['测试企业','2020/1/2',43832,10,'1,200',3,1,'人民币']]},before=JSON.stringify(t),map=M.recommend(t.headers);assert.equal(map.name,0);assert.equal(map.formed,1);assert.equal(map.start,2);assert.equal(map.capital,4);assert.equal(M.scaleFor(t.headers[map.capital]),10000);
 const out=M.convert(t,map,{capitalScale:10000});assert.equal(out.errors.length,0);const r=out.records[0];assert.equal(r.formed,'2020-01-02');assert.equal(r.start,'2020-01-02');assert.equal(r.capital,12000000);assert.equal(r.cases,3);assert.equal(r.dishonest,'是');assert.equal(r.currency,'CNY');assert.equal(r.days,null);assert.equal(JSON.stringify(t),before);
 const preset=M.preset(t.headers,{...map,formed:-1},{capitalScale:10000});const headers=[...t.headers].reverse(),saved=M.recommend(headers,preset);assert.equal(saved.name,7);assert.equal(saved.formed,-1);assert.equal(saved.capital,3);
-assert.throws(()=>M.convert(t,{...map,name:-1}),/必须映射/);assert(M.convert({...t,rows:[[...t.rows[0].slice(0,5),-1,1,'CNY']]},map).errors.length);
+assert.equal(M.convert(t,{...map,name:-1}).records.length,0);assert.equal(M.convert(t,{...map,name:-1}).errors.length,0);assert(M.convert({...t,rows:[[...t.rows[0].slice(0,5),-1,1,'CNY']]},map).errors.length);
 const repeated={...t,rows:[...t.rows,...t.rows]};assert(M.convert(repeated,map).errors.length);assert.equal(M.convert(repeated,map,{duplicates:'first'}).records.length,1);assert.equal(M.convert(repeated,map,{duplicates:'last'}).records.length,1);
 const existing=[{...r,start:'2010-01-01',days:555,cases:1,custom:'preserve'},{...r,name:'不更新企业',cases:7}];const raw=JSON.stringify(existing),updated=M.merge(existing,[{...r,cases:9}],'update',['name','cases']);assert.equal(updated[0].cases,9);assert.equal(updated[0].start,'2010-01-01');assert.equal(updated[0].days,555);assert.equal(updated[0].custom,'preserve');assert.equal(updated[1].cases,7);assert.equal(JSON.stringify(existing),raw);assert.equal(M.merge(existing,[r],'replace').length,1);
 const dates=M.convert({headers:['企业名称','经营起始日期'],rows:[['日期测试企业',42370]]},M.recommend(['企业名称','经营起始日期']),{epoch:24107});assert.equal(dates.records[0].start,'2020-01-02');
 console.log('PASS: aliases, reordered saved mapping and ignored fields, exact source columns, capital units, Excel date systems, flags and missing values, duplicate policies, validations, partial-field update preserves old fields/records/source');
+
+const flexible=M.convert(
+ {headers:['名称','经营开始','经营结束'],rows:[['有效企业','2020-01-01','长期 有效'],['  ','2020-01-01','随意'],['早于开始的企业','2020-01-01','2019-01-01']]},
+ {name:0,start:1,end:2}
+);
+assert.equal(flexible.errors.length,0);
+assert.match(flexible.warnings[0],/跳过 1 行/);
+assert.deepEqual(flexible.records.map(r=>r.end),['长期 有效','2019-01-01']);
+assert.equal(AuditRegistry.value(flexible.records[0],'days','2025-01-01'),1827);
+const standard=AuditRegistry.importRecords([{name:'',end:'长期'},{name:'标准档案企业',start:'2020-01-01',end:'长期'}]);
+assert.equal(standard.skipped,1);
+assert.equal(standard.records[0].end,'长期');
