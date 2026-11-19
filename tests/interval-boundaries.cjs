@@ -11,6 +11,13 @@ values.forEach((v,i)=>{const r=Array(d[K.flow].headers.length).fill(null);Object
 const before=JSON.stringify(d),m=AuditReport.compute(d,{from:'2025-01-01',to:'2025-12-31',registry,registryAsOf:'2025-12-31',threshold:50000});
 const features=m.sections.find(s=>s.id==='features'),follow=m.sections.find(s=>s.id==='follow'),compliance=m.sections.find(s=>s.id==='compliance');
 assert.deepEqual(features.charts.find(c=>c.name.startsWith('合并范围外')).rows.map(r=>r[1]),[1,1,1,1,2]);
+const groupTotal=values.reduce((total,v)=>total+E.cents(v),0);
+const outside=features.charts.find(c=>c.name.startsWith('合并范围外'));
+assert.deepEqual(outside.amountBands.map(r=>r[3]),[
+ ...values.slice(0,4).map(v=>E.cents(v)/groupTotal),
+ (E.cents(values[4])+E.cents(values[5]))/groupTotal
+]);
+assert(features.charts.find(c=>c.name.startsWith('合并范围内')).amountBands.every(r=>r[3]===0));
 assert.deepEqual(follow.charts.find(c=>c.name.startsWith('未识别')).rows.map(r=>r[1]),[2,1,1,2]);
 for(const prefix of ['经营天数','参保人数','注册资本'])assert.deepEqual(compliance.charts.find(c=>c.name.startsWith(prefix)).rows.map(r=>r[1]),[1,1,2,2]);
 for(const id of ['features','follow','compliance']){const html=AuditReport.render(AuditReport.selectSections(m,[id]),{allRows:true,forExport:true});assert(html.includes(id==='compliance'?'区间口径':'区间边界'));}

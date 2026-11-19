@@ -245,6 +245,11 @@ function compute(data,settings={}){
   const parts=buckets.map(()=>aggregate());
   for(const r of rs){const m=amount(value(r,8,fx)+value(r,10,fx));add(parts[m<1?0:m<5?1:m<10?2:m<20?3:4],r,fx);}
   stacked(features,name+'大额交易金额分布',buckets.map((label,i)=>[label,parts[i].n,parts[i]]),{first:'单笔金额（百万元）',countLabel:'交易笔数'});
+  const groupTotal=parts.reduce((total,part)=>total+turnover(part),0);
+  features.charts.at(-1).amountBands=parts.map((part,i)=>{
+   const bandTotal=turnover(part);
+   return [buckets[i],amount(bandTotal),part.ins+part.outs,ratio(bandTotal,groupTotal)];
+  });
  }
  const detailHeaders=['源Excel行','流水号','本方名称','本方账号','本方银行','对手方名称','对手方账号','交易日期','交易时间','币种','等值人民币流入金额（元）','等值人民币流出金额（元）','交易类型','摘要','关联关系','对手方类型'];
  const originalIndex=new Map(all.map((r,i)=>[r,i+2]));
@@ -335,6 +340,12 @@ function compute(data,settings={}){
   [cat,'其中：关联方',...directions(byCategoryRelated.get(cat)||aggregate(),externalTotals)]
  ]));
  cpSection.tables.at(-1).grouped=true;
+ cpSection.categoryNatureRows=categories.flatMap(cat=>{
+  const all=byCategory.get(cat)||aggregate();
+  const related=byCategoryRelated.get(cat)||aggregate();
+  const thirdParty={in:all.in-related.in,out:all.out-related.out,ins:all.ins-related.ins,outs:all.outs-related.outs};
+  return [[cat,'第三方',...directions(thirdParty,externalTotals)],['','关联方',...directions(related,externalTotals)]];
+ });
  const cpForTypes=cp.map(x=>({...x,categories:new Set(categories.filter(c=>x.pairCategories.has(c)))}));
  for(const [dir,metric] of [['流入','in'],['流出','out']])table(cpSection,dir+'前20大对手方',cpHeaders,ranking(sortBy(cpForTypes.filter(x=>x[metric]>0),x=>x[metric]),externalTotals,20,cpForTypes.filter(x=>x[metric]<=0)));
  const relatedSection=section('related','2.2 关联方资金流水分析（以下数据分析是依据系统中关联方主档名单进行汇总）','关联组合按被审计单位公司名称＋关联方名称去重，不按关联关系类型或重复主档行重复计数。在已有主档组合基础上，自动补齐不同被审计单位之间的有向关联组合（X→Y和Y→X分别计一组），不自动增加自身组合，也不扩展第三方关系。组合数量使用“组”，不同关联方名称数量使用“个”。本节交易按本方被审计单位名称＋对手方名称匹配主档，未命中的本方交易不计入。先筛选命中流水，再按对手方汇总并取前20大。类型为空为其他；同一组合多种类型分别计入对应类型，交易合计和排名不重复。交易统计仍剔除合并范围内往来。');
@@ -618,8 +629,7 @@ function sectionBody(s,m,continuations){
    return tableHTML({...t,name,headers,rows,limit:t.limit?t.limit+1:undefined});
   };
   const breakdown=c=>{
-   const total=c.rows.reduce((n,r)=>n+r[2]+r[5],0);
-   return stackedHTML(c)+tableHTML({name:'单笔交易金额分布',headers:['单笔交易','金额（百万元）','笔数','占比'],rows:c.rows.map(r=>[r[0],r[2]+r[5],r[3]+r[6],ratio(r[2]+r[5],total)])})+'<p class="report-boundary-note">区间边界：1百万归入1～&lt;5百万；5百万归入5～&lt;10百万；10百万归入10～&lt;20百万；20百万归入≥20百万。先按大额阈值（含阈值）筛选，再做区间分布。</p>';
+   return stackedHTML(c)+tableHTML({name:'单笔交易金额分布',headers:['单笔交易','金额（百万元）','笔数','占比'],rows:c.amountBands})+'<p class="report-boundary-note">区间边界：1百万归入1～&lt;5百万；5百万归入5～&lt;10百万；10百万归入10～&lt;20百万；20百万归入≥20百万。先按大额阈值（含阈值）筛选，再做区间分布。</p>';
   };
   continuations.push(
    subhead('1.2.1 大额单笔交易分析')+detail(tables[3],'合并范围内')+detail(tables[4],'合并范围外'),
@@ -633,11 +643,7 @@ function sectionBody(s,m,continuations){
  if(s.id==='counterparties'){
   const [inflow,outflow]=tables.slice(1).map((t,i)=>{
    const direction=i?'流出':'流入',offset=2+i*3;
-   const rows=tables[0].rows.map(([cat],j)=>{
-    const row=tables[0].rows[j],related=tables[0].rows[j|1],isRelated=j%2===1;
-    const values=related.slice(offset,offset+3);
-    return [isRelated?'':cat,isRelated?'关联方':'第三方',...(isRelated?values:row.slice(offset,offset+3).map((v,k)=>v-values[k]))];
-   });
+   const rows=s.categoryNatureRows.map(row=>[...row.slice(0,2),...row.slice(offset,offset+3)]);
    const summary={name:'全部交易对手方',headers:['对手方类型','性质',direction+'金额（百万元）','笔数','占比'],rows};
    return '<div class="report-direction"><b class="report-direction-tag">'+direction+'</b><div class="report-direction-summary">'+stackedHTML({...charts[0],name:'对手方分类（含交叉）'},i)+tableHTML(summary)+'<p class="report-boundary-note">分类口径：左侧按本方单位＋对手方组合匹配客商分类，关联性质按名称判断。同一组合命中两表的流水交叉计入客户、供应商及客商一体。分类金额、笔数及占比不可直接相加；柱图底部为含交叉的分类合计。表内占比分母为本期剔除内部往来后的该方向交易总额，右侧清单按对手方去重展示，标签汇总该对手方本期交易组合的分类；多标签行的金额是对手方总额，不能将整行金额重复归入每个标签核对左表。</p>'+'</div><div class="report-wide-detail">'+tableHTML({...t,limit:23})+'</div></div>';
   });
