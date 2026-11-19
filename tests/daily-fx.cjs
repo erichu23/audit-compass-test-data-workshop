@@ -15,3 +15,24 @@ const original=AuditReport.compute({...d,[K.flow]:{...d[K.flow],rows:[missing]}}
 assert.equal(AuditRegistry.value({currency:'JPY',capital:10000},'capital','2025-01-01',rates),447.95);assert.equal(AuditRegistry.value({currency:'JPY',capital:10000},'capital','2025-01-03',fallback),null);
 const restored=JSON.parse(JSON.stringify({version:2,data:d,config:{fx:7,fxMode:'daily',dailyFx:parsed.records,dailyFxUnits:units,dailyFxRule:'exact'}}));const replay=F.attach({USD:restored.config.fx},restored.config.dailyFx,{units:restored.config.dailyFxUnits,match:restored.config.dailyFxRule});assert.equal(E.analysis(restored.data,{first:2025,last:2025,rates:replay}).in,analysis.in);assert.equal(JSON.stringify(restored.data),raw);
 console.log('PASS: four currencies/two dates, aliases, quote units incl 100JPY, conflicts, exact/previous/original fallback, balance/amount/report/export trace, mixed disclosures, no raw mutation, saved daily project replay');
+
+const mixedQuotes={headers,rows:[
+ ['2025-01-01','美元',713.45],
+ ['2025-01-01','USD',7.1345],
+ ['2025-01-02','USD',714],
+ ['2025-01-03','USD',7.13],
+ ['2025-01-01','JPY',4.47],
+ ['2025-01-01','KRW',520],
+ ['2025-01-02','KRW',6]
+]};
+const mixedQuotesOriginal=JSON.stringify(mixedQuotes);
+const suggested=F.detectMixedQuotes(mixedQuotes);
+assert.deepEqual(suggested.changes.map(row=>[row.index,row.normalized]),[[0,7.1345],[2,7.14]]);
+const normalized=F.parse(suggested.table);
+assert.equal(normalized.duplicates,1);
+const normalizedRates=F.attach({},normalized.records,{units:{USD:1,JPY:100}});
+assert.equal(F.resolve(normalizedRates,'2025-01-01','USD').rate,7.1345);
+assert.equal(F.resolve(normalizedRates,'2025-01-02','USD').rate,7.14);
+assert.equal(F.resolve(normalizedRates,'2025-01-01','JPY').rate,.0447);
+assert.equal(F.resolve(normalizedRates,'2025-01-01','KRW').rate,520);
+assert.equal(JSON.stringify(mixedQuotes),mixedQuotesOriginal);

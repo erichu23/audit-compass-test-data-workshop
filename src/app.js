@@ -452,10 +452,63 @@ let dailyFxFlowFilters={page:1,size:50},dailyFxPreviewStale=false,dailyFxEditing
 function dailyFxRows(){return dailyFxImport&&!dailyFxImport.ready?[]:dailyFxDraft?.records||config.dailyFx||[];}
 function dailyFxMapping(){
  const draft=dailyFxImport;if(!draft)return '';const flowCodes=[...new Set(data[K.flow].rows.map(r=>E.currencyCode(r[7])))].sort();
- return `<section class="panel"><h3>汇率币种名称映射</h3><p>来源：${h(draft.fileName)}，${num(draft.table.rows.length)}行。名称无需固定，请将每个来源名称对应到流水使用的三位币种代码，例如“日圆现汇”→JPY；所有该名称、所有日期的记录一次映射。三位代码可直接填写，不限于常用币种。</p>${draft.error?'<p role="alert">'+h(draft.error)+'</p>':''}<form id="dailyFxMappingForm"><datalist id="fxCurrencyCodes">${flowCodes.filter(c=>/^[A-Z]{3}$/.test(c)).map(c=>'<option value="'+h(c)+'"></option>').join('')}</datalist><table><thead><tr><th>汇率表原始名称</th><th>匹配代码</th><th>记录数</th></tr></thead><tbody>${draft.names.map((name,i)=>`<tr><td>${h(name)||'（空白，需补充）'}</td><td><input name="currency_${i}" value="${h(draft.mapping[name]||'')}" list="fxCurrencyCodes" maxlength="3" pattern="[A-Za-z]{3}" placeholder="例如 VND" required aria-label="${h(name)}对应币种代码"></td><td>${num(draft.counts[name])}</td></tr>`).join('')}</tbody></table><button class="primary" type="submit">确认币种映射并预览全部日期</button></form><p class="muted">自动识别到的名称已推荐代码；未识别名称请手动填写。映射只用于汇率核验，不改写原流水币种。</p></section>`;
+ return `<section class="panel"><h3>汇率币种名称映射</h3><p>来源：${h(draft.fileName)}，${num(draft.table.rows.length)}行。名称无需固定，请将每个来源名称对应到流水使用的三位币种代码，例如“日圆现汇”→JPY；所有该名称、所有日期的记录一次映射。三位代码可直接填写，不限于常用币种。</p>${draft.error?'<p role="alert">'+h(draft.error)+'</p>':''}<form id="dailyFxMappingForm"><datalist id="fxCurrencyCodes">${flowCodes.filter(c=>/^[A-Z]{3}$/.test(c)).map(c=>'<option value="'+h(c)+'"></option>').join('')}</datalist><table><thead><tr><th>汇率表原始名称</th><th>匹配代码</th><th>记录数</th></tr></thead><tbody>${draft.names.map((name,i)=>`<tr><td>${h(name)||'（空白，需补充）'}</td><td><input name="currency_${i}" value="${h(draft.mapping[name]||'')}" list="fxCurrencyCodes" maxlength="3" pattern="[A-Za-z]{3}" placeholder="例如 VND" required aria-label="${h(name)}对应币种代码"></td><td>${num(draft.counts[name])}</td></tr>`).join('')}</tbody></table><div class="actions"><button class="primary" type="submit">确认币种映射并预览全部日期</button><button type="submit" value="detectQuotes">识别混合报价</button>${draft.quotePreview?.changes.length&&!draft.quotesNormalized?'<button type="submit" value="normalizeQuotes">确认将识别到的报价除以 100</button>':''}</div></form>${dailyFxQuotePreview(draft)}<p class="muted">自动识别到的名称已推荐代码；未识别名称请手动填写。映射只用于汇率核验，不改写原流水币种。</p></section>`;
 }
-function prepareDailyFxMapping(mapping){const d=dailyFxImport;const parsed=AuditDailyFx.parse(d.table,{currencyMap:mapping});AuditDailyFx.attach(fixedRates(),parsed.records,{units:config.dailyFxUnits||{},match:config.dailyFxRule||'exact'});dailyFxDraft={...parsed,fileName:d.fileName,units:{...config.dailyFxUnits},rule:config.dailyFxRule||'exact'};d.mapping=mapping;d.ready=true;d.error='';dailyFxCheck=null;}
-document.addEventListener('submit',e=>{if(e.target.id!=='dailyFxMappingForm')return;e.preventDefault();run(async()=>{const values=new FormData(e.target),mapping=Object.fromEntries(dailyFxImport.names.map((name,i)=>[name,String(values.get('currency_'+i)||'').trim().toUpperCase()]));try{prepareDailyFxMapping(mapping);}catch(error){dailyFxImport.ready=false;dailyFxImport.mapping=mapping;dailyFxImport.error=error.message;render();throw error;}render();toast('币种已映射，全部日期汇率已载入预览；确认报价单位后应用。');});});
+function dailyFxQuotePreview(draft){
+ const preview=draft.quotePreview;
+ if(!preview)return '';
+ if(!preview.changes.length)return '<p role="status">未识别到可统一的约 100 倍混合报价。请按来源文件设置报价单位。</p>';
+ const message=draft.quotesNormalized?'已统一到较小报价组的单位，核验仍需确认下方报价单位并点击应用。':'系统只在同一币种内识别两组报价。高组除以 100 后须与低组参考值相差不超过 5%。请核对两组确实用了不同的报价单位。';
+ return `<div class="ui-notice" role="status"><div><strong>${draft.quotesNormalized?'已统一':'建议统一'} ${num(preview.changes.length)} 条报价</strong><p>${message}</p></div></div><div class="table-scroll"><table><thead><tr><th>生效日期</th><th>币种</th><th>来源报价</th><th>除以 100 后</th><th>低组参考报价</th></tr></thead><tbody>${preview.changes.slice(0,50).map(row=>`<tr><td>${h(row.date)}</td><td>${h(row.currency)}</td><td>${h(row.rate)}</td><td>${h(row.normalized)}</td><td>${h(row.reference)}</td></tr>`).join('')}</tbody></table></div>${preview.changes.length>50?'<p class="muted">显示前 50 条，确认后统一处理全部识别记录。</p>':''}`;
+}
+function prepareDailyFxMapping(mapping,table=dailyFxImport.table){
+ const draft=dailyFxImport;
+ const parsed=AuditDailyFx.parse(table,{currencyMap:mapping});
+ const units={...config.dailyFxUnits,...dailyFxDraft?.units};
+ const rule=dailyFxDraft?.rule||config.dailyFxRule||'exact';
+ AuditDailyFx.attach(fixedRates(),parsed.records,{units,match:rule});
+ dailyFxDraft={...parsed,fileName:draft.fileName,units,rule};
+ draft.mapping=mapping;draft.ready=true;draft.error='';dailyFxCheck=null;
+}
+document.addEventListener('submit',e=>{
+ if(e.target.id!=='dailyFxMappingForm')return;
+ e.preventDefault();
+ run(async()=>{
+  const draft=dailyFxImport,values=new FormData(e.target);
+  const mapping=Object.fromEntries(draft.names.map((name,i)=>[name,String(values.get('currency_'+i)||'').trim().toUpperCase()]));
+  const action=e.submitter?.value;
+  const signature=JSON.stringify(mapping);
+  try{
+   if(action==='detectQuotes'||action==='normalizeQuotes'){
+    if(action==='detectQuotes'||draft.quoteSignature!==signature){
+     draft.quotePreview=AuditDailyFx.detectMixedQuotes(draft.table,mapping);
+     draft.quoteSignature=signature;
+     draft.mapping=mapping;
+     draft.error='';
+     draft.ready=false;
+     draft.quotesNormalized=false;
+     render();
+     return;
+    }
+    if(!draft.quotePreview?.changes.length)return;
+    prepareDailyFxMapping(mapping,draft.quotePreview.table);
+    draft.quotesNormalized=true;
+    render();
+    toast('报价已统一，请核对报价单位和逐笔换算预览。');
+    return;
+   }
+   const keepNormalized=draft.quotesNormalized&&draft.quoteSignature===signature;
+   if(!keepNormalized){draft.quotePreview=null;draft.quotesNormalized=false;}
+   prepareDailyFxMapping(mapping,keepNormalized?draft.quotePreview.table:draft.table);
+  }catch(error){
+   draft.ready=false;draft.mapping=mapping;draft.error=error.message;
+   render();
+   throw error;
+  }
+  render();
+  toast('币种已映射，全部日期汇率已载入预览；确认报价单位后应用。');
+ });
+});
 function dailyFxPreview(){
  const rows=dailyFxRows(),units=dailyFxDraft?.units||config.dailyFxUnits||{},dates=rows.map(r=>r.date).sort(),codes=[...new Set(rows.map(r=>r.currency))].sort();
  return `<section class="panel" id="dailyFxPreview"><div class="panel-heading"><h3>已导入汇率明细</h3><span>${dailyFxDraft?'待应用主档':rows.length?'已保存主档'+(config.fxMode==='daily'?' · 正在使用':' · 当前未启用'):'尚未导入'}</span></div>${rows.length?`<p>共 <b>${num(rows.length)}</b> 条，日期 <b>${h(dates[0])} ～ ${h(dates.at(-1))}</b>；币种：${codes.map(h).join('、')}。${dailyFxDraft?.fileName?'来源：'+h(dailyFxDraft.fileName)+'。':''}</p><p class="muted">已列出全部记录，可在表内滚动，并使用表头排序、筛选核对。实际换算汇率＝上传汇率÷报价单位；在报价设置中修改单位后，点击“刷新匹配与换算预览”可刷新此处预览，点击“应用”后才用于报告。</p><div class="table-scroll daily-fx-records"><table id="dailyFxRecords"><thead><tr><th>生效日期</th><th>货币名称</th><th>来源名称</th><th>上传汇率</th><th>报价单位</th><th>实际换算汇率（1单位原币兑人民币）</th></tr></thead><tbody>${rows.map(r=>{const unit=r.currency==='CNY'?1:Number(units[r.currency]||1),rate=r.currency==='CNY'?1:r.rate/unit;return `<tr><td>${h(r.date)}</td><td>${h(r.currency)}</td><td>${h(r.name||r.currency)}</td><td>${h(r.rate)}</td><td>${h(unit)}</td><td>${h(Number(rate.toPrecision(15)))}</td></tr>`;}).join('')}</tbody></table></div>`:`<p class="empty">${dailyFxImport?'请先在上方确认币种映射，全部日期的汇率将在这里显示。':'尚未读取汇率记录。点击上方“上传汇率Excel”，读取成功后明细会立即显示在这里，无需先应用。'}</p>`}</section>`;

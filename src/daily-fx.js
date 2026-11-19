@@ -4,6 +4,44 @@ const aliases={'人民币':'CNY','人民币元':'CNY','美元':'USD','美金':'U
 const cache=new WeakMap(),own=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
 function code(value){const text=String(value??'').trim();let c=aliases[text]||text.toUpperCase();if(c==='RMB')c='CNY';if(!/^[A-Z]{3}$/.test(c))throw Error('无法识别货币名称“'+text+'”，请填写USD、HKD、EUR等三位代码，或美元、港币、欧元等常用名称。');return c;}
 function date(value){let s=String(value??'').trim().slice(0,10).replace(/\//g,'-');const m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);if(m)s=m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');if(!/^\d{4}-\d{2}-\d{2}$/.test(s)||!Number.isFinite(Date.parse(s))||new Date(s).toISOString().slice(0,10)!==s)throw Error('汇率生效日期无效：'+value);return s;}
+function detectMixedQuotes(table,currencyMap={}){
+ const dateIndex=table.headers.indexOf('生效日期');
+ const nameIndex=table.headers.indexOf('货币名称');
+ const rateIndex=table.headers.indexOf('汇率');
+ const groups=new Map();
+ table.rows.forEach((row,index)=>{
+  const name=String(row[nameIndex]??'').trim();
+  if(!name)return;
+  const currency=code(own(currencyMap,name)?currencyMap[name]:name);
+  const rate=Number(String(row[rateIndex]??'').trim().replace(/[,，]/g,''));
+  if(!groups.has(currency))groups.set(currency,[]);
+  groups.get(currency).push({index,currency,date:row[dateIndex],rate});
+ });
+ const changes=[];
+ for(const [currency,records] of groups){
+  if(currency==='CNY'||records.length<2||records.some(row=>!Number.isFinite(row.rate)||row.rate<=0))continue;
+  const sorted=[...records].sort((a,b)=>a.rate-b.rate);
+  const split=sorted.findIndex((row,i)=>i>0&&row.rate/sorted[i-1].rate>=50);
+  if(split<0)continue;
+  const low=sorted.slice(0,split),high=sorted.slice(split);
+  let closest=0;
+  const proposed=high.map(row=>{
+   const normalized=Number((row.rate/100).toPrecision(15));
+   while(closest+1<low.length&&Math.abs(low[closest+1].rate-normalized)<=Math.abs(low[closest].rate-normalized))closest++;
+   return {...row,normalized,reference:low[closest].rate};
+  });
+  if(proposed.every(row=>Math.abs(row.normalized/row.reference-1)<=0.05))changes.push(...proposed);
+ }
+ changes.sort((a,b)=>a.index-b.index);
+ const replacements=new Map(changes.map(row=>[row.index,row.normalized]));
+ const rows=table.rows.map((row,i)=>{
+  if(!replacements.has(i))return row;
+  const updated=[...row];
+  updated[rateIndex]=replacements.get(i);
+  return updated;
+ });
+ return {changes,table:{...table,rows}};
+}
 function parse(table,options={}){
  const columns=new Map(table.headers.map((v,i)=>[String(v).trim(),i]));for(const h of ['生效日期','货币名称','汇率'])if(!columns.has(h))throw Error('汇率模板缺少列：'+h);
  const found=new Map();let duplicates=0;
@@ -33,5 +71,5 @@ function assertCoverage(rows,rates){if(!rates?.dailyFx)return;const missing=cove
 function table(records){return {headers:['生效日期','货币名称','汇率'],rows:records.map(r=>[r.date,r.currency,r.rate])};}
 function trace(rows,rates,sourceRows=rows){const sourceIndex=new Map(sourceRows.map((r,i)=>[r,i+2]));return {headers:['源流水行','流水识别号','本方名称','本方账号','交易日期','币种','原币流入金额','原币流出金额','原币交易后余额','汇率生效日期','实际汇率（1单位原币兑人民币）','匹配来源','换算人民币流入金额','换算人民币流出金额','换算人民币交易后余额','导入人民币流入金额（保留）','导入人民币流出金额（保留）','导入人民币交易后余额（保留）','报价单位','主档原始报价汇率'],rows:rows.map((r,i)=>{const hit=resolve(rates,r[5],r[7]),convert=j=>hit.rate==null?null:Math.round(Math.round(Number(r[j]||0)*100)*hit.rate)/100;return [sourceIndex.get(r),r[15],r[0],r[1],String(r[5]).slice(0,10),r[7],r[8],r[10],r[12],hit.date,hit.rate,hit.source,convert(8),convert(10),convert(12),r[9],r[11],r[13],hit.unit??null,hit.quote??null];})};}
 function describe(rates){const c=rates?.dailyFx;return c?'每日汇率；'+(c.match==='previous'?'最近生效日期≤交易日期':'交易日期精确匹配')+'；报价单位：'+[...c.index.keys()].filter(k=>k!=='CNY').map(k=>k+'按'+Number(c.units[k]||1)+'单位原币报价').join('、')+'；人民币固定为1；'+(c.match==='original'?'缺少当日汇率的流水按原币数值计入，可能为人民币与未折算原币混合口径。':'未命中不使用固定汇率。'):'';}
-g.AuditDailyFx={code,parse,attach,resolve,coverage,assertCoverage,table,trace,describe};
+g.AuditDailyFx={code,detectMixedQuotes,parse,attach,resolve,coverage,assertCoverage,table,trace,describe};
 })(globalThis);
