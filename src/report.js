@@ -229,7 +229,7 @@ function compute(data,settings={}){
  }
 
  const thresholdLabel='大额单笔交易人民币['+thresholdInWan.format(threshold/10000)+']万元以上'+(threshold===50000?'【系统默认】':'【项目自定义】');
- const features=section('features','1.2 资金流水 – 资金流水性质分析',thresholdLabel+'（含阈值）。范围内外柱图与区间表基于同一批命中流水，方向占比分母为该范围内同方向的大额金额。对手方为空仅判断对手方名称为空（含纯空格），账号有值仍计入。');
+ const features=section('features','1.2 资金流水 – 资金流水性质分析',thresholdLabel+'（含阈值）。左侧大额单笔汇总及明细按该阈值筛选。合并范围内外的单笔交易图表按本期全量流水直接分组，金额占比分母为各自范围的交易总额，方向占比分母为各自范围的同方向金额。对手方为空仅判断对手方名称为空（含纯空格），账号有值仍计入。');
  const tradeAmount=r=>value(r,8,fx)+value(r,10,fx);
  const big=rows.filter(r=>value(r,8,rates)+value(r,10,rates)>=E.cents(threshold));
  const blank=rows.filter(r=>!clean(r[3]));
@@ -245,14 +245,15 @@ function compute(data,settings={}){
   return card;
  });
  const buckets=['<1百万','1～<5百万','5～<10百万','10～<20百万','≥20百万'];
- for(const [name,rs] of [['合并范围内',groups[0][1]],['合并范围外',groups[1][1]]]){
+ const internalRows=rows.filter(r=>own.has(r[3]));
+ for(const [name,rs] of [['合并范围内',internalRows],['合并范围外',external]]){
   const parts=buckets.map(()=>aggregate());
   for(const r of rs){const m=amount(value(r,8,fx)+value(r,10,fx));add(parts[m<1?0:m<5?1:m<10?2:m<20?3:4],r,fx);}
-  stacked(features,name+'大额交易金额分布',buckets.map((label,i)=>[label,parts[i].n,parts[i]]),{first:'单笔金额（百万元）',countLabel:'交易笔数'});
+  stacked(features,'单笔交易分析（'+name+'交易情况）',buckets.map((label,i)=>[label,parts[i].n,parts[i]]),{first:'单笔金额（百万元）',countLabel:'交易笔数'});
   const groupTotal=parts.reduce((total,part)=>total+turnover(part),0);
   features.charts.at(-1).amountBands=parts.map((part,i)=>{
    const bandTotal=turnover(part);
-   return [buckets[i],amount(bandTotal),part.ins+part.outs,ratio(bandTotal,groupTotal)];
+   return [buckets[i],amount(bandTotal),part.n,ratio(bandTotal,groupTotal)];
   });
  }
  const detailHeaders=['源Excel行','流水号','本方名称','本方账号','本方银行','对手方名称','对手方账号','交易日期','交易时间','币种','等值人民币流入金额（元）','等值人民币流出金额（元）','交易类型','摘要','关联关系','对手方类型'];
@@ -634,7 +635,7 @@ function sectionBody(s,m,continuations){
    return tableHTML({...t,name,headers,rows,limit:t.limit?t.limit+1:undefined});
   };
   const breakdown=c=>{
-   return stackedHTML(c)+tableHTML({name:'单笔交易金额分布',headers:['单笔交易','金额（百万元）','笔数','占比'],rows:c.amountBands})+'<p class="report-boundary-note">区间边界：1百万归入1～&lt;5百万；5百万归入5～&lt;10百万；10百万归入10～&lt;20百万；20百万归入≥20百万。先按大额阈值（含阈值）筛选，再做区间分布。</p>';
+   return stackedHTML(c)+tableHTML({name:'单笔交易金额分布',headers:['单笔交易','金额（百万元）','笔数','占比'],rows:c.amountBands})+'<p class="report-boundary-note">区间边界：1百万归入1～&lt;5百万；5百万归入5～&lt;10百万；10百万归入10～&lt;20百万；20百万归入≥20百万。按本期该合并范围的全部流水统计。</p>';
   };
   continuations.push(
    subhead('1.2.1 大额单笔交易分析')+detail(tables[3],'合并范围内')+detail(tables[4],'合并范围外'),
