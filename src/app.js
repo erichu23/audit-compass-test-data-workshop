@@ -7,6 +7,16 @@ const reportScenarioCounts={
  relatedCustomerPairs:36,relatedSupplierPairs:36,relatedBothPairs:36,relatedNonPairs:36,
  internalBig:8,employeeRows:12,officerRows:12
 };
+const defaultFinancialCounterparties=new Map([
+ ['陕西汽车控股集团有限公司','示例恒川银行股份有限公司'],
+ ['广东省交通集团有限公司','示例海岚银行股份有限公司'],
+ ['太平人寿保险有限公司','示例嘉禾理财有限责任公司'],
+ ['深圳市爱施德股份有限公司','示例新源基金管理有限公司'],
+ ['上海城建（集团）有限公司','示例东浦银行股份有限公司'],
+ ['隆基绿能科技股份有限公司','示例远帆理财有限责任公司'],
+ ['广西南丹南方金属有限公司','示例瑞泽基金管理有限公司'],
+ ['河北津西钢铁集团股份有限公司','示例明川基金管理有限公司']
+]);
 function defaultReportProject(){
  const config={seed:'AC-REPORT-COVERAGE',start:'2023-01-01',end:'2025-12-31',count:9000,min:100,max:24000000,opening:120000,includeForeign:true,fx:E.DEFAULT_FX,growth:18,internal:12,big:12,bigThreshold:50000,blankCP:30,blankSummary:30,balanceErrors:12,sameTime:12,sameMissing:9,person:true,once:true,personPerYear:2,oncePerYear:2,annualCounts:{},companyFlow:{},sampleNonMerchants:{},sampleAccountPlans:{},companySourceMode:'all',missingCompany:true,cut:'12-31',first:2023,last:2025};
  config.annualCounts=Object.fromEntries([2023,2024,2025].map(year=>[year,{...reportScenarioCounts}]));
@@ -18,6 +28,12 @@ function defaultReportProject(){
  config.sampleNonMerchants=samples.pools;
  config.sampleAccountPlans=samples.accountPlans;
  const {data}=E.generate(samples.data,config);
+ // Rename only the built-in sample and its source so master-data matches survive regeneration.
+ const sampleName=value=>defaultFinancialCounterparties.get(value)??value;
+ for(const books of [data,samples.data]){
+  for(const sheet of Object.values(books))sheet.rows=sheet.rows.map(row=>row.map(sampleName));
+ }
+ config.sampleNonMerchants=Object.fromEntries(Object.entries(samples.pools).map(([name,pool])=>[name,pool.map(sampleName)]));
  config.reportCriteria=AuditReport.parseCriteria({daysMin:0,daysMax:365,insuredMax:50,paidMin:20,paidMax:50,overlapAmount:1000000,overlapPercent:20,unknownAmount:500000});
  config.registryIntervalVersion=AuditRegistry.INTERVAL_VERSION;
  config.registryBounds=Object.fromEntries(AuditRegistry.metrics.map(([id,,,limits])=>[id,[...limits]]));

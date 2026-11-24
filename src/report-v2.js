@@ -354,8 +354,8 @@ function compute(data,settings={}){
     subtotal('非前20大合计（'+integer(remaining.n)+'笔，交易金额合计 '+currency.format(amount(turnover(remaining)))+'百万）',remaining)
    );
    features.externalTop20={
-    table:{name:'交易金额前20大明细',headers:['序号',...largeDetailColumns.map(i=>headers[i])],rows,largeDetail:true,categoryBands},
-    note:'前20大共 '+integer(top20.length)+'笔，交易金额合计 '+top20Amount+'百万。按对手方名称中的银行、理财或基金关键词分组。'
+    table:{hideTitle:true,headers:['序号',...largeDetailColumns.map(i=>headers[i])],rows,largeDetail:true,categoryBands},
+    note:'其中：交易金额前20大，交易金额合计 '+top20Amount+'百万。按对手方名称中的银行、理财或基金关键词分组。'
    };
   }
  }
@@ -666,8 +666,8 @@ function detailRowsHTML(t,rows){
   return '<tr'+(category?' class="report-category-band"':total?' class="report-total"':'')+'>'+cells.join('')+'</tr>';
  }).join('')||'<tr><td colspan="'+t.headers.length+'">'+esc(t.emptyMessage||'本期无记录')+'</td></tr>';
 }
-function detailSummaryHTML(note,highlight=false){
- return '<p class="muted report-detail-summary'+(highlight?' report-focus-summary':'')+'">'+
+function detailSummaryHTML(note){
+ return '<p class="muted report-detail-summary">'+
   esc(note).replace(/\d[\d,]*(?:\.\d+)?/g,n=>'<strong class="report-stat-value">'+n+'</strong>').replaceAll('\n','<br>')+'</p>';
 }
 function tableHTML(t){
@@ -841,7 +841,7 @@ function sectionBody(s,m,continuations){
    '注册资本':'注册资本 '+c.capitalMinWan+'–'+c.capitalMaxWan+' 万元（含边界）',
    '收支重合':'交易额 ≥ '+currency.format(c.overlapAmount)+'；重合比例 ≥ '+c.overlapPercent+'%',
    '未识别客商关系':'交易额 ≥ '+currency.format(c.unknownAmount)};
-  const detail=tableHTML({...list,sectionRanks:true,filterHeaders:list.headers.map(h=>conditions[h]||'')});
+  const detail=tableHTML({...list,name:list.name.replace(/^2\.3\.[1-3]\s+/,''),sectionRanks:true,filterHeaders:list.headers.map(h=>conditions[h]||'')});
   continuations.push('<section class="report-section" id="report-'+s.id+'-detail">'+detail+'</section>');
  }
  if(s.id==='cover')return coverHTML(s);
@@ -881,8 +881,8 @@ function sectionBody(s,m,continuations){
   const externalTop20=s.externalTop20;
   continuations.push(
    '<section class="report-section" id="report-large-internal">'+subhead(largeTitle)+detail(largeInternal,'合并范围内')+'</section>',
-   '<section class="report-section" id="report-large-external">'+subhead('重点关注：'+largeExternalScope)+
-    detailSummaryHTML(s.largeExternalSummary,true)+detailSummaryHTML(externalTop20.note)+
+   '<section class="report-section" id="report-large-external"><h4 class="report-subhead report-focus-heading">'+esc('重点关注：'+largeExternalScope)+'</h4>'+
+    detailSummaryHTML(s.largeExternalSummary)+detailSummaryHTML(externalTop20.note)+
     tableHTML(externalTop20.table)+'</section>',
    tableHTML({...blankParty.top20Summary,name:'1.2.2 交易对手方信息为空的交易分析',note:blankParty.note}),
    '<section class="report-section" id="report-blank-memo">'+

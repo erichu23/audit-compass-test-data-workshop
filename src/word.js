@@ -36,10 +36,10 @@ function wordContents(compact=false){
  }));
  return new ReportTableOfContents('报告目录',{hyperlink:true,headingStyleRange:'1-3',contentChildren:entries,beginDirty:true});
 }
-function paragraph(text,{heading,align,bold=false,color=theme.ink,size=18,characterSpacing,bookmark,runs,spacing={after:65,line:240},snapToGrid}={}){
+function paragraph(text,{heading,align,bold=false,color=theme.ink,size=18,characterSpacing,bookmark,runs,spacing={after:65,line:240},snapToGrid,pageBreakBefore}={}){
  return new D.Paragraph({
   ...(heading?{heading}:{}),
-  alignment:align,spacing,snapToGrid,keepNext:!!heading,
+  alignment:align,spacing,snapToGrid,pageBreakBefore,keepNext:!!heading,
   children:bookmark?[new D.Bookmark({id:bookmark,children:[new D.TextRun({text:String(text??''),font,size,bold,color,characterSpacing})]})]:(runs||[new D.TextRun({text:String(text??''),font,size,bold,color,characterSpacing})])
  });
 }
@@ -256,7 +256,7 @@ async function blocks(node,width,context={}){
   }
   if(child.matches('.report-toc')){
    const title=context.wordV2?text(child.querySelector('h2')):'报告目录';
-   out.push(paragraph(title,{bold:true,color:theme.navy,size:context.wordV2?38:32}));
+   out.push(paragraph(title,{bold:true,color:theme.navy,size:context.wordV2?38:32,pageBreakBefore:context.tocAfterCover}));
    if(context.wordV2){
     const accent=Math.floor(width*.12);
     const fillCells=[theme.accent,theme.fill].map((fill,i)=>new D.TableCell({
@@ -355,7 +355,9 @@ async function blocks(node,width,context={}){
     continue;
    }
    const main=tag==='h2',level=headingBookmarks.has(child)?[D.HeadingLevel.HEADING_1,D.HeadingLevel.HEADING_2,D.HeadingLevel.HEADING_3][headingDepth(child)-1]:undefined;
-   out.push(paragraph(text(child),{heading:child.textContent.includes('综合分析报告（年审适用）')?D.HeadingLevel.TITLE:level,bold:!child.matches('.report-section-rank-title'),color:toc?theme.navy:theme.ink,size:main?32:23,bookmark:headingBookmarks.get(child),snapToGrid:detailSpacing?false:undefined,spacing:detailSpacing?{...detailSpacing,line:main?440:320}:spaciousCover?{before:60,after:145,line:290}:context.compactOverview?{before:0,after:30,line:240}:undefined}));
+   const color=child.matches('.report-focus-heading')?'C00000':toc?theme.navy:theme.ink;
+   const rankTitle=child.matches('.report-section-rank-title');
+   out.push(paragraph(text(child),{heading:child.textContent.includes('综合分析报告（年审适用）')?D.HeadingLevel.TITLE:level,bold:!rankTitle,color,size:main?32:rankTitle?18:23,bookmark:headingBookmarks.get(child),snapToGrid:detailSpacing?false:undefined,spacing:rankTitle?{before:30,after:55,line:240}:detailSpacing?{...detailSpacing,line:main?440:320}:spaciousCover?{before:60,after:145,line:290}:context.compactOverview?{before:0,after:30,line:240}:undefined}));
    if(toc)out.push(new D.Table({
     layout:D.TableLayoutType.FIXED,width:{size:width,type:D.WidthType.DXA},columnWidths:[Math.floor(width*.12),Math.ceil(width*.88)],
     borders:Object.fromEntries(Object.keys(borders).map(key=>[key,{style:D.BorderStyle.NONE,size:0,color:'FFFFFF'}])),
@@ -390,7 +392,7 @@ async function blocks(node,width,context={}){
      if(child.matches('.report-detail-summary,.report-registry-condition')){
       const registry=child.matches('.report-registry-condition');
       const compactRegistry=registry&&!!child.closest('#report-compliance');
-      const runs=[],color=child.matches('.report-focus-summary')?'C00000':context.color||theme.ink;
+      const runs=[],color=context.color||theme.ink;
       const visit=(node,heavy=false)=>{if(node.nodeType===3){runs.push(new D.TextRun({text:node.textContent,font,size:compactRegistry?15:registry?16:size,bold:!!bold||heavy,color}));return;}for(const part of node.childNodes)visit(part,heavy||['STRONG','B'].includes(node.tagName));};
       visit(temp);out.push(paragraph('',{runs,color,align:context.align,size,snapToGrid:detailSpacing?false:undefined,spacing:detailSpacing??(registry?{after:30,line:220}:undefined)}));
      }else out.push(paragraph(value,{bold,color:context.color,align:context.align,size,snapToGrid:detailSpacing?false:undefined,spacing:detailSpacing??(spaciousCover?{before:!context.cell&&bold?context.coverSpacing.noteTop:0,after:context.cell?36:context.coverSpacing.noteAfter,line:context.cell?230:270}:context.compactOverview?{after:25,line:220}:undefined)}));
@@ -488,18 +490,24 @@ async function report(model,template=g.AuditReport){
    ['#report-blank-memo',{rowHeight:260,padding:24,fontSize:15,line:210}]
   ];
  const sections=[];let bodyStarted=false;
- for(const page of pages){
+ for(const [pageIndex,page] of pages.entries()){
   const front=page.dataset?.reportFront==='true'||!!page.querySelector?.('#report-cover,.report-toc');
   const restart=!front&&!bodyStarted;if(!front)bodyStarted=true;
   const coverSpacing=wordV2&&page.querySelector('#report-cover')?coverSpacingFor(page):undefined;
   const isV2Toc=wordV2&&!!page.querySelector('.report-toc');
+  const tocAfterCover=isV2Toc&&!!pages[pageIndex-1]?.querySelector('#report-cover');
   const detailLayout=wordV2?detailLayouts.find(([selector])=>page.querySelector(selector))?.[1]:undefined;
   const compactOverview=wordV2&&!!page.querySelector('#report-compliance,#report-follow');
   const sectionFit=wordV2&&(page.querySelector('.report-counterparty-summary')?'counterparties':
    ['features','concentration','compliance','people'].find(id=>page.querySelector('#report-'+id)));
   const boundedPage=detailLayout||coverSpacing||sectionFit;
-  const content=await blocks(page,pageWidth,{wordV2,coverSpacing,compactOverview,detailLayout,sectionFit});
-  if(!isV2Toc)content.push(new D.Paragraph({spacing:{before:0,after:0,line:20,...(boundedPage?{lineRule:D.LineRuleType.EXACT}:{})},snapToGrid:boundedPage?false:undefined,children:[new D.TextRun({text:'',size:2})]}));
+  const content=await blocks(page,pageWidth,{wordV2,coverSpacing,compactOverview,detailLayout,sectionFit,tocAfterCover});
+  if(tocAfterCover){
+   // A single page break avoids a separate cover section ending before the TOC.
+   sections.at(-1).children.push(...content);
+   continue;
+  }
+  if(!isV2Toc&&!(coverSpacing&&pages[pageIndex+1]?.querySelector('.report-toc')))content.push(new D.Paragraph({spacing:{before:0,after:0,line:20,...(boundedPage?{lineRule:D.LineRuleType.EXACT}:{})},snapToGrid:boundedPage?false:undefined,children:[new D.TextRun({text:'',size:2})]}));
   sections.push({
    properties:{type:D.SectionType.NEXT_PAGE,...(boundedPage?{grid:{type:D.DocumentGridType.DEFAULT}}:{}),page:{size:{width:11906,height:16838,orientation:D.PageOrientation.LANDSCAPE},pageNumbers:restart?{start:1}:{},margin:{top:coverSpacing?680:detailLayout||sectionFit?660:compactOverview?760:850,right:567,bottom:coverSpacing?650:detailLayout||sectionFit?660:compactOverview?760:850,left:567,header:300,footer:300}}},
    headers:{default:header},footers:{default:front?frontFooter:footer},children:content

@@ -141,7 +141,7 @@ assert.equal(memoCard.partyGroups[0][1].parties,memoNamedCount);
 assert(featuresPage.includes('有交易对手方：<strong class="report-nature-group-total">'+memoNamedCount+'家/'));
 assert(featuresPage.includes('无交易对手方：<strong class="report-nature-group-total">0.00百万/0笔'));
 
-const largePages=v2WordPages.filter(page=>page.includes('1.2.1 大额单笔交易分析</h4>')||page.includes('<h4 class="report-subhead">重点关注：合并范围外（不包括对手方为空）</h4>'));
+const largePages=v2WordPages.filter(page=>page.includes('1.2.1 大额单笔交易分析</h4>')||page.includes('<h4 class="report-subhead report-focus-heading">重点关注：合并范围外（不包括对手方为空）</h4>'));
 assert.equal(largePages.length,2);
 for(const page of largePages){
  assert(!page.includes('<th>流水识别号</th>'));
@@ -149,7 +149,12 @@ for(const page of largePages){
  assert(page.includes('<th>等值人民币流出金额（百万）</th>'));
 }
 const outsidePage=largePages[1];
-assert(outsidePage.includes('report-focus-summary">大额单笔交易人民币'));
+assert(outsidePage.includes('report-detail-summary">大额单笔交易人民币'));
+assert(outsidePage.includes('其中：交易金额前<strong class="report-stat-value">20</strong>大，交易金额合计'));
+assert(!outsidePage.includes('交易金额前20大明细')&&!outsidePage.includes('大共'));
+const defaultFinanceNames=features2.externalTop20.table.rows.filter(row=>typeof row[0]==='number').map(row=>row[4]).filter(name=>/银行|理财|基金/.test(name));
+assert.equal(new Set(defaultFinanceNames).size,8);
+for(const keyword of ['银行','理财','基金'])assert(defaultFinanceNames.some(name=>name.includes(keyword)));
 assert(largePages[0].includes('report-detail-summary">大额单笔交易人民币'));
 assert.equal((outsidePage.match(/class="report-category-band"/g)||[]).length,2);
 assert(outsidePage.indexOf('银行／理财／基金（')<outsidePage.indexOf('其他对手方（'));
@@ -311,7 +316,7 @@ for(const [id,include,exclude] of [
  assert(details.every((row,i)=>i===0||row[amount]<=details[i-1][amount]));
  for(const h of include)assert(t.headers.includes(h));
  for(const h of exclude)assert(!t.headers.includes(h));
- assert(v2WordHtml.includes('<h4 class="report-section-rank-title">'+t.name+'</h4>'));
+ assert(v2WordHtml.includes('<h4 class="report-section-rank-title">'+t.name.replace(/^2\.3\.[1-3]\s+/,'')+'</h4>'));
  assert(reportTables[t.name]);
 }
 
@@ -363,7 +368,7 @@ assert.equal((peoplePage.match(/<table class="table"/g)||[]).length,1);
 for(const name of ['类型','人数（人）'])assert(peoplePage.includes('<th rowspan="2">'+name+'</th>'));
 for(const direction of ['流入','流出'])assert(peoplePage.includes('<th colspan="3">'+direction+'</th>'));
 assert(peoplePage.includes('<th colspan="2">交易金额合计</th>'));
-assert(v2WordHtml.includes('2.3.2 个人及疑似个人前20大对手方</h4>'));
+assert(v2WordHtml.includes('>个人及疑似个人前20大对手方</h4>'));
 
 for(const id of ['compliance','people','follow']){
  const overviewIndex=v2WordPages.findIndex(page=>page.includes('id="report-'+id+'"'));

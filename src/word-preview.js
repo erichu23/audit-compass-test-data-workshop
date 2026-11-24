@@ -148,22 +148,31 @@ async function render(blob){
  const pages=create('div');pages.className='word-preview-pages';
  let pageNumber=1;
  let content=create('section');
+ let sectionPages=[];
  for(const block of children(child(documentXml.documentElement,'body'))){
-  const section=block.localName==='sectPr'?block:child(child(block,'pPr'),'sectPr');
+  const properties=child(block,'pPr');
+  if(child(properties,'pageBreakBefore')&&content.hasChildNodes()){
+   sectionPages.push(content);
+   content=create('section');
+  }
+  const section=block.localName==='sectPr'?block:child(properties,'sectPr');
   if(!section||block.textContent.trim()||block.getElementsByTagNameNS(W,'drawing').length)appendBlock(content,block);
   if(!section)continue;
   const size=child(section,'pgSz'),margins=child(section,'pgMar');
-  content.className='word-preview-page';
-  content.style.width=twips(number(size,'w')||16838);
-  content.style.minHeight=twips(number(size,'h')||11906);
-  content.style.padding=['top','right','bottom','left'].map(side=>twips(number(margins,side))).join(' ');
   const restart=number(child(section,'pgNumType'),'start');
   if(restart)pageNumber=restart;
-  const header=pagePart(section,'header',pageNumber),footer=pagePart(section,'footer',pageNumber);
-  if(header)content.prepend(header);
-  if(footer)content.append(footer);
-  pages.append(content);
-  pageNumber++;
+  for(const sectionPage of [...sectionPages,content]){
+   sectionPage.className='word-preview-page';
+   sectionPage.style.width=twips(number(size,'w')||16838);
+   sectionPage.style.minHeight=twips(number(size,'h')||11906);
+   sectionPage.style.padding=['top','right','bottom','left'].map(side=>twips(number(margins,side))).join(' ');
+   const header=pagePart(section,'header',pageNumber),footer=pagePart(section,'footer',pageNumber);
+   if(header)sectionPage.prepend(header);
+   if(footer)sectionPage.append(footer);
+   pages.append(sectionPage);
+   pageNumber++;
+  }
+  sectionPages=[];
   content=create('section');
  }
  if(content.hasChildNodes()){content.className='word-preview-page';pages.append(content);}

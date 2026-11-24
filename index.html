@@ -1622,11 +1622,11 @@ body #content table thead th.ba-filtered .ba-filter-btn::before{background-image
 .report-document .report-nature-cards .report-large-condition,.report-document .report-nature-cards .report-large-group{margin-bottom:5px}
 
 .report-document .report-nature-charts figcaption:not(.report-large-chart-title){color:#000;font-size:14px}
-.report-document .report-focus-summary,.report-document .report-focus-summary .report-stat-value{color:#c00000}
+.report-document .report-focus-heading{color:#c00000}
 
 .report-sheet .report-counterparty-summary{grid-template-columns:minmax(0,38fr) minmax(0,62fr)}
 .report-sheet .report-related-summary{grid-template-columns:minmax(0,2fr) minmax(0,3fr)}
-.report-v2-document .report-table h4.report-section-rank-title{font-weight:400}
+.report-v2-document .report-table h4.report-section-rank-title{font-size:12px;font-weight:400}
 .report-v2-document .report-cover-grid>tbody>tr:first-child{height:4.5em}
 .report-v2-document .report-cover-notes p{margin:4px 0 6px}
 .report-v2-document .report-unknown-bands .table-scroll>table tbody td:first-child{white-space:nowrap!important}
@@ -3880,8 +3880,8 @@ function compute(data,settings={}){
     subtotal('非前20大合计（'+integer(remaining.n)+'笔，交易金额合计 '+currency.format(amount(turnover(remaining)))+'百万）',remaining)
    );
    features.externalTop20={
-    table:{name:'交易金额前20大明细',headers:['序号',...largeDetailColumns.map(i=>headers[i])],rows,largeDetail:true,categoryBands},
-    note:'前20大共 '+integer(top20.length)+'笔，交易金额合计 '+top20Amount+'百万。按对手方名称中的银行、理财或基金关键词分组。'
+    table:{hideTitle:true,headers:['序号',...largeDetailColumns.map(i=>headers[i])],rows,largeDetail:true,categoryBands},
+    note:'其中：交易金额前20大，交易金额合计 '+top20Amount+'百万。按对手方名称中的银行、理财或基金关键词分组。'
    };
   }
  }
@@ -4192,8 +4192,8 @@ function detailRowsHTML(t,rows){
   return '<tr'+(category?' class="report-category-band"':total?' class="report-total"':'')+'>'+cells.join('')+'</tr>';
  }).join('')||'<tr><td colspan="'+t.headers.length+'">'+esc(t.emptyMessage||'本期无记录')+'</td></tr>';
 }
-function detailSummaryHTML(note,highlight=false){
- return '<p class="muted report-detail-summary'+(highlight?' report-focus-summary':'')+'">'+
+function detailSummaryHTML(note){
+ return '<p class="muted report-detail-summary">'+
   esc(note).replace(/\d[\d,]*(?:\.\d+)?/g,n=>'<strong class="report-stat-value">'+n+'</strong>').replaceAll('\n','<br>')+'</p>';
 }
 function tableHTML(t){
@@ -4367,7 +4367,7 @@ function sectionBody(s,m,continuations){
    '注册资本':'注册资本 '+c.capitalMinWan+'–'+c.capitalMaxWan+' 万元（含边界）',
    '收支重合':'交易额 ≥ '+currency.format(c.overlapAmount)+'；重合比例 ≥ '+c.overlapPercent+'%',
    '未识别客商关系':'交易额 ≥ '+currency.format(c.unknownAmount)};
-  const detail=tableHTML({...list,sectionRanks:true,filterHeaders:list.headers.map(h=>conditions[h]||'')});
+  const detail=tableHTML({...list,name:list.name.replace(/^2\.3\.[1-3]\s+/,''),sectionRanks:true,filterHeaders:list.headers.map(h=>conditions[h]||'')});
   continuations.push('<section class="report-section" id="report-'+s.id+'-detail">'+detail+'</section>');
  }
  if(s.id==='cover')return coverHTML(s);
@@ -4407,8 +4407,8 @@ function sectionBody(s,m,continuations){
   const externalTop20=s.externalTop20;
   continuations.push(
    '<section class="report-section" id="report-large-internal">'+subhead(largeTitle)+detail(largeInternal,'合并范围内')+'</section>',
-   '<section class="report-section" id="report-large-external">'+subhead('重点关注：'+largeExternalScope)+
-    detailSummaryHTML(s.largeExternalSummary,true)+detailSummaryHTML(externalTop20.note)+
+   '<section class="report-section" id="report-large-external"><h4 class="report-subhead report-focus-heading">'+esc('重点关注：'+largeExternalScope)+'</h4>'+
+    detailSummaryHTML(s.largeExternalSummary)+detailSummaryHTML(externalTop20.note)+
     tableHTML(externalTop20.table)+'</section>',
    tableHTML({...blankParty.top20Summary,name:'1.2.2 交易对手方信息为空的交易分析',note:blankParty.note}),
    '<section class="report-section" id="report-blank-memo">'+
@@ -27702,10 +27702,10 @@ function wordContents(compact=false){
  }));
  return new ReportTableOfContents('报告目录',{hyperlink:true,headingStyleRange:'1-3',contentChildren:entries,beginDirty:true});
 }
-function paragraph(text,{heading,align,bold=false,color=theme.ink,size=18,characterSpacing,bookmark,runs,spacing={after:65,line:240},snapToGrid}={}){
+function paragraph(text,{heading,align,bold=false,color=theme.ink,size=18,characterSpacing,bookmark,runs,spacing={after:65,line:240},snapToGrid,pageBreakBefore}={}){
  return new D.Paragraph({
   ...(heading?{heading}:{}),
-  alignment:align,spacing,snapToGrid,keepNext:!!heading,
+  alignment:align,spacing,snapToGrid,pageBreakBefore,keepNext:!!heading,
   children:bookmark?[new D.Bookmark({id:bookmark,children:[new D.TextRun({text:String(text??''),font,size,bold,color,characterSpacing})]})]:(runs||[new D.TextRun({text:String(text??''),font,size,bold,color,characterSpacing})])
  });
 }
@@ -27922,7 +27922,7 @@ async function blocks(node,width,context={}){
   }
   if(child.matches('.report-toc')){
    const title=context.wordV2?text(child.querySelector('h2')):'报告目录';
-   out.push(paragraph(title,{bold:true,color:theme.navy,size:context.wordV2?38:32}));
+   out.push(paragraph(title,{bold:true,color:theme.navy,size:context.wordV2?38:32,pageBreakBefore:context.tocAfterCover}));
    if(context.wordV2){
     const accent=Math.floor(width*.12);
     const fillCells=[theme.accent,theme.fill].map((fill,i)=>new D.TableCell({
@@ -28021,7 +28021,9 @@ async function blocks(node,width,context={}){
     continue;
    }
    const main=tag==='h2',level=headingBookmarks.has(child)?[D.HeadingLevel.HEADING_1,D.HeadingLevel.HEADING_2,D.HeadingLevel.HEADING_3][headingDepth(child)-1]:undefined;
-   out.push(paragraph(text(child),{heading:child.textContent.includes('综合分析报告（年审适用）')?D.HeadingLevel.TITLE:level,bold:!child.matches('.report-section-rank-title'),color:toc?theme.navy:theme.ink,size:main?32:23,bookmark:headingBookmarks.get(child),snapToGrid:detailSpacing?false:undefined,spacing:detailSpacing?{...detailSpacing,line:main?440:320}:spaciousCover?{before:60,after:145,line:290}:context.compactOverview?{before:0,after:30,line:240}:undefined}));
+   const color=child.matches('.report-focus-heading')?'C00000':toc?theme.navy:theme.ink;
+   const rankTitle=child.matches('.report-section-rank-title');
+   out.push(paragraph(text(child),{heading:child.textContent.includes('综合分析报告（年审适用）')?D.HeadingLevel.TITLE:level,bold:!rankTitle,color,size:main?32:rankTitle?18:23,bookmark:headingBookmarks.get(child),snapToGrid:detailSpacing?false:undefined,spacing:rankTitle?{before:30,after:55,line:240}:detailSpacing?{...detailSpacing,line:main?440:320}:spaciousCover?{before:60,after:145,line:290}:context.compactOverview?{before:0,after:30,line:240}:undefined}));
    if(toc)out.push(new D.Table({
     layout:D.TableLayoutType.FIXED,width:{size:width,type:D.WidthType.DXA},columnWidths:[Math.floor(width*.12),Math.ceil(width*.88)],
     borders:Object.fromEntries(Object.keys(borders).map(key=>[key,{style:D.BorderStyle.NONE,size:0,color:'FFFFFF'}])),
@@ -28056,7 +28058,7 @@ async function blocks(node,width,context={}){
      if(child.matches('.report-detail-summary,.report-registry-condition')){
       const registry=child.matches('.report-registry-condition');
       const compactRegistry=registry&&!!child.closest('#report-compliance');
-      const runs=[],color=child.matches('.report-focus-summary')?'C00000':context.color||theme.ink;
+      const runs=[],color=context.color||theme.ink;
       const visit=(node,heavy=false)=>{if(node.nodeType===3){runs.push(new D.TextRun({text:node.textContent,font,size:compactRegistry?15:registry?16:size,bold:!!bold||heavy,color}));return;}for(const part of node.childNodes)visit(part,heavy||['STRONG','B'].includes(node.tagName));};
       visit(temp);out.push(paragraph('',{runs,color,align:context.align,size,snapToGrid:detailSpacing?false:undefined,spacing:detailSpacing??(registry?{after:30,line:220}:undefined)}));
      }else out.push(paragraph(value,{bold,color:context.color,align:context.align,size,snapToGrid:detailSpacing?false:undefined,spacing:detailSpacing??(spaciousCover?{before:!context.cell&&bold?context.coverSpacing.noteTop:0,after:context.cell?36:context.coverSpacing.noteAfter,line:context.cell?230:270}:context.compactOverview?{after:25,line:220}:undefined)}));
@@ -28154,18 +28156,24 @@ async function report(model,template=g.AuditReport){
    ['#report-blank-memo',{rowHeight:260,padding:24,fontSize:15,line:210}]
   ];
  const sections=[];let bodyStarted=false;
- for(const page of pages){
+ for(const [pageIndex,page] of pages.entries()){
   const front=page.dataset?.reportFront==='true'||!!page.querySelector?.('#report-cover,.report-toc');
   const restart=!front&&!bodyStarted;if(!front)bodyStarted=true;
   const coverSpacing=wordV2&&page.querySelector('#report-cover')?coverSpacingFor(page):undefined;
   const isV2Toc=wordV2&&!!page.querySelector('.report-toc');
+  const tocAfterCover=isV2Toc&&!!pages[pageIndex-1]?.querySelector('#report-cover');
   const detailLayout=wordV2?detailLayouts.find(([selector])=>page.querySelector(selector))?.[1]:undefined;
   const compactOverview=wordV2&&!!page.querySelector('#report-compliance,#report-follow');
   const sectionFit=wordV2&&(page.querySelector('.report-counterparty-summary')?'counterparties':
    ['features','concentration','compliance','people'].find(id=>page.querySelector('#report-'+id)));
   const boundedPage=detailLayout||coverSpacing||sectionFit;
-  const content=await blocks(page,pageWidth,{wordV2,coverSpacing,compactOverview,detailLayout,sectionFit});
-  if(!isV2Toc)content.push(new D.Paragraph({spacing:{before:0,after:0,line:20,...(boundedPage?{lineRule:D.LineRuleType.EXACT}:{})},snapToGrid:boundedPage?false:undefined,children:[new D.TextRun({text:'',size:2})]}));
+  const content=await blocks(page,pageWidth,{wordV2,coverSpacing,compactOverview,detailLayout,sectionFit,tocAfterCover});
+  if(tocAfterCover){
+   // A single page break avoids a separate cover section ending before the TOC.
+   sections.at(-1).children.push(...content);
+   continue;
+  }
+  if(!isV2Toc&&!(coverSpacing&&pages[pageIndex+1]?.querySelector('.report-toc')))content.push(new D.Paragraph({spacing:{before:0,after:0,line:20,...(boundedPage?{lineRule:D.LineRuleType.EXACT}:{})},snapToGrid:boundedPage?false:undefined,children:[new D.TextRun({text:'',size:2})]}));
   sections.push({
    properties:{type:D.SectionType.NEXT_PAGE,...(boundedPage?{grid:{type:D.DocumentGridType.DEFAULT}}:{}),page:{size:{width:11906,height:16838,orientation:D.PageOrientation.LANDSCAPE},pageNumbers:restart?{start:1}:{},margin:{top:coverSpacing?680:detailLayout||sectionFit?660:compactOverview?760:850,right:567,bottom:coverSpacing?650:detailLayout||sectionFit?660:compactOverview?760:850,left:567,header:300,footer:300}}},
    headers:{default:header},footers:{default:front?frontFooter:footer},children:content
@@ -28374,22 +28382,31 @@ async function render(blob){
  const pages=create('div');pages.className='word-preview-pages';
  let pageNumber=1;
  let content=create('section');
+ let sectionPages=[];
  for(const block of children(child(documentXml.documentElement,'body'))){
-  const section=block.localName==='sectPr'?block:child(child(block,'pPr'),'sectPr');
+  const properties=child(block,'pPr');
+  if(child(properties,'pageBreakBefore')&&content.hasChildNodes()){
+   sectionPages.push(content);
+   content=create('section');
+  }
+  const section=block.localName==='sectPr'?block:child(properties,'sectPr');
   if(!section||block.textContent.trim()||block.getElementsByTagNameNS(W,'drawing').length)appendBlock(content,block);
   if(!section)continue;
   const size=child(section,'pgSz'),margins=child(section,'pgMar');
-  content.className='word-preview-page';
-  content.style.width=twips(number(size,'w')||16838);
-  content.style.minHeight=twips(number(size,'h')||11906);
-  content.style.padding=['top','right','bottom','left'].map(side=>twips(number(margins,side))).join(' ');
   const restart=number(child(section,'pgNumType'),'start');
   if(restart)pageNumber=restart;
-  const header=pagePart(section,'header',pageNumber),footer=pagePart(section,'footer',pageNumber);
-  if(header)content.prepend(header);
-  if(footer)content.append(footer);
-  pages.append(content);
-  pageNumber++;
+  for(const sectionPage of [...sectionPages,content]){
+   sectionPage.className='word-preview-page';
+   sectionPage.style.width=twips(number(size,'w')||16838);
+   sectionPage.style.minHeight=twips(number(size,'h')||11906);
+   sectionPage.style.padding=['top','right','bottom','left'].map(side=>twips(number(margins,side))).join(' ');
+   const header=pagePart(section,'header',pageNumber),footer=pagePart(section,'footer',pageNumber);
+   if(header)sectionPage.prepend(header);
+   if(footer)sectionPage.append(footer);
+   pages.append(sectionPage);
+   pageNumber++;
+  }
+  sectionPages=[];
   content=create('section');
  }
  if(content.hasChildNodes()){content.className='word-preview-page';pages.append(content);}
@@ -28454,6 +28471,16 @@ const reportScenarioCounts={
  relatedCustomerPairs:36,relatedSupplierPairs:36,relatedBothPairs:36,relatedNonPairs:36,
  internalBig:8,employeeRows:12,officerRows:12
 };
+const defaultFinancialCounterparties=new Map([
+ ['陕西汽车控股集团有限公司','示例恒川银行股份有限公司'],
+ ['广东省交通集团有限公司','示例海岚银行股份有限公司'],
+ ['太平人寿保险有限公司','示例嘉禾理财有限责任公司'],
+ ['深圳市爱施德股份有限公司','示例新源基金管理有限公司'],
+ ['上海城建（集团）有限公司','示例东浦银行股份有限公司'],
+ ['隆基绿能科技股份有限公司','示例远帆理财有限责任公司'],
+ ['广西南丹南方金属有限公司','示例瑞泽基金管理有限公司'],
+ ['河北津西钢铁集团股份有限公司','示例明川基金管理有限公司']
+]);
 function defaultReportProject(){
  const config={seed:'AC-REPORT-COVERAGE',start:'2023-01-01',end:'2025-12-31',count:9000,min:100,max:24000000,opening:120000,includeForeign:true,fx:E.DEFAULT_FX,growth:18,internal:12,big:12,bigThreshold:50000,blankCP:30,blankSummary:30,balanceErrors:12,sameTime:12,sameMissing:9,person:true,once:true,personPerYear:2,oncePerYear:2,annualCounts:{},companyFlow:{},sampleNonMerchants:{},sampleAccountPlans:{},companySourceMode:'all',missingCompany:true,cut:'12-31',first:2023,last:2025};
  config.annualCounts=Object.fromEntries([2023,2024,2025].map(year=>[year,{...reportScenarioCounts}]));
@@ -28465,6 +28492,12 @@ function defaultReportProject(){
  config.sampleNonMerchants=samples.pools;
  config.sampleAccountPlans=samples.accountPlans;
  const {data}=E.generate(samples.data,config);
+ // Rename only the built-in sample and its source so master-data matches survive regeneration.
+ const sampleName=value=>defaultFinancialCounterparties.get(value)??value;
+ for(const books of [data,samples.data]){
+  for(const sheet of Object.values(books))sheet.rows=sheet.rows.map(row=>row.map(sampleName));
+ }
+ config.sampleNonMerchants=Object.fromEntries(Object.entries(samples.pools).map(([name,pool])=>[name,pool.map(sampleName)]));
  config.reportCriteria=AuditReport.parseCriteria({daysMin:0,daysMax:365,insuredMax:50,paidMin:20,paidMax:50,overlapAmount:1000000,overlapPercent:20,unknownAmount:500000});
  config.registryIntervalVersion=AuditRegistry.INTERVAL_VERSION;
  config.registryBounds=Object.fromEntries(AuditRegistry.metrics.map(([id,,,limits])=>[id,[...limits]]));
