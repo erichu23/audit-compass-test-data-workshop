@@ -34,9 +34,10 @@ const sharedIds=['counterparties','related','background'];
 assert.deepEqual(currentVocabulary(report2.sections.filter(s=>sharedIds.includes(s.id))),currentVocabulary(report1.sections.filter(s=>sharedIds.includes(s.id))));
 for(const id of ['compliance','people','follow']){
  const current=report2.sections.find(s=>s.id===id),previous=report1.sections.find(s=>s.id===id);
- if(id!=='follow')assert.deepEqual(currentVocabulary(current.tables.slice(id==='people'?1:0,-1)),currentVocabulary(previous.tables.slice(id==='people'?1:0)));
+ if(id==='compliance')assert.deepEqual(currentVocabulary(current.tables.slice(0,-1)),currentVocabulary(previous.tables));
  const chartData=({name,kind,rows})=>({name,kind,rows});
- assert.deepEqual(current.charts.map(chartData),previous.charts.map(chartData));
+ assert.deepEqual((id==='follow'?current.charts.slice(0,1):current.charts).map(chartData),
+  (id==='follow'?previous.charts.slice(0,1):previous.charts).map(chartData));
 }
 vm.runInContext('config[reportSectionKey()]=["features"]',ctx);
 assert.deepEqual(Array.from(vm.runInContext('reportModel().selectedSectionIds',ctx)),['features']);
@@ -290,7 +291,9 @@ assert(!report2.sections.some(s=>s.id==='focus'));
 assert(!v2WordHtml.includes('前20大见2.4'));
 assert(!v2WordHtml.includes('2.4 重点关注对手方清单表'));
 assert.deepEqual(Array.from(ctx.AuditReportV2.selectSections(report2,['focus']).selectedSectionIds),['compliance','people','follow']);
-assert(v2WordHtml.includes('已上传关联方主档中关联方个数'));
+assert(v2WordHtml.includes('有效关联组合数量（含被审计单位间自动补齐）'));
+const effectivePairs=report2.sections.find(s=>s.id==='related').relationStats.effectivePairs;
+assert(v2WordHtml.includes('class="report-scope-value">'+effectivePairs.toLocaleString('en-US')+'组'));
 assert(v2WordHtml.includes('详见本报告2.2.2'));
 assert(v2WordHtml.includes('流入总额/交易笔数/占总流入比例：'));
 assert(v2WordHtml.includes('流出总额/交易笔数/占总流出比例：'));
@@ -359,9 +362,8 @@ assert(customFollowHtml.includes('<strong>[250,000]</strong> USD及以上，且�
 assert(customFollowHtml.includes('<strong>[175,000]</strong> USD及以上 <span>（用户自定义）</span>'));
 
 const persons=report2.sections.find(s=>s.id==='people');
-const priorPersons=report1.sections.find(s=>s.id==='people');
 const personalRows=persons.tables[0].rows;
-assert.deepEqual(personalRows.map(r=>r.filter((_,i)=>i!==4&&i!==7)),priorPersons.tables[0].rows);
+for(const col of [1,2,3,5,6,8,9])assert(Math.abs(personalRows[0][col]-personalRows.slice(1).reduce((sum,row)=>sum+row[col],0))<1e-9);
 const personalTotal=personalRows[0];
 for(const [count,share] of [[2,4],[5,7]]){
  const denominator=personalTotal[count];

@@ -11,3 +11,21 @@ const hit=s.tables.find(t=>t.name==='收支重合明细');assert(hit.rows.some(r
 const defaults=AuditReport.compute(d,{from:'2025-01-01',to:'2025-12-31'}).sections.find(s=>s.id==='follow');assert.equal(defaults.charts[0].rows[0][1],3);assert(!defaults.tables.find(t=>t.name==='收支重合明细').rows.some(r=>r[0]==='单向收款企业'));
 const html=AuditReport.render(AuditReport.selectSections(m,['follow']),{allRows:true,forExport:true});assert(html.includes('包含单向交易')&&html.includes('组合匹配'));assert.equal(JSON.stringify(d),before);
 console.log('PASS: one-way ratio zero in first band, blank names/null/spaces aggregated with all counts; zero-only/internal excluded from overlap, pair-matched flows excluded before unknown aggregation, independent filters, boundary 20%, raw rows unchanged, exported descriptions');
+vm.runInThisContext(fs.readFileSync('src/report-v2.js','utf8'));
+const v2=AuditReportV2.compute(d,settings).sections.find(section=>section.id==='follow');
+assert.equal(v2.charts[0].rows[0][1],3);
+assert.equal(v2.charts[1].rows[1][1],0);
+const v2Unknown=v2.tables.find(t=>t.name==='未识别客商关系明细');
+assert(!v2Unknown.rows.some(row=>row[0]==='【对手方为空】'));
+assert.deepEqual(v2Unknown.rows.find(row=>row[0]==='部分匹配企业').slice(2,6),[1,1,.2,1]);
+assert.equal(JSON.stringify(d),before);
+
+d[K.employee].rows=[['甲',null,'王小明']];
+add('甲','王小明',500,0);
+add('乙','王小明',0,300);
+const people=AuditReportV2.compute(d,settings).sections.find(section=>section.id==='people');
+const [total,employee,officer,other]=people.tables[0].rows;
+assert.deepEqual([total[1],employee[1],officer[1],other[1]],[1,1,0,0]);
+assert.deepEqual(employee.slice(2,8),[.0005,1,1,.0003,1,1]);
+assert.equal(people.tables.at(-1).rows[0][1],'本类别总合计');
+console.log('PASS: V2 excludes blanks only from unknown merchants and assigns a name to one personal category');
