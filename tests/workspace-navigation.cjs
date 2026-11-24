@@ -15,6 +15,20 @@ ctx.navigate('reportV2');
 assert.equal(nodes.get('pageTitle').textContent,'综合分析报告核验2');
 assert(nodes.get('content').innerHTML.includes('data-nav="exportReportV2"'));
 const report2=vm.runInContext('reportModel()',ctx);
+const coverAmounts=vm.runInContext(`(()=>{
+ const model=reportModel(),E=AuditEngine;
+ const companyNames=new Set(data[E.KEYS.company].rows.map(row=>row[0]).filter(Boolean));
+ const totals=new Map([...companyNames].map(name=>[name,0]));
+ for(const row of data[E.KEYS.flow].rows){
+  const date=String(row[5]).slice(0,10);
+  if(date<model.from||date>model.to||!totals.has(row[0]))continue;
+  totals.set(row[0],totals.get(row[0])+E.rmbCents(row,8,model.rates)+E.rmbCents(row,10,model.rates));
+ }
+ return totals;
+})()`,ctx);
+const coverCompanyOrder=report2.sections.find(s=>s.id==='cover').companyNamesByAmount;
+assert.equal(coverCompanyOrder.length,coverAmounts.size);
+assert(coverCompanyOrder.every((name,i)=>coverAmounts.has(name)&&(i===0||coverAmounts.get(coverCompanyOrder[i-1])>=coverAmounts.get(name))));
 const currentVocabulary=value=>JSON.parse(JSON.stringify(value,(key,entry)=>key==='headers'?undefined:entry).replaceAll('模拟黑名单','黑名单'));
 const sharedIds=['counterparties','related','background'];
 assert.deepEqual(currentVocabulary(report2.sections.filter(s=>sharedIds.includes(s.id))),currentVocabulary(report1.sections.filter(s=>sharedIds.includes(s.id))));
@@ -62,7 +76,8 @@ assert(v2Preview.includes('href="#report-accounts"'));
 assert(scopePage.includes('id="report-accounts"'));
 assert(v2WordPages[1].includes('class="report-toc"')&&v2WordPages[2]===scopePage);
 assert(scopePage.includes('class="report-scope-value">35 个'));
-assert(scopePage.includes('详见系统[银行流水分析-账户总览]'));
+assert(!scopePage.includes('详见系统[银行流水分析-账户总览]'));
+assert(!scopePage.split('id="report-accounts"')[1].includes('已上传账户个数'));
 for(const label of ['前五大','第6–10大','第11–20大','非前20大'])assert(scopePage.includes(label));
 
 assert.equal(report1.threshold,50000);
@@ -70,12 +85,12 @@ assert.equal(report2.threshold,1000000);
 const findFeatures=model=>model.sections.find(s=>s.id==='features');
 const features2=findFeatures(report2);
 const [legacyInternal,legacyExternal]=findFeatures(report1).charts;
-const [namedExternal,internal]=features2.charts;
+const [internal,namedExternal]=features2.charts;
 assert.deepEqual({...internal,name:legacyInternal.name},legacyInternal);
 const blankPartyChart=features2.charts[2];
 assert.deepEqual(Array.from(features2.charts,c=>c.name),[
- '合并范围外交易情况（不包括对手方为空）',
  '合并范围内交易情况',
+ '合并范围外交易情况（不包括对手方为空）',
  '交易对手方信息为空'
 ]);
 for(const [i,row] of namedExternal.amountBands.entries()){
@@ -126,7 +141,7 @@ assert.equal(memoCard.partyGroups[0][1].parties,memoNamedCount);
 assert(featuresPage.includes('有交易对手方：<strong class="report-nature-group-total">'+memoNamedCount+'家/'));
 assert(featuresPage.includes('无交易对手方：<strong class="report-nature-group-total">0.00百万/0笔'));
 
-const largePages=v2WordPages.filter(page=>page.includes('1.2.1 大额单笔交易分析</h4>')||page.includes('<h4 class="report-subhead">合并范围外（不包括对手方为空）</h4>'));
+const largePages=v2WordPages.filter(page=>page.includes('1.2.1 大额单笔交易分析</h4>')||page.includes('<h4 class="report-subhead">重点关注：合并范围外（不包括对手方为空）</h4>'));
 assert.equal(largePages.length,2);
 for(const page of largePages){
  assert(!page.includes('<th>流水识别号</th>'));
@@ -134,7 +149,8 @@ for(const page of largePages){
  assert(page.includes('<th>等值人民币流出金额（百万）</th>'));
 }
 const outsidePage=largePages[1];
-assert(outsidePage.includes('report-focus-summary">重点关注：合并范围外合计'));
+assert(outsidePage.includes('report-focus-summary">大额单笔交易人民币'));
+assert(largePages[0].includes('report-detail-summary">大额单笔交易人民币'));
 assert.equal((outsidePage.match(/class="report-category-band"/g)||[]).length,2);
 assert(outsidePage.indexOf('银行／理财／基金（')<outsidePage.indexOf('其他对手方（'));
 assert(/<tr class="report-total"><td colspan="9">非前20大合计（[^<]+<\/td>/.test(outsidePage));
@@ -239,9 +255,9 @@ for(const [i,direction] of ['流入','流出'].entries()){
  assert.equal((overview.match(/class="report-pane"/g)||[]).length,2);
  assert.equal((overview.match(/<li><i style="background:/g)||[]).length,4);
  assert.equal((overview.match(/<i style="background:/g)||[]).length,4);
- for(const category of ['客户','供应商','客商一体','非客商']){
-  assert.equal((overview.match(new RegExp('<td rowspan="2" class="">'+category+'</td>','g'))||[]).length,1);
- }
+ assert(overview.includes('<th>性质</th><th>对手方类型</th>'));
+ assert(overview.indexOf('<td rowspan="4" class="">关联方</td>')<overview.indexOf('<td rowspan="4" class="">第三方</td>'));
+ assert.equal((overview.match(/<td rowspan="4"/g)||[]).length,2);
  assert(ranking.includes('<h4>'+direction+'前20大对手方</h4>'));
  assert(ranking.includes('report-counterparty-rank-table'));
  for(const header of ['交易总金额（百万）','交易总金额笔数（笔）','交易总金额占比（%）'])assert(ranking.includes('<th>'+header+'</th>'));
@@ -276,21 +292,26 @@ const reportTables=ctx.AuditReportV2.workbook(report2);
 for(const [id,include,exclude] of [
  ['compliance',['经营天数','社保人数','注册资本','失信被执行人','行政处罚数量'],['个人类型','收支重合','未识别客商关系','实缴资本','诉讼案件数量']],
  ['people',['个人类型'],['黑名单','经营天数','收支重合','未识别客商关系']],
- ['follow',['收支重合','未识别客商关系'],['个人类型','黑名单','经营天数']]
+ ['follow',['收支重合','未识别客商关系','黑名单'],['个人类型','经营天数']]
 ]){
  const section=report2.sections.find(s=>s.id===id),t=section.tables.at(-1);
- const [full,subtotal,...details]=t.rows;
+ const [full,subtotal,...details]=t.rows.slice(0,-1),remaining=t.rows.at(-1);
  assert(details.length<=20);
  assert.equal(new Set(details.map(r=>r[1])).size,details.length);
  assert.deepEqual(Array.from(details,r=>r[0]),Array.from({length:details.length},(_,i)=>i+1));
- assert.equal(subtotal[1],'前20大小计');
+ assert.equal(full[1],'本类别总合计');
+ assert.equal(subtotal[1],'前20大合计');
+ assert.equal(remaining[1],'非前20大合计');
  const amount=t.headers.length-4;
- assert(Math.abs(details.reduce((sum,r)=>sum+r[amount],0)-subtotal[amount])<1e-10);
- assert(full[amount]>=subtotal[amount]);
+ for(let col=amount-6;col<=amount+2;col++){
+  assert(Math.abs(details.reduce((sum,r)=>sum+r[col],0)-subtotal[col])<1e-9);
+  assert(Math.abs(full[col]-subtotal[col]-remaining[col])<1e-9);
+ }
+ assert.equal(full[amount+2],full[amount]>0?1:0);
  assert(details.every((row,i)=>i===0||row[amount]<=details[i-1][amount]));
  for(const h of include)assert(t.headers.includes(h));
  for(const h of exclude)assert(!t.headers.includes(h));
- assert(v2WordHtml.includes(t.name+'</h4>'));
+ assert(v2WordHtml.includes('<h4 class="report-section-rank-title">'+t.name+'</h4>'));
  assert(reportTables[t.name]);
 }
 

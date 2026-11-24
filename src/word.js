@@ -83,14 +83,14 @@ async function svgImage(svg,width,legend,{maxPlotHeight=Infinity,legendWidth=330
  }finally{URL.revokeObjectURL(url);}
 }
 function text(node){return (node.innerText||node.textContent||'').replace(/\s+/g,' ').trim();}
-async function grid(children,width,weights,{natureGroup=false,compactOverview=false,wordV2=false}={}){
+async function grid(children,width,weights,{natureGroup=false,compactOverview=false,wordV2=false,sectionFit}={}){
  const sum=weights.reduce((a,b)=>a+b,0),sizes=weights.map(n=>Math.floor(width*n/sum));
  const padding=natureGroup||compactOverview?30:65;
  return new D.Table({
   layout:D.TableLayoutType.FIXED,width:{size:width,type:D.WidthType.DXA},columnWidths:sizes,borders,
   rows:[new D.TableRow({cantSplit:natureGroup||compactOverview,children:await Promise.all(children.map(async (node,i)=>new D.TableCell({
    width:{size:sizes[i],type:D.WidthType.DXA},margins:{top:padding,bottom:padding,left:75,right:75},
-   children:await blocks(node,Math.max(200,sizes[i]-160),{natureGroup,compactOverview,wordV2})
+   children:await blocks(node,Math.max(200,sizes[i]-160),{natureGroup,compactOverview,wordV2,sectionFit})
   })))})]
  });
 }
@@ -123,6 +123,7 @@ function coverHeadingBlocks(width,heading,spacing){
 // Give company names and account numbers enough width for the top-20 detail pages.
 const largeDetailWidths=[24,78,83,71,83,83,55,46,30,57,57,44,74].map(n=>n/785);
 const v2LargeDetailWidths=[24,96,84,54,105,84,49,42,29,56,56,38,68].map(n=>n/785);
+const v2CounterpartyWidths=[27,178,62,73,43,48,39,45,48,39,45,49,43,46].map(n=>n/785);
 const sectionRankColumnWeights={
  '排名':27,'对手方名称':120,'客商分类':76,'关联关系':86,'黑名单':48,'个人类型':53,
  '诉讼案件数量':54,'行政处罚数量':54,'失信被执行人':53,'经营天数':45,'所属行业':72,
@@ -152,37 +153,48 @@ async function table(node,width,context){
  const columnWidths=[...node.querySelectorAll(':scope > colgroup > col')].map(col=>parseFloat(col.style.width)/100);
  const spanWidths=flowSummary||overviewDistribution||largeDetail||columnWidths.length===columns;
  const counterpartyRanks=node.classList.contains('report-counterparty-rank-table');
+ const relatedRanks=context.wordV2&&!!node.closest('.report-related-ranking');
+ const directionPage=context.sectionFit==='counterparties';
+ const denseRanks=directionPage&&counterpartyRanks&&rows.filter(row=>text(row.cells[1]).length>24).length>=8;
  const sectionRanks=node.classList.contains('report-section-rank-table');
  const compactRows=largeDetail||counterpartyRanks||sectionRanks;
+ const concentrationTable=context.sectionFit==='concentration'&&node.classList.contains('report-concentration');
+ const peoplePage=context.sectionFit==='people';
+ const peopleSummary=peoplePage&&!sectionRanks;
  const rowPadding=cover
   ?(node.classList.contains('report-cover-status')?context.coverSpacing.status:context.coverSpacing.table)
-  :registryResults?24:narrowDistribution?18:detailLayout?detailLayout.padding:compactRows?23:context?.natureGroup?85:context.compactOverview?27:45;
- const sidePadding=cover?coverSidePadding:narrowDistribution?10:overviewDistribution?30:55;
+  :registryResults?24:narrowDistribution?18:detailLayout?detailLayout.padding:concentrationTable?20:peopleSummary?44:directionPage?16:relatedRanks||peoplePage?22:context.sectionFit==='features'?48:context.sectionFit?30:compactRows?23:context?.natureGroup?85:context.compactOverview?27:45;
+ const sidePadding=cover?coverSidePadding:narrowDistribution?10:directionPage||relatedRanks||overviewDistribution?30:55;
  const coverFrame=cover&&node.classList.contains('report-cover-grid');
+ const natureRowSpan=node.closest('.report-counterparty-summary')&&Number(node.tBodies[0]?.rows[0]?.cells[0]?.rowSpan)>1
+  ?node.tBodies[0].rows[0].cells[0].rowSpan:0;
  const alignDataCells=context.wordV2&&!coverFrame;
  const customWidths=node.classList.contains('report-cover-grid')?[.23,.77]
   :node.classList.contains('report-cover-status')?[.40,.22,.38]
   :largeDetail?(detailLayout?v2LargeDetailWidths:largeDetailWidths)
   :flowSummary?[.25,.13,.085,.09,.13,.085,.09,.14]
   :registryResults?[.44,.56]
+  :columnWidths.length===columns?columnWidths
   :narrowDistribution?[.103,.127,.162,.116,.107,.162,.116,.107]
   :overviewDistribution?[.114,.117,.145,.11,.129,.145,.11,.13]
+  :relatedRanks||directionPage&&counterpartyRanks?v2CounterpartyWidths
   :counterpartyRanks?[.033,.171,.083,.11,.057,.071,.047,.052,.071,.047,.052,.082,.06,.064]
-  :sectionRanks?sectionRankWidths(rows[0])
-  :columnWidths.length===columns?columnWidths:null;
+  :sectionRanks?sectionRankWidths(rows[0]):null;
  const widths=coverFrame?coverColumnWidths(width):customWidths?customWidths.map(n=>Math.floor(tableWidth*n)):Array(columns).fill(unit);
  return new D.Table({
   layout:D.TableLayoutType.FIXED,width:registryResults?{size:94,type:D.WidthType.PERCENTAGE}:{size:width,type:D.WidthType.DXA},columnWidths:widths,borders,
   ...(coverFrame?{alignment:D.AlignmentType.CENTER}:{}),
   rows:await Promise.all(rows.map(async (row,rowIndex)=>new D.TableRow({
    tableHeader:row.parentElement.tagName==='THEAD',cantSplit:true,
-   ...(registryResults||narrowDistribution||detailLayout?{height:{
-    value:detailLayout?detailLayout.rowHeight:registryResults?340:row.parentElement.tagName==='THEAD'?255:410,rule:D.HeightRule.ATLEAST
+   ...(registryResults||narrowDistribution||detailLayout||peopleSummary||coverFrame&&rowIndex===0?{height:{
+    value:coverFrame?3*230+2*rowPadding:peopleSummary?(row.parentElement.tagName==='THEAD'?330:395):detailLayout?detailLayout.rowHeight:registryResults?(context.sectionFit?295:340):row.parentElement.tagName==='THEAD'?255:context.sectionFit?315:410,rule:D.HeightRule.ATLEAST
    }}:{}),
    children:await Promise.all([...row.cells].map(async (cell,i)=>{
     const header=cell.tagName==='TH',total=row.classList.contains('report-total'),categoryBand=row.classList.contains('report-category-band');
-    const cellFontSize=narrowDistribution?(header?12:14):overviewDistribution&&header?14:registryResults?15:detailLayout?detailLayout.fontSize:undefined;
-    const rowOffset=header&&row.sectionRowIndex===1?(overviewDistribution?2:flowSummary?1:0):0;
+    const cellFontSize=peopleSummary?16:peoplePage||concentrationTable||relatedRanks||directionPage?(denseRanks&&i===1&&!header?13:14):narrowDistribution?(header?12:14):overviewDistribution&&header?14:registryResults?15:detailLayout?detailLayout.fontSize:undefined;
+    const rowOffset=header&&row.sectionRowIndex===1&&spanWidths
+     ?[...node.tHead.rows[0].cells].findIndex(cell=>cell.rowSpan===1)
+     :natureRowSpan&&row.parentElement.tagName==='TBODY'&&row.sectionRowIndex%natureRowSpan!==0?1:0;
     const column=spanWidths?[...row.cells].slice(0,i).reduce((sum,c)=>sum+c.colSpan,rowOffset):i;
     const cellWidth=spanWidths?widths.slice(column,column+cell.colSpan).reduce((sum,w)=>sum+w,0):customWidths?widths[i]:unit*cell.colSpan;
     const statusElement=cell.querySelector('.report-status');
@@ -203,7 +215,7 @@ async function table(node,width,context){
      shading:status?{fill:status.fill}:categoryBand?{fill:'F1F5F9'}:header||total?{fill:header?theme.fill:theme.total}:narrowDistribution&&rowIndex%2===0?{fill:'F6F9FD'}:undefined,
      children:await blocks(cell,Math.max(200,cellWidth-120),{
       cell:true,wordV2:context?.wordV2,coverSpacing:context?.coverSpacing,compactRows,compactOverview:context.compactOverview,
-      registryResults,narrowDistribution,detailLayout,rangeText,cellFontSize,characterSpacing:narrowDistribution&&header?-8:undefined,
+      registryResults,narrowDistribution,detailLayout,sectionFit:context.sectionFit,cellLine:peopleSummary?235:relatedRanks?210:denseRanks?181:undefined,rangeText,cellFontSize,characterSpacing:narrowDistribution&&header?-8:undefined,
       largeDetail:largeDetail||sectionRanks,bold:header||total||categoryBand||!!status,color:unidentified?'C00000':status?.text||(header||categoryBand?theme.heading:theme.ink),align
      })
     });
@@ -213,8 +225,9 @@ async function table(node,width,context){
 }
 async function blocks(node,width,context={}){
  const out=[];
- const detailSpacing=context.detailLayout&&{
-  before:0,after:context.cell?0:42,line:context.cell?context.detailLayout.line:240,lineRule:D.LineRuleType.EXACT
+ const tableLine=context.cellLine??({concentration:190,features:244,people:195,counterparties:190}[context.sectionFit]??214);
+ const detailSpacing=(context.detailLayout||context.sectionFit||context.cellLine)&&{
+  before:0,after:context.cell?0:42,line:context.cell?(context.detailLayout?.line??tableLine):240,lineRule:D.LineRuleType.EXACT
  };
  for(const child of node.childNodes){
   if(child.nodeType===3){
@@ -223,7 +236,7 @@ async function blocks(node,width,context={}){
     out.push(paragraph(context.rangeText??child.textContent.trim(),{
      bold:context.bold,color:context.color,align:context.align,characterSpacing:context.characterSpacing,size:context.cell?(context.cellFontSize??cover?.tableSize??(context.largeDetail?14:15)):18,
      snapToGrid:detailSpacing?false:undefined,
-     spacing:detailSpacing??(cover&&context.cell?{after:30,line:220}:context.registryResults||context.narrowDistribution?{after:0,line:205}:context.compactRows?{after:0,line:205}:context.compactOverview?{after:25,line:220}:undefined)
+     spacing:detailSpacing??(cover&&context.cell?{after:0,line:230,lineRule:D.LineRuleType.EXACT}:context.registryResults||context.narrowDistribution?{after:0,line:205}:context.compactRows?{after:0,line:205}:context.compactOverview?{after:25,line:220}:undefined)
     }));
    }
    continue;
@@ -264,8 +277,10 @@ async function blocks(node,width,context={}){
     const emphasized=caption.matches('.report-large-chart-title');
     out.push(paragraph(text(caption),{bold:true,color:emphasized?theme.accent:context.natureGroup?'000000':theme.heading,size:context.natureGroup?20:emphasized?22:16,spacing:context.natureGroup?{after:20,line:220}:undefined}));
    }
-   const chartLayout=child.matches('.report-concentration-chart')?{maxPlotHeight:245,legendWidth:680}
-    :child.closest('.report-counterparty-summary')?{maxPlotHeight:225}
+   const chartLayout=child.matches('.report-concentration-chart')?{maxPlotHeight:context.sectionFit==='concentration'?154:245,legendWidth:680}
+    :context.sectionFit==='features'?{maxPlotHeight:195}
+    :context.sectionFit==='compliance'?{maxPlotHeight:151}
+    :child.closest('.report-counterparty-summary')?{maxPlotHeight:context.sectionFit==='counterparties'?115:225}
     :child.closest('#report-compliance')?{maxPlotHeight:157}
     :child.closest('#report-follow')?{maxPlotHeight:170}:undefined;
    out.push(await svgImage(child.querySelector('svg'),width,child.querySelector('.report-stack-legend,.report-legend'),chartLayout));
@@ -290,8 +305,11 @@ async function blocks(node,width,context={}){
      color:red?'C00000':scope?theme.accent:label&&!headline?theme.muted:theme.ink
     });
    });
+   const natureSummaryLayout=context.sectionFit==='features';
    out.push(new D.Paragraph({
-    spacing:{before:group?24:0,after:20,line:215},
+    snapToGrid:context.sectionFit?false:undefined,
+    spacing:{before:group?(natureSummaryLayout?65:24):0,after:natureSummaryLayout?50:20,
+     line:natureSummaryLayout?(headline||group?285:250):215,...(context.sectionFit?{lineRule:D.LineRuleType.EXACT}:{})},
     children:runs
    }));
    continue;
@@ -308,13 +326,13 @@ async function blocks(node,width,context={}){
     text:part.textContent,font,size,bold:value||part.nodeType===1,
     color:part.nodeType===1&&part.matches('.report-scope-red')?'C00000':muted?theme.muted:theme.ink
    }));
-   out.push(paragraph('',{runs,spacing:compliance?{before:value?45:0,after:10,line:220}:undefined}));
+   out.push(paragraph('',{runs,spacing:compliance?{before:value?60:0,after:context.sectionFit==='compliance'?35:10,line:context.sectionFit==='compliance'?(value?295:245):220}:undefined}));
    continue;
   }
   if(child.matches('.report-panes')){
    const panes=[...child.children];
-   const weights=child.matches('.report-counterparty-summary')?[.38,.62]:panes.map(()=>1);
-   if(panes.length)out.push(await grid(panes,width,weights,{natureGroup:child.matches('.report-nature-cards,.report-nature-charts'),compactOverview:context.compactOverview,wordV2:context.wordV2}));
+   const weights=child.matches('.report-counterparty-summary')?[.38,.62]:child.matches('.report-related-summary')?[2,3]:panes.map(()=>1);
+   if(panes.length)out.push(await grid(panes,width,weights,{natureGroup:child.matches('.report-nature-cards,.report-nature-charts'),compactOverview:context.compactOverview,wordV2:context.wordV2,sectionFit:context.sectionFit}));
    continue;
   }
   if(child.matches('.report-direction')){
@@ -327,13 +345,17 @@ async function blocks(node,width,context={}){
   const spaciousCover=!!context.coverSpacing&&!!child.closest('#report-cover');
   if(/^h[1-4]$/.test(tag)){
    const toc=!!child.closest('.report-toc');
+   if(context.sectionFit==='concentration'&&child.matches('h4.report-subhead')){
+    out.push(paragraph(text(child),{bold:true,color:theme.heading,size:18,snapToGrid:false,spacing:{before:54,after:38,line:215,lineRule:D.LineRuleType.EXACT}}));
+    continue;
+   }
    const registryFilter=child.matches('#report-compliance .report-registry-screen > h4');
    if(registryFilter){
     out.push(paragraph('筛选条件',{bold:true,size:18,align:D.AlignmentType.LEFT,spacing:{before:105,after:24,line:220}}));
     continue;
    }
    const main=tag==='h2',level=headingBookmarks.has(child)?[D.HeadingLevel.HEADING_1,D.HeadingLevel.HEADING_2,D.HeadingLevel.HEADING_3][headingDepth(child)-1]:undefined;
-   out.push(paragraph(text(child),{heading:child.textContent.includes('综合分析报告（年审适用）')?D.HeadingLevel.TITLE:level,bold:true,color:toc?theme.navy:theme.ink,size:main?32:23,bookmark:headingBookmarks.get(child),snapToGrid:detailSpacing?false:undefined,spacing:detailSpacing?{...detailSpacing,line:270}:spaciousCover?{before:60,after:145,line:290}:context.compactOverview?{before:0,after:30,line:240}:undefined}));
+   out.push(paragraph(text(child),{heading:child.textContent.includes('综合分析报告（年审适用）')?D.HeadingLevel.TITLE:level,bold:!child.matches('.report-section-rank-title'),color:toc?theme.navy:theme.ink,size:main?32:23,bookmark:headingBookmarks.get(child),snapToGrid:detailSpacing?false:undefined,spacing:detailSpacing?{...detailSpacing,line:main?440:320}:spaciousCover?{before:60,after:145,line:290}:context.compactOverview?{before:0,after:30,line:240}:undefined}));
    if(toc)out.push(new D.Table({
     layout:D.TableLayoutType.FIXED,width:{size:width,type:D.WidthType.DXA},columnWidths:[Math.floor(width*.12),Math.ceil(width*.88)],
     borders:Object.fromEntries(Object.keys(borders).map(key=>[key,{style:D.BorderStyle.NONE,size:0,color:'FFFFFF'}])),
@@ -380,20 +402,63 @@ async function blocks(node,width,context={}){
  }
  return out.length?out:[paragraph('',detailSpacing?{snapToGrid:false,spacing:detailSpacing}:undefined)];
 }
+function limitCoverCompanies(names){
+ const charLimit=165;
+ const separator='、',suffix=' 等 '+names.length.toLocaleString('zh-CN')+' 家';
+ const length=text=>Array.from(text).length;
+ const full=names.join(separator);
+ if(length(full)<=charLimit)return full;
+ const shown=[];
+ let remaining=charLimit-length(suffix);
+ for(const name of names){
+  const cost=length(name)+(shown.length?1:0);
+  if(cost>remaining)break;
+  shown.push(name);
+  remaining-=cost;
+ }
+ return (shown.length?shown.join(separator):Array.from(names[0]).slice(0,remaining-1).join('')+'…')+suffix;
+}
 function coverSpacingFor(page){
  const rows=Array.from(page.querySelectorAll('.report-cover-grid > tbody > tr'));
  const longest=rows.reduce((max,row)=>Math.max(max,text(row.cells[1]||row).length),0);
  const companyLength=rows[0]?.cells[1]?text(rows[0].cells[1]).length:0;
  const dense=companyLength>140||longest>450;
  return dense
-  ?{table:46,status:37,tableSize:14,noteSize:16,headingTop:90,headingBottom:55,noteTop:90,noteAfter:75}
-  :{table:72,status:53,tableSize:16,noteSize:18,headingTop:110,headingBottom:75,noteTop:110,noteAfter:105};
+  ?{table:46,status:37,tableSize:14,noteSize:16,headingTop:90,headingBottom:55,noteTop:50,noteAfter:50}
+  :{table:72,status:53,tableSize:16,noteSize:18,headingTop:110,headingBottom:75,noteTop:70,noteAfter:65};
 }
 async function report(model,template=g.AuditReport){
  const container=document.createElement('div');
  container.innerHTML=template.render(model,{allRows:true,forExport:true});
- const pages=[...container.querySelectorAll('.report-sheet-content')];
  const wordV2=template===g.AuditReportV2;
+ if(wordV2){
+  const related=container.querySelector('#report-concentration');
+  const thirdParty=container.querySelector('.report-concentration-third-party');
+  if(related&&thirdParty){
+   const continuation=thirdParty.closest('.report-sheet');
+   related.append(thirdParty);
+   continuation.remove();
+  }
+  for(const summary of container.querySelectorAll('.report-counterparty-summary')){
+   const continuation=summary.closest('.report-sheet').nextElementSibling;
+   const ranking=continuation?.querySelector('.report-counterparty-ranking');
+   if(ranking){
+    summary.after(ranking);
+    continuation.remove();
+   }
+  }
+  const people=container.querySelector('#report-people');
+  const personDetails=container.querySelector('#report-people-detail');
+  if(people&&personDetails){
+   const continuation=personDetails.closest('.report-sheet');
+   people.after(personDetails);
+   continuation.remove();
+  }
+ }
+ const pages=[...container.querySelectorAll('.report-sheet-content')];
+ const companyNames=wordV2&&model.sections.find(section=>section.id==='cover')?.companyNamesByAmount;
+ const companyCell=container.querySelector('#report-cover .report-cover-grid > tbody > tr:first-child > td');
+ if(companyCell&&companyNames)companyCell.textContent=limitCoverCompanies(companyNames);
  headingBookmarks=new WeakMap();reportTocEntries=[];
  let bodyPage=0;
  pages.forEach(page=>{
@@ -430,10 +495,13 @@ async function report(model,template=g.AuditReport){
   const isV2Toc=wordV2&&!!page.querySelector('.report-toc');
   const detailLayout=wordV2?detailLayouts.find(([selector])=>page.querySelector(selector))?.[1]:undefined;
   const compactOverview=wordV2&&!!page.querySelector('#report-compliance,#report-follow');
-  const content=await blocks(page,pageWidth,{wordV2,coverSpacing,compactOverview,detailLayout});
-  if(!isV2Toc)content.push(new D.Paragraph({spacing:{before:0,after:0,line:20,...(detailLayout?{lineRule:D.LineRuleType.EXACT}:{})},snapToGrid:detailLayout?false:undefined,children:[new D.TextRun({text:'',size:2})]}));
+  const sectionFit=wordV2&&(page.querySelector('.report-counterparty-summary')?'counterparties':
+   ['features','concentration','compliance','people'].find(id=>page.querySelector('#report-'+id)));
+  const boundedPage=detailLayout||coverSpacing||sectionFit;
+  const content=await blocks(page,pageWidth,{wordV2,coverSpacing,compactOverview,detailLayout,sectionFit});
+  if(!isV2Toc)content.push(new D.Paragraph({spacing:{before:0,after:0,line:20,...(boundedPage?{lineRule:D.LineRuleType.EXACT}:{})},snapToGrid:boundedPage?false:undefined,children:[new D.TextRun({text:'',size:2})]}));
   sections.push({
-   properties:{type:D.SectionType.NEXT_PAGE,...(detailLayout?{grid:{type:D.DocumentGridType.DEFAULT}}:{}),page:{size:{width:11906,height:16838,orientation:D.PageOrientation.LANDSCAPE},pageNumbers:restart?{start:1}:{},margin:{top:coverSpacing?680:detailLayout?660:compactOverview?760:850,right:567,bottom:coverSpacing?650:detailLayout?660:compactOverview?760:850,left:567,header:300,footer:300}}},
+   properties:{type:D.SectionType.NEXT_PAGE,...(boundedPage?{grid:{type:D.DocumentGridType.DEFAULT}}:{}),page:{size:{width:11906,height:16838,orientation:D.PageOrientation.LANDSCAPE},pageNumbers:restart?{start:1}:{},margin:{top:coverSpacing?680:detailLayout||sectionFit?660:compactOverview?760:850,right:567,bottom:coverSpacing?650:detailLayout||sectionFit?660:compactOverview?760:850,left:567,header:300,footer:300}}},
    headers:{default:header},footers:{default:front?frontFooter:footer},children:content
   });
  }

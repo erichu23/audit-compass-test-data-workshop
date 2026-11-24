@@ -996,12 +996,16 @@ body #content table thead th.ba-filtered .ba-filter-btn::before{background-image
 .report-document .report-focus-summary,.report-document .report-focus-summary .report-stat-value{color:#c00000}
 
 .report-sheet .report-counterparty-summary{grid-template-columns:minmax(0,38fr) minmax(0,62fr)}
+.report-sheet .report-related-summary{grid-template-columns:minmax(0,2fr) minmax(0,3fr)}
+.report-v2-document .report-table h4.report-section-rank-title{font-weight:400}
+.report-v2-document .report-cover-grid>tbody>tr:first-child{height:4.5em}
+.report-v2-document .report-cover-notes p{margin:4px 0 6px}
+.report-v2-document .report-unknown-bands .table-scroll>table tbody td:first-child{white-space:nowrap!important}
 .report-sheet .report-counterparty-summary .report-chart{padding:0;border:0;margin:0}
-@media screen and (max-width:760px){.report-sheet .report-counterparty-summary{grid-template-columns:minmax(0,1fr)}}
+@media screen and (max-width:760px){.report-sheet .report-counterparty-summary,.report-sheet .report-related-summary{grid-template-columns:minmax(0,1fr)}}
 .report-sheet .report-counterparty-summary .report-chart figcaption{font-size:14px}
 .report-sheet .report-counterparty-summary .report-stacked svg{max-width:460px}
-.report-sheet .report-counterparty-summary .report-table tbody tr:nth-child(4n+1),
-.report-sheet .report-counterparty-summary .report-table tbody tr:nth-child(4n+2){background:#f5f8fc}
+.report-sheet .report-counterparty-summary .report-table tbody td[rowspan]{background:#f5f8fc;font-weight:600}
 .report-sheet .report-counterparty-ranking .report-table{margin-top:0}
 
 .report-scope-v2.report-known-related-summary .report-scope-value{margin-top:24px}
