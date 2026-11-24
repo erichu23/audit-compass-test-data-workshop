@@ -1015,6 +1015,9 @@ body #content table thead th.ba-filtered .ba-filter-btn::before{background-image
 
 .report-document .report-registry-condition{margin:0 0 5px;font-size:12px;color:#172438}
 .report-document .report-registry-condition span{color:#51647b}
+.report-v2-document #report-follow .report-registry-screen>h4,
+.report-v2-document #report-follow .report-criteria>b{font-size:12px}
+.report-v2-document #report-follow .report-registry-condition{font-size:11px}
 
 .report-document .report-compliance-card p{margin:0 0 3px}
 .report-document .report-compliance-card .report-scope-label,

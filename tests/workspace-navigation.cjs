@@ -34,7 +34,7 @@ const sharedIds=['counterparties','related','background'];
 assert.deepEqual(currentVocabulary(report2.sections.filter(s=>sharedIds.includes(s.id))),currentVocabulary(report1.sections.filter(s=>sharedIds.includes(s.id))));
 for(const id of ['compliance','people','follow']){
  const current=report2.sections.find(s=>s.id===id),previous=report1.sections.find(s=>s.id===id);
- assert.deepEqual(currentVocabulary(current.tables.slice(id==='people'?1:0,-1)),currentVocabulary(previous.tables.slice(id==='people'?1:0)));
+ if(id!=='follow')assert.deepEqual(currentVocabulary(current.tables.slice(id==='people'?1:0,-1)),currentVocabulary(previous.tables.slice(id==='people'?1:0)));
  const chartData=({name,kind,rows})=>({name,kind,rows});
  assert.deepEqual(current.charts.map(chartData),previous.charts.map(chartData));
 }
@@ -337,22 +337,26 @@ for(const html of [v2WordHtml,v2Preview]){
  assert(follow.includes('<figcaption>收支重合</figcaption>'));
  assert(follow.includes('<figcaption>未识别客商关系</figcaption>'));
  assert(!follow.includes('收支重合比例区间')&&!follow.includes('未识别客商的交易金额区间'));
- assert(follow.includes('与对手方交易总额 <strong>[100]</strong> 万元及以上，且流入总额与流出总额重合比例 <strong>[20]</strong>%及以上 <span>（系统默认）</span>'));
- assert(follow.includes('与对手方交易总额 <strong>[50]</strong> 万元及以上 <span>（系统默认）</span>'));
+ assert(follow.includes('与对手方交易总额<strong>[0]</strong>元及以上，且流入总额与流出总额重合比例<strong>[20%]</strong>及以上 <span>（系统默认）</span>'));
+ assert(follow.includes('与对手方交易总额<strong>[0]</strong>元及以上 <span>（系统默认）</span>'));
  assert.equal((follow.match(/<td class="">识别对手方数<\/td>/g)||[]).length,2);
  assert.equal((follow.match(/class="report-follow-highlight">其中，/g)||[]).length,2);
  const totals=[...html.matchAll(/y="173" text-anchor="middle">([^<]+)<\/text>/g)];
  assert(totals.length>=12&&totals.every(([,value])=>value.endsWith(' 百万')));
 }
 const customModel=ctx.AuditReportV2.selectSections({...report2,criteria:{...report2.criteria,daysMin:60,daysMax:500}},['compliance']);
-assert(ctx.AuditReportV2.render(customModel,{forExport:true}).includes('<strong>[60]</strong> 天 ≤ 经营天数 ≤ <strong>[500]</strong> 天 <span>（项目自定义）</span>'));
+assert(ctx.AuditReportV2.render(customModel,{forExport:true}).includes('<strong>[60]</strong> 天 ≤ 经营天数 ≤ <strong>[500]</strong> 天 <span>（用户自定义）</span>'));
+const blankFollowCriteria=ctx.AuditReportV2.parseCriteria({overlapAmount:'',unknownAmount:''},{overlapAmount:100,unknownAmount:200});
+assert.equal(blankFollowCriteria.overlapAmount,0);
+assert.equal(blankFollowCriteria.unknownAmount,0);
+assert.equal(blankFollowCriteria.overlapPercent,20);
 
 const customFollow=ctx.AuditReportV2.selectSections({...report2,originalCurrency:'USD',criteria:{
  ...report2.criteria,overlapAmount:250000,overlapPercent:30,unknownAmount:175000
 }},['follow']);
 const customFollowHtml=ctx.AuditReportV2.render(customFollow,{forExport:true});
-assert(customFollowHtml.includes('<strong>[25]</strong> 万 USD及以上，且流入总额与流出总额重合比例 <strong>[30]</strong>%及以上 <span>（项目自定义）</span>'));
-assert(customFollowHtml.includes('<strong>[17.5]</strong> 万 USD及以上 <span>（项目自定义）</span>'));
+assert(customFollowHtml.includes('<strong>[250,000]</strong> USD及以上，且流入总额与流出总额重合比例<strong>[30%]</strong>及以上 <span>（用户自定义）</span>'));
+assert(customFollowHtml.includes('<strong>[175,000]</strong> USD及以上 <span>（用户自定义）</span>'));
 
 const persons=report2.sections.find(s=>s.id==='people');
 const priorPersons=report1.sections.find(s=>s.id==='people');

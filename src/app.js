@@ -34,7 +34,7 @@ function defaultReportProject(){
   for(const sheet of Object.values(books))sheet.rows=sheet.rows.map(row=>row.map(sampleName));
  }
  config.sampleNonMerchants=Object.fromEntries(Object.entries(samples.pools).map(([name,pool])=>[name,pool.map(sampleName)]));
- config.reportCriteria=AuditReport.parseCriteria({daysMin:0,daysMax:365,insuredMax:50,paidMin:20,paidMax:50,overlapAmount:1000000,overlapPercent:20,unknownAmount:500000});
+ config.reportCriteria={};
  config.registryIntervalVersion=AuditRegistry.INTERVAL_VERSION;
  config.registryBounds=Object.fromEntries(AuditRegistry.metrics.map(([id,,,limits])=>[id,[...limits]]));
  const own=new Set(data[K.company].rows.map(r=>r[0]));
@@ -721,10 +721,11 @@ document.addEventListener('submit',e=>{
  e.preventDefault();
  try{
   const input=Object.fromEntries(new FormData(e.target));
-  const next=AuditReport.parseCriteria(input,config.reportCriteria);
+  const next=activeReportTemplate().parseCriteria(input,config.reportCriteria);
   const nextBounds=input.daysBounds?{...bounds(),days:R.parseBounds(input.daysBounds,'天')}:bounds();
   lastData=snapshot();
-  config.reportCriteria=next;config.registryBounds=nextBounds;config.registryIntervalVersion=R.INTERVAL_VERSION;
+  config.reportCriteria={...config.reportCriteria,...Object.fromEntries(Object.keys(input).filter(key=>Object.hasOwn(next,key)).map(key=>[key,next[key]]))};
+  config.registryBounds=nextBounds;config.registryIntervalVersion=R.INTERVAL_VERSION;
   const top=window.scrollY;persist();render();window.scrollTo(0,top);
   toast('已更新筛选结果与核验明细。');
  }catch(err){toast(err.message,true);}

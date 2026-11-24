@@ -113,7 +113,8 @@ function scopeData(data,rows,own,from,to,cut){
  });
  return {sources,status};
 }
-const criteriaDefaults={daysMin:0,daysMax:365,insuredMax:50,capitalMinWan:0,capitalMaxWan:50,paidMin:20,paidMax:50,overlapAmount:1000000,overlapPercent:20,unknownAmount:500000};
+const criteriaDefaults={daysMin:0,daysMax:365,insuredMax:50,capitalMinWan:0,capitalMaxWan:50,paidMin:20,paidMax:50,overlapAmount:0,overlapPercent:20,unknownAmount:0};
+const optionalFollowAmounts=new Set(['overlapAmount','unknownAmount']);
 const criteriaFields={
  registryDays:[['daysMin','经营天数下限'],['daysMax','经营天数上限']],
  registryInsured:[['insuredMax','参保人数上限']],
@@ -129,7 +130,7 @@ function parseCriteria(input,current={}){
   if(!Object.hasOwn(criteriaDefaults,key))continue;
   const n=Number(value);
   const percent=key==='paidMin'||key==='paidMax'||key==='overlapPercent';
-  if(String(value).trim()===''||!Number.isFinite(n)||n<0||percent&&n>100||['daysMin','daysMax','insuredMax'].includes(key)&&!Number.isInteger(n))throw Error('请输入有效的非负筛选数值，比例须在 0–100 之间。');
+  if(!optionalFollowAmounts.has(key)&&String(value).trim()===''||!Number.isFinite(n)||n<0||percent&&n>100||['daysMin','daysMax','insuredMax'].includes(key)&&!Number.isInteger(n))throw Error('请输入有效的非负筛选数值，比例须在 0–100 之间。');
   next[key]=n;
  }
  if(next.daysMin>next.daysMax||next.paidMin>next.paidMax||next.capitalMinWan>next.capitalMaxWan)throw Error('筛选下限不能大于上限。');
@@ -241,7 +242,7 @@ function compute(data,settings={}){
   table(coverage,'2.1.2 账户'+metric+'分析',['分布',...headers],rankBands(ranks.map(r=>[r[3]/1e6,r[4],r[5]])));
  }
 
- const thresholdLabel='大额单笔交易人民币'+thresholdInWan.format(threshold/10000)+'万元以上'+(threshold===defaultLargeThreshold?'【系统默认】':'【项目自定义】');
+ const thresholdLabel='大额单笔交易人民币'+thresholdNumber.format(threshold/10000)+'万元以上'+(threshold===defaultLargeThreshold?'【系统默认】':'【用户自定义】');
  const features=section('features','1.2 资金流水 – 资金流水单笔交易性质分析',thresholdLabel+'（含阈值）。大额单笔汇总及明细按该阈值筛选。单笔交易图表分别按本期合并范围外（不包括对手方为空）、合并范围内、对手方名称为空的全量流水分组，金额占比分母为各自范围的交易总额，方向占比分母为各自范围的同方向金额。对手方为空仅判断对手方名称为空（含纯空格），账号有值仍计入。1.2.1 合并范围外大额明细排除空白对手方，先取全体交易金额前20大，再按对手方名称是否包含银行、理财或基金拆分。前20大以外汇总列为非前20大合计。1.2.2 和 1.2.3 分别先取各自交易金额前20大，再分组汇总。交易类型优先识别流水的交易类型字段，未命中时匹配摘要中的理财、贷款或工资，均未命中归为其他。摘要为空的交易按对手方名称归组，名称为空单列。两表的流入、流出占比分别以各自全量交易的同方向金额为分母，按换算成百万前的金额计算。');
  const tradeAmount=r=>value(r,8,fx)+value(r,10,fx);
  const big=rows.filter(r=>value(r,8,rates)+value(r,10,rates)>=E.cents(threshold));
@@ -619,7 +620,7 @@ const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const currency=new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const integer=n=>Number(n).toLocaleString('en-US',{maximumFractionDigits:0});
 const formatRate=n=>n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:20});
-const thresholdInWan=new Intl.NumberFormat('zh-CN',{maximumFractionDigits:6});
+const thresholdNumber=new Intl.NumberFormat('zh-CN',{maximumFractionDigits:6});
 const display=(v,header)=>typeof v!=='number'?esc(v):/占比|比例/.test(header)?(100*v).toFixed(2)+'%':/金额|余额/.test(header)?currency.format(v):/笔数|总交易行数/.test(header)?integer(v):String(v);
 const palette=['#24569e','#5283c5','#83a9dc','#abc6eb','#a92226','#cc4c50','#df8588','#efb9bb'];
 const natureReference=section=>'<p class="report-nature-reference">详见本报告'+section+'</p>';
@@ -732,7 +733,7 @@ const filterValue=n=>'<strong>['+esc(n)+']</strong>';
 function criteriaConditionHTML(group,c,description){
  const isDefault=criteriaFields[group].every(([key])=>c[key]===criteriaDefaults[key]);
  return '<p class="report-registry-condition">'+description+
-  ' <span>（'+(isDefault?'系统默认':'项目自定义')+'）</span></p>';
+  ' <span>（'+(isDefault?'系统默认':'用户自定义')+'）</span></p>';
 }
 function registryConditionHTML(group,c){
  const ranges={
@@ -745,9 +746,9 @@ function registryConditionHTML(group,c){
 }
 function followConditionHTML(group,c,code){
  const limit=group==='overlap'?c.overlapAmount:c.unknownAmount;
- const unit=code&&code!=='CNY'?'万 '+esc(code):'万元';
- const amountLimit='与对手方交易总额 '+filterValue(thresholdInWan.format(limit/10000))+' '+unit+'及以上';
- const ratioLimit=group==='overlap'?'，且流入总额与流出总额重合比例 '+filterValue(c.overlapPercent)+'%及以上':'';
+ const unit=code&&code!=='CNY'?' '+esc(code):'元';
+ const amountLimit='与对手方交易总额'+filterValue(thresholdNumber.format(limit))+unit+'及以上';
+ const ratioLimit=group==='overlap'?'，且流入总额与流出总额重合比例'+filterValue(c.overlapPercent+'%')+'及以上':'';
  return criteriaConditionHTML(group,c,amountLimit+ratioLimit);
 }
 function screenResultHTML(r){
@@ -831,7 +832,11 @@ function concentrationHTML(t){
 }
 
 function criteriaForm(group,criteria,bounds){
- return '<form class="report-criteria" data-report-criteria><b>设置筛选条件</b><div>'+criteriaFields[group].map(([id,label])=>'<label>'+esc(label)+'<input type="number" min="0" step="'+(['daysMin','daysMax','insuredMax'].includes(id)?'1':'any')+'" name="'+id+'" value="'+esc(criteria[id])+'" required></label>').join('')+(group==='registry'?'<label>经营天数统计分界值（天）<input name="daysBounds" value="'+esc(g.AuditRegistry.boundsFor('days',bounds).join(', '))+'" required></label>':'')+'</div><button type="submit" class="btn btn-primary">应用筛选</button></form>';
+ const fields=criteriaFields[group].map(([id,label])=>{
+  const optional=optionalFollowAmounts.has(id),value=optional&&criteria[id]===0?'':criteria[id];
+  return '<label>'+esc(label)+'<input type="number" min="0" step="'+(['daysMin','daysMax','insuredMax'].includes(id)?'1':'any')+'" name="'+id+'" value="'+esc(value)+'"'+(optional?' placeholder="0"':' required')+'></label>';
+ });
+ return '<form class="report-criteria" data-report-criteria><b>设置筛选条件</b><div>'+fields.join('')+(group==='registry'?'<label>经营天数统计分界值（天）<input name="daysBounds" value="'+esc(g.AuditRegistry.boundsFor('days',bounds).join(', '))+'" required></label>':'')+'</div><button type="submit" class="btn btn-primary">应用筛选</button></form>';
 }
 function sectionBody(s,m,continuations){
  const tables=s.tables,charts=s.charts;

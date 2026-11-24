@@ -359,6 +359,10 @@ async function blocks(node,width,context={}){
     out.push(paragraph('筛选条件',{bold:true,size:18,align:D.AlignmentType.LEFT,spacing:{before:105,after:24,line:220}}));
     continue;
    }
+   if(child.matches('#report-follow .report-registry-screen > h4')){
+    out.push(paragraph(text(child),{bold:true,size:16,spacing:{before:70,after:30,line:205}}));
+    continue;
+   }
    const main=tag==='h2',level=headingBookmarks.has(child)?[D.HeadingLevel.HEADING_1,D.HeadingLevel.HEADING_2,D.HeadingLevel.HEADING_3][headingDepth(child)-1]:undefined;
    const color=child.matches('.report-focus-heading')?'C00000':toc?theme.navy:theme.ink;
    const rankTitle=child.matches('.report-section-rank-title');
@@ -397,8 +401,10 @@ async function blocks(node,width,context={}){
      if(child.matches('.report-detail-summary,.report-registry-condition')){
       const registry=child.matches('.report-registry-condition');
       const compactRegistry=registry&&!!child.closest('#report-compliance');
+      const compactFollow=registry&&!!child.closest('#report-follow');
+      const runSize=compactFollow?14:compactRegistry?15:registry?16:size;
       const runs=[],color=context.color||theme.ink;
-      const visit=(node,heavy=false)=>{if(node.nodeType===3){runs.push(new D.TextRun({text:node.textContent,font,size:compactRegistry?15:registry?16:size,bold:!!bold||heavy,color}));return;}for(const part of node.childNodes)visit(part,heavy||['STRONG','B'].includes(node.tagName));};
+      const visit=(node,heavy=false)=>{if(node.nodeType===3){runs.push(new D.TextRun({text:node.textContent,font,size:runSize,bold:!!bold||heavy,color}));return;}for(const part of node.childNodes)visit(part,heavy||['STRONG','B'].includes(node.tagName));};
       visit(temp);out.push(paragraph('',{runs,color,align:context.align,size,snapToGrid:detailSpacing?false:undefined,spacing:detailSpacing??(registry?{after:30,line:220}:undefined)}));
      }else out.push(paragraph(value,{bold,color:context.color,align:context.align,size,snapToGrid:detailSpacing?false:undefined,spacing:detailSpacing??(spaciousCover?{before:!context.cell&&bold?context.coverSpacing.noteTop:0,after:context.cell?36:context.coverSpacing.noteAfter,line:context.cell?230:270}:context.compactOverview?{after:25,line:220}:undefined)}));
     }
