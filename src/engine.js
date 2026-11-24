@@ -463,12 +463,12 @@ const belongs=(part,cat)=>part.category===cat||(part.category==='客商一体'&&
 for(const dir of ['in','out']){
  const grouped=new Map();
  for(const part of cp.values()){
-  if(part[dir]<=0)continue;
+  if(part[dir]<=0||(opt.excludeBlankConcentration&&!part.name))continue;
   if(!grouped.has(part.name))grouped.set(part.name,{name:part.name,amount:0,parts:[]});
   const item=grouped.get(part.name);item.amount+=part[dir];item.parts.push(part);
  }
  // Rank the whole external counterparty population before splitting categories.
- // A blank name is one counterparty and participates in the same ranking.
+ // By default a blank name is counted as one counterparty.
  const ranked=[...grouped.values()].sort((a,b)=>b.amount-a.amount||a.name.localeCompare(b.name,'zh-CN'));
  const direction=dir==='in'?'流入':'流出';
  const bands=[['合计',ranked],['前5',ranked.slice(0,5)],['前10',ranked.slice(0,10)],['前20',ranked.slice(0,20)],['其他',ranked.slice(20)]];

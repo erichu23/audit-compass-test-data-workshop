@@ -1,4 +1,4 @@
-const fs=require('fs'),vm=require('vm'),assert=require('assert');global.window=global;for(const n of ['baseline','engine','registry','report'])vm.runInThisContext(fs.readFileSync('src/'+n+'.js','utf8'));
+const fs=require('fs'),vm=require('vm'),assert=require('assert');global.window=global;for(const n of ['baseline','engine','registry','report','report-v2'])vm.runInThisContext(fs.readFileSync('src/'+n+'.js','utf8'));
 const E=AuditEngine,K=E.KEYS,d=Object.fromEntries(Object.entries(BASELINE).map(([k,t])=>[k,{headers:t.headers,rows:[]}]));
 d[K.company].rows=[['本方甲',null,null,'母公司'],['本方乙',null,null,'子公司']];
 for(let i=0;i<25;i++){const name='企业'+String(i).padStart(2,'0'),which=i%4;if(which===0||which===2)d[K.customer].rows.push(['本方甲',null,name]);if(which===1||which===2)d[K.supplier].rows.push(['本方甲',null,name]);if(i%2===0)d[K.related].rows.push(['本方甲',name,'控股股东']);}
@@ -26,3 +26,28 @@ for(const direction of ['流入','流出'])for(const cat of ['客户','供应商
 }
 assert(sec.tables.at(-1).headers.includes('全体对手方排名'));assert.equal(JSON.stringify(d),before);
 console.log('PASS: period/internal exclusion, global ranking before category split, blank participates as nonmerchant third party, same name across companies, independent directions, top5/10/20 amounts and counts, category denominators, raw input unchanged');
+
+const v2=AuditReportV2.compute(d,{from:'2025-01-01',to:'2025-12-31',rates:{USD:7}});
+const concentration2=v2.sections.find(s=>s.id==='concentration');
+const [trend,related,third,details]=concentration2.tables;
+assert(!details.rows.some(r=>['【对手方名称为空】','本方乙','期间外'].includes(r[2])));
+assert(details.rows.filter(r=>r[0]==='流入'&&r[2]==='企业00').every(r=>r[3]===1));
+for(const direction of ['流入','流出'])for(const [i,cat] of ['客户','供应商','客商一体','非客商'].entries()){
+ const matching=details.rows.filter(r=>r[0]===direction&&r[1]===cat);
+ const total=matching.reduce((sum,r)=>sum+r[5],0);
+ for(const [table,nature] of [[related,'关联方'],[third,'第三方']]){
+  const rows=table.rows.filter(r=>r[0]===direction);
+  assert.equal(rows.length,5);
+  for(const [band,lo,hi] of [[0,1,Infinity],[1,1,5],[2,6,10],[3,11,20],[4,21,Infinity]]){
+   const expected=matching.filter(r=>r[4]===nature&&r[3]>=lo&&r[3]<=hi);
+   const amount=expected.reduce((sum,r)=>sum+r[5],0);
+   assert(Math.abs(rows[band][3+i*3]-amount)<1e-12);
+   assert.equal(rows[band][4+i*3],expected.reduce((sum,r)=>sum+r[6],0));
+   assert(Math.abs(rows[band][5+i*3]-(total?amount/total:0))<1e-12);
+  }
+ }
+ const trendColumn=1+i*2+(direction==='流出'?1:0);
+ assert(Math.abs(trend.rows.reduce((sum,r)=>sum+r[trendColumn],0)-total)<1e-12);
+}
+assert.equal(JSON.stringify(d),before);
+console.log('PASS: V2 excludes blank names in trends, ranks and denominators, then splits the same ranks into separate tables');
