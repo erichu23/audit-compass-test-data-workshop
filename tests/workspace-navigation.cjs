@@ -122,6 +122,7 @@ const blankHeading=featuresPage.indexOf('>交易对手方信息为空的交易</
 assert(memoHeading>=0&&memoHeading<blankHeading&&blankHeading<featuresPage.indexOf('<figcaption'));
 assert.equal((featuresPage.match(/<figcaption/g)||[]).length,3);
 assert.equal((featuresPage.match(/<table class="table"/g)||[]).length,3);
+assert(featuresPage.includes('report-nature-cards report-stat-rule'));
 assert(featuresPage.includes('<figcaption>交易对手方信息为空</figcaption>'));
 
 assert.equal((featuresPage.match(/详见本报告1\.2\.1/g)||[]).length,3);
@@ -254,7 +255,7 @@ for(const report of [v2Preview,v2WordHtml]){
 const directionPage=v2WordPages.findIndex(page=>page.includes('id="report-counterparties"'));
 for(const [i,direction] of ['流入','流出'].entries()){
  const overview=v2WordPages[directionPage+i*2],ranking=v2WordPages[directionPage+i*2+1];
- const plotPosition=overview.indexOf(direction+'金额分布（含交叉）');
+ const plotPosition=overview.indexOf('<figcaption>'+direction+'金额分布</figcaption>');
  assert(plotPosition>=0&&plotPosition<overview.indexOf('<h4>'+direction+'分类汇总</h4>'));
  assert(overview.includes('class="report-panes report-counterparty-summary"')&&!overview.includes('分类口径：'));
  assert.equal((overview.match(/class="report-pane"/g)||[]).length,2);
@@ -316,7 +317,7 @@ for(const [id,include,exclude] of [
  assert(details.every((row,i)=>i===0||row[amount]<=details[i-1][amount]));
  for(const h of include)assert(t.headers.includes(h));
  for(const h of exclude)assert(!t.headers.includes(h));
- assert(v2WordHtml.includes('<h4 class="report-section-rank-title">'+t.name.replace(/^2\.3\.[1-3]\s+/,'')+'</h4>'));
+ assert(v2WordHtml.includes('<h4 class="report-section-rank-title">'+section.title.replace(/^2\.3\.[1-3]\s+/,'')+'（前20大交易对手方）</h4>'));
  assert(reportTables[t.name]);
 }
 
@@ -368,7 +369,7 @@ assert.equal((peoplePage.match(/<table class="table"/g)||[]).length,1);
 for(const name of ['类型','人数（人）'])assert(peoplePage.includes('<th rowspan="2">'+name+'</th>'));
 for(const direction of ['流入','流出'])assert(peoplePage.includes('<th colspan="3">'+direction+'</th>'));
 assert(peoplePage.includes('<th colspan="2">交易金额合计</th>'));
-assert(v2WordHtml.includes('>个人及疑似个人前20大对手方</h4>'));
+assert(v2WordHtml.includes('>交易对手方为个人或疑似个人的分析（前20大交易对手方）</h4>'));
 
 for(const id of ['compliance','people','follow']){
  const overviewIndex=v2WordPages.findIndex(page=>page.includes('id="report-'+id+'"'));

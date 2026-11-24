@@ -1629,6 +1629,8 @@ body #content table thead th.ba-filtered .ba-filter-btn::before{background-image
 .report-v2-document .report-table h4.report-section-rank-title{font-size:12px;font-weight:400}
 .report-v2-document .report-cover-grid>tbody>tr:first-child{height:4.5em}
 .report-v2-document .report-cover-notes p{margin:4px 0 6px}
+.report-v2-document .report-stat-rule,
+.report-v2-document .report-related-summary>.report-pane:first-child{border-top:2px solid #668dbd}
 .report-v2-document .report-unknown-bands .table-scroll>table tbody td:first-child{white-space:nowrap!important}
 .report-sheet .report-counterparty-summary .report-chart{padding:0;border:0;margin:0}
 @media screen and (max-width:760px){.report-sheet .report-counterparty-summary,.report-sheet .report-related-summary{grid-template-columns:minmax(0,1fr)}}
@@ -3724,7 +3726,7 @@ function compute(data,settings={}){
  const timestampParts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(new Date()).map(p=>[p.type,p.value]));
  table(cover,'封面',['项目','当前结果'],[['被审计单位',[...own].join('、')],['系统已有数据期间',rangeLabel(minimum,maximum)],['财务报表期间',rangeLabel(from,to)],['本期首末交易日期',rangeLabel(selectedDates[0],selectedDates.at(-1))],['金额口径',originalCurrency?'原币 '+originalCurrency:rates.importedRmb?'使用流水文件的等值人民币':'折算人民币'],['测试汇率',fxLabel],['报告版本','V1.0 '+timestampParts.year+'年'+Number(timestampParts.month)+'月'+Number(timestampParts.day)+'日']]);
  const simulatedUpdatedAt=timestampParts.year+'-'+timestampParts.month+'-'+timestampParts.day+' '+timestampParts.hour+':'+timestampParts.minute+':'+timestampParts.second;
- const masterList=[['company','被审计单位主档'],['bank','银行账号主档'],['flow','资金交易明细'],['related','关联方主档'],['customer','客户主档'],['supplier','供应商主档'],['employee','员工主档'],['balance','银行科目主档'],['gl','总账科目余额表']];
+ const masterList=[['company','被审计单位主档'],['bank','银行账号主档'],['flow','资金交易明细'],['related','关联方主档'],['customer','客户主档'],['supplier','供应商主档'],['employee','员工主档'],['balance','银行科余主档'],['gl','总账科目余额表']];
  table(cover,'分析数据范围',['主档名称','状态','本期记录数','最后更新时间','本期核验说明'],masterList.map(([k,label])=>{
   const [,status,count,note]=sourceStatus.find(r=>r[0]===k);
   return [label,status,count,simulatedUpdatedAt,note];
@@ -4303,14 +4305,16 @@ function chartAndTable(chart,tables,criteria,{chartTitle,showTableCaption=true,s
   (showBoundaryNote&&chart.boundaryNote?'<p class="report-boundary-note">'+esc(chart.boundaryNote)+'</p>':'')+results;
 }
 function trendHTML(t){
- const width=Math.max(520,t.rows.length*30),height=185;
+ const annual=t.rows.length<=12;
+ const width=annual?920:Math.max(520,t.rows.length*30),height=185;
  const directionTotal=(r,d)=>categories.reduce((s,_,i)=>s+r[1+i*2+d],0);
  const rawMax=Math.max(1,...t.rows.map(r=>Math.max(directionTotal(r,0),directionTotal(r,1))));
  const magnitude=10**Math.floor(Math.log10(rawMax/5)),tickStep=Math.ceil(rawMax/5/magnitude)*magnitude,max=tickStep*5;
  const ticks=Array.from({length:6},(_,i)=>{const y=158-i*26;return '<line x1="52" y1="'+y+'" x2="'+(width-4)+'" y2="'+y+'" stroke="#e1e7ef"/><text x="48" y="'+(y+3)+'" text-anchor="end">'+esc(currency.format(tickStep*i))+'</text>';}).join('');
  const step=(width-64)/Math.max(1,t.rows.length),labelInterval=Math.max(1,Math.ceil(t.rows.length/12));
  const bars=t.rows.map((r,i)=>{
-  const x=58+i*step,barWidth=Math.min(12,(step-3)/2);
+  const barWidth=Math.min(annual?19:12,(step-3)/2);
+  const x=58+i*step+(annual?(step-2*barWidth-1)/2:0);
   let html=i%labelInterval===0?'<text x="'+x+'" y="177">'+esc(r[0].slice(2))+'</text>':'';
   for(let d=0;d<2;d++){
    let y=158;
@@ -4367,7 +4371,8 @@ function sectionBody(s,m,continuations){
    '注册资本':'注册资本 '+c.capitalMinWan+'–'+c.capitalMaxWan+' 万元（含边界）',
    '收支重合':'交易额 ≥ '+currency.format(c.overlapAmount)+'；重合比例 ≥ '+c.overlapPercent+'%',
    '未识别客商关系':'交易额 ≥ '+currency.format(c.unknownAmount)};
-  const detail=tableHTML({...list,name:list.name.replace(/^2\.3\.[1-3]\s+/,''),sectionRanks:true,filterHeaders:list.headers.map(h=>conditions[h]||'')});
+  const title=s.title.replace(/^2\.3\.[1-3]\s+/,'')+'（前20大交易对手方）';
+  const detail=tableHTML({...list,name:title,sectionRanks:true,filterHeaders:list.headers.map(h=>conditions[h]||'')});
   continuations.push('<section class="report-section" id="report-'+s.id+'-detail">'+detail+'</section>');
  }
  if(s.id==='cover')return coverHTML(s);
@@ -4388,7 +4393,7 @@ function sectionBody(s,m,continuations){
    scopeLine('detail',integer(n['银行账号清单'])+' 个银行账号清单')+
    scopeLine('detail',integer(n['科目余额表'])+' 个科目余额表')+
    scopeLine('reference',appendixLink);
-  return sideBySide([company,bank],'report-scope-panes report-scope-v2');
+  return sideBySide([company,bank],'report-scope-panes report-scope-v2 report-stat-rule');
  }
  if(s.id==='features'){
   const detail=(t,name)=>{
@@ -4414,8 +4419,8 @@ function sectionBody(s,m,continuations){
    '<section class="report-section" id="report-blank-memo">'+
     tableHTML({...blankMemo.top20Summary,name:'1.2.3 摘要信息为空的交易分析',note:blankMemo.note})+'</section>'
   );
-  return sideBySide(s.cards.map(cardHTML),'report-three report-nature-cards')+
-   sideBySide(charts.map(breakdown),'report-three report-nature-charts')+extra('流水性质汇总数据',tableHTML(tables[0]));
+  return sideBySide(s.cards.map(cardHTML),'report-three report-nature-cards report-stat-rule')+
+   sideBySide(charts.map(breakdown),'report-three report-nature-charts')+extra('流水性质汇总数据',tableHTML({...tables[0]}));
  }
  if(s.id==='concentration'){
   const [,relatedTable,thirdPartyTable]=tables;
@@ -4431,7 +4436,7 @@ function sectionBody(s,m,continuations){
    }));
    const summary={name:direction+'分类汇总',headers:['性质','对手方类型',direction+'金额（百万）',direction+'笔数',direction+'占比'],rows,
     mergeFirstColumn:categories.length,columnWidths:[14,23,26,18,19]};
-   const plot=stackedHTML({...charts[0],name:direction+'金额分布（含交叉）'},i);
+   const plot=stackedHTML({...charts[0],name:direction+'金额分布'},i);
    return {
     overview:sideBySide([plot,tableHTML(summary)],'report-counterparty-summary'),
     ranking:'<div class="report-counterparty-ranking">'+tableHTML({...t,limit:23,counterpartyRanks:true})+'</div>'
@@ -4474,7 +4479,7 @@ function sectionBody(s,m,continuations){
   const [days,insured,capital,...more]=charts;
   const distributions=[[days,'经营时间'],[insured,'社保人数'],[capital,'注册资本']].map(([chart,registryDimension])=>
    chartAndTable(chart,tables,m.criteria,{showTableCaption:false,showBoundaryNote:false,registryDimension}));
-  return sideBySide(cards,'report-three')+sideBySide(distributions,'report-three')+
+  return sideBySide(cards,'report-three report-stat-rule')+sideBySide(distributions,'report-three')+
    extra('合规汇总',tableHTML({...summary,headers:summary.headers.slice(0,4),rows:visibleRows.map(row=>row.slice(0,4))}))+
    extra('注册资本金额及诉讼数量区间',sideBySide(more.map(c=>chartAndTable(c,tables))))+
    extra('本期工商匹配明细',tableHTML(tables.at(-2)))+extra('黑名单命中明细',tableHTML(details));
@@ -27676,6 +27681,7 @@ class ReportTableOfContents extends D.TableOfContents {
 let headingBookmarks=new WeakMap(),reportTocEntries=[];
 const border={style:D.BorderStyle.SINGLE,size:4,color:theme.border};
 const borders={top:border,bottom:border,left:border,right:border,insideHorizontal:border,insideVertical:border};
+const statTopBorder={...border,size:12,color:'668DBD'};
 function legendHex(value){
  const color=String(value||'').trim();if(/^#[0-9a-f]{6}$/i.test(color))return color.slice(1).toUpperCase();
  if(/^#[0-9a-f]{3}$/i.test(color))return color.slice(1).split('').map(c=>c+c).join('').toUpperCase();
@@ -27709,7 +27715,7 @@ function paragraph(text,{heading,align,bold=false,color=theme.ink,size=18,charac
   children:bookmark?[new D.Bookmark({id:bookmark,children:[new D.TextRun({text:String(text??''),font,size,bold,color,characterSpacing})]})]:(runs||[new D.TextRun({text:String(text??''),font,size,bold,color,characterSpacing})])
  });
 }
-async function svgImage(svg,width,legend,{maxPlotHeight=Infinity,legendWidth=330}={}){
+async function svgImage(svg,width,legend,{maxPlotHeight=Infinity,legendWidth=330,legendMarkerSize=5}={}){
  const clone=svg.cloneNode(true),box=svg.viewBox.baseVal;
  const aspect=(box.width||Number(svg.getAttribute('width'))||330)/(box.height||Number(svg.getAttribute('height'))||181);
  const pixels=Math.min(1050,width/15,maxPlotHeight*aspect),height=pixels/aspect;
@@ -27727,11 +27733,12 @@ async function svgImage(svg,width,legend,{maxPlotHeight=Infinity,legendWidth=330
   const context=canvas.getContext('2d');
   if(!context)throw Error('浏览器无法绘制报告图表。');
   const scale=canvas.width/legendWidth,legendFont=8*scale,lineHeight=15*scale,padding=8*scale;
+  const marker=legendMarkerSize*scale,markerAdvance=marker+2*scale;
   const items=legend?[...legend.children]:[],layout=[];let x=padding,y=padding;
   context.font=legendFont+'px "Microsoft YaHei","微软雅黑",sans-serif';
   for(const item of items){
    const colors=[...item.querySelectorAll('i')].map(icon=>legendHex(icon.style.backgroundColor||icon.style.background));
-   const label=text(item),itemWidth=context.measureText(label).width+(colors.length*7+10)*scale;
+   const label=text(item),itemWidth=context.measureText(label).width+colors.length*markerAdvance+10*scale;
    if(x>padding&&x+itemWidth>canvas.width-padding){x=padding;y+=lineHeight;}
    layout.push({x,y,label,colors});x+=itemWidth;
   }
@@ -27739,7 +27746,7 @@ async function svgImage(svg,width,legend,{maxPlotHeight=Infinity,legendWidth=330
   canvas.height=Math.ceil(height*2+legendHeight);
   context.fillStyle='#ffffff';context.fillRect(0,0,canvas.width,canvas.height);
   context.font=legendFont+'px "Microsoft YaHei","微软雅黑",sans-serif';context.textBaseline='middle';
-  for(const item of layout){let left=item.x;for(const color of item.colors){context.fillStyle='#'+color;context.fillRect(left,item.y+3*scale,5*scale,5*scale);left+=7*scale;}context.fillStyle='#435976';context.fillText(item.label,left+2*scale,item.y+6*scale);}
+  for(const item of layout){let left=item.x;for(const color of item.colors){context.fillStyle='#'+color;context.fillRect(left,item.y+6*scale-marker/2,marker,marker);left+=markerAdvance;}context.fillStyle='#435976';context.fillText(item.label,left+2*scale,item.y+6*scale);}
   context.drawImage(image,0,legendHeight,canvas.width,height*2);
   const png=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
   if(!png)throw Error('报告图表转换失败。');
@@ -27749,13 +27756,15 @@ async function svgImage(svg,width,legend,{maxPlotHeight=Infinity,legendWidth=330
  }finally{URL.revokeObjectURL(url);}
 }
 function text(node){return (node.innerText||node.textContent||'').replace(/\s+/g,' ').trim();}
-async function grid(children,width,weights,{natureGroup=false,compactOverview=false,wordV2=false,sectionFit}={}){
+async function grid(children,width,weights,{natureGroup=false,compactOverview=false,wordV2=false,sectionFit,statRule=false}={}){
  const sum=weights.reduce((a,b)=>a+b,0),sizes=weights.map(n=>Math.floor(width*n/sum));
  const padding=natureGroup||compactOverview?30:65;
  return new D.Table({
-  layout:D.TableLayoutType.FIXED,width:{size:width,type:D.WidthType.DXA},columnWidths:sizes,borders,
+  layout:D.TableLayoutType.FIXED,width:{size:width,type:D.WidthType.DXA},columnWidths:sizes,
+  borders:statRule?{...borders,top:statTopBorder}:borders,
   rows:[new D.TableRow({cantSplit:natureGroup||compactOverview,children:await Promise.all(children.map(async (node,i)=>new D.TableCell({
    width:{size:sizes[i],type:D.WidthType.DXA},margins:{top:padding,bottom:padding,left:75,right:75},
+   ...(node.querySelector('.report-known-related-summary')?{borders:{top:statTopBorder}}:{}),
    children:await blocks(node,Math.max(200,sizes[i]-160),{natureGroup,compactOverview,wordV2,sectionFit})
   })))})]
  });
@@ -27943,7 +27952,8 @@ async function blocks(node,width,context={}){
     const emphasized=caption.matches('.report-large-chart-title');
     out.push(paragraph(text(caption),{bold:true,color:emphasized?theme.accent:context.natureGroup?'000000':theme.heading,size:context.natureGroup?20:emphasized?22:16,spacing:context.natureGroup?{after:20,line:220}:undefined}));
    }
-   const chartLayout=child.matches('.report-concentration-chart')?{maxPlotHeight:context.sectionFit==='concentration'?154:245,legendWidth:680}
+   const chartLayout=child.matches('.report-concentration-chart')?{maxPlotHeight:context.sectionFit==='concentration'?154:245,legendWidth:680,
+    legendMarkerSize:context.sectionFit==='concentration'?9:5}
     :context.sectionFit==='features'?{maxPlotHeight:195}
     :context.sectionFit==='compliance'?{maxPlotHeight:151}
     :child.closest('.report-counterparty-summary')?{maxPlotHeight:context.sectionFit==='counterparties'?115:225}
@@ -27998,7 +28008,7 @@ async function blocks(node,width,context={}){
   if(child.matches('.report-panes')){
    const panes=[...child.children];
    const weights=child.matches('.report-counterparty-summary')?[.38,.62]:child.matches('.report-related-summary')?[2,3]:panes.map(()=>1);
-   if(panes.length)out.push(await grid(panes,width,weights,{natureGroup:child.matches('.report-nature-cards,.report-nature-charts'),compactOverview:context.compactOverview,wordV2:context.wordV2,sectionFit:context.sectionFit}));
+   if(panes.length)out.push(await grid(panes,width,weights,{natureGroup:child.matches('.report-nature-cards,.report-nature-charts'),compactOverview:context.compactOverview,wordV2:context.wordV2,sectionFit:context.sectionFit,statRule:child.classList.contains('report-stat-rule')}));
    continue;
   }
   if(child.matches('.report-direction')){
@@ -28322,6 +28332,12 @@ async function render(blob){
   if(!p.hasChildNodes())p.append('\u00a0');
   return p;
  }
+ function renderTopBorder(element,borders){
+  const top=child(borders,'top');
+  if(attr(top,'val')==='single'&&number(top,'sz')>4){
+   element.style.borderTop=number(top,'sz')/8+'pt solid '+color(attr(top,'color'));
+  }
+ }
  function renderTable(node){
   const table=create('table'),props=child(node,'tblPr'),cols=children(child(node,'tblGrid'),'gridCol'),widths=cols.map(col=>number(col,'w'));
   if(attr(child(props,'jc'),'val')==='center')table.style.marginInline='auto';
@@ -28330,8 +28346,9 @@ async function render(blob){
    const measure=attr(specifiedWidth,'w');
    if(measure)table.style.width=measure.endsWith('%')?measure:Number(measure)/50+'%';
   }
-  const borders=children(child(props,'tblBorders'));
+  const tableBorders=child(props,'tblBorders'),borders=children(tableBorders);
   if(borders.length&&borders.every(edge=>['none','nil'].includes(attr(edge,'val'))))table.classList.add('word-preview-borderless');
+  renderTopBorder(table,tableBorders);
   const sum=widths.reduce((a,b)=>a+b,0);
   if(sum){
    const group=create('colgroup');
@@ -28348,6 +28365,7 @@ async function render(blob){
     const merge=child(props,'vMerge'),previous=merges.get(column);
     if(merge&&attr(merge,'val')!=='restart'&&previous){previous.rowSpan++;column+=span;continue;}
     const td=create('td');td.colSpan=span;
+    renderTopBorder(td,child(props,'tcBorders'));
     if(merge)merges.set(column,td);else merges.delete(column);
     const fill=color(attr(child(props,'shd'),'fill'));if(fill)td.style.backgroundColor=fill;
     if(attr(child(props,'vAlign'),'val')==='center')td.style.verticalAlign='middle';

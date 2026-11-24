@@ -88,6 +88,12 @@ async function render(blob){
   if(!p.hasChildNodes())p.append('\u00a0');
   return p;
  }
+ function renderTopBorder(element,borders){
+  const top=child(borders,'top');
+  if(attr(top,'val')==='single'&&number(top,'sz')>4){
+   element.style.borderTop=number(top,'sz')/8+'pt solid '+color(attr(top,'color'));
+  }
+ }
  function renderTable(node){
   const table=create('table'),props=child(node,'tblPr'),cols=children(child(node,'tblGrid'),'gridCol'),widths=cols.map(col=>number(col,'w'));
   if(attr(child(props,'jc'),'val')==='center')table.style.marginInline='auto';
@@ -96,8 +102,9 @@ async function render(blob){
    const measure=attr(specifiedWidth,'w');
    if(measure)table.style.width=measure.endsWith('%')?measure:Number(measure)/50+'%';
   }
-  const borders=children(child(props,'tblBorders'));
+  const tableBorders=child(props,'tblBorders'),borders=children(tableBorders);
   if(borders.length&&borders.every(edge=>['none','nil'].includes(attr(edge,'val'))))table.classList.add('word-preview-borderless');
+  renderTopBorder(table,tableBorders);
   const sum=widths.reduce((a,b)=>a+b,0);
   if(sum){
    const group=create('colgroup');
@@ -114,6 +121,7 @@ async function render(blob){
     const merge=child(props,'vMerge'),previous=merges.get(column);
     if(merge&&attr(merge,'val')!=='restart'&&previous){previous.rowSpan++;column+=span;continue;}
     const td=create('td');td.colSpan=span;
+    renderTopBorder(td,child(props,'tcBorders'));
     if(merge)merges.set(column,td);else merges.delete(column);
     const fill=color(attr(child(props,'shd'),'fill'));if(fill)td.style.backgroundColor=fill;
     if(attr(child(props,'vAlign'),'val')==='center')td.style.verticalAlign='middle';

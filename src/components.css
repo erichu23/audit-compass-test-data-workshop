@@ -1000,6 +1000,8 @@ body #content table thead th.ba-filtered .ba-filter-btn::before{background-image
 .report-v2-document .report-table h4.report-section-rank-title{font-size:12px;font-weight:400}
 .report-v2-document .report-cover-grid>tbody>tr:first-child{height:4.5em}
 .report-v2-document .report-cover-notes p{margin:4px 0 6px}
+.report-v2-document .report-stat-rule,
+.report-v2-document .report-related-summary>.report-pane:first-child{border-top:2px solid #668dbd}
 .report-v2-document .report-unknown-bands .table-scroll>table tbody td:first-child{white-space:nowrap!important}
 .report-sheet .report-counterparty-summary .report-chart{padding:0;border:0;margin:0}
 @media screen and (max-width:760px){.report-sheet .report-counterparty-summary,.report-sheet .report-related-summary{grid-template-columns:minmax(0,1fr)}}

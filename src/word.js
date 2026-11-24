@@ -10,6 +10,7 @@ class ReportTableOfContents extends D.TableOfContents {
 let headingBookmarks=new WeakMap(),reportTocEntries=[];
 const border={style:D.BorderStyle.SINGLE,size:4,color:theme.border};
 const borders={top:border,bottom:border,left:border,right:border,insideHorizontal:border,insideVertical:border};
+const statTopBorder={...border,size:12,color:'668DBD'};
 function legendHex(value){
  const color=String(value||'').trim();if(/^#[0-9a-f]{6}$/i.test(color))return color.slice(1).toUpperCase();
  if(/^#[0-9a-f]{3}$/i.test(color))return color.slice(1).split('').map(c=>c+c).join('').toUpperCase();
@@ -43,7 +44,7 @@ function paragraph(text,{heading,align,bold=false,color=theme.ink,size=18,charac
   children:bookmark?[new D.Bookmark({id:bookmark,children:[new D.TextRun({text:String(text??''),font,size,bold,color,characterSpacing})]})]:(runs||[new D.TextRun({text:String(text??''),font,size,bold,color,characterSpacing})])
  });
 }
-async function svgImage(svg,width,legend,{maxPlotHeight=Infinity,legendWidth=330}={}){
+async function svgImage(svg,width,legend,{maxPlotHeight=Infinity,legendWidth=330,legendMarkerSize=5}={}){
  const clone=svg.cloneNode(true),box=svg.viewBox.baseVal;
  const aspect=(box.width||Number(svg.getAttribute('width'))||330)/(box.height||Number(svg.getAttribute('height'))||181);
  const pixels=Math.min(1050,width/15,maxPlotHeight*aspect),height=pixels/aspect;
@@ -61,11 +62,12 @@ async function svgImage(svg,width,legend,{maxPlotHeight=Infinity,legendWidth=330
   const context=canvas.getContext('2d');
   if(!context)throw Error('浏览器无法绘制报告图表。');
   const scale=canvas.width/legendWidth,legendFont=8*scale,lineHeight=15*scale,padding=8*scale;
+  const marker=legendMarkerSize*scale,markerAdvance=marker+2*scale;
   const items=legend?[...legend.children]:[],layout=[];let x=padding,y=padding;
   context.font=legendFont+'px "Microsoft YaHei","微软雅黑",sans-serif';
   for(const item of items){
    const colors=[...item.querySelectorAll('i')].map(icon=>legendHex(icon.style.backgroundColor||icon.style.background));
-   const label=text(item),itemWidth=context.measureText(label).width+(colors.length*7+10)*scale;
+   const label=text(item),itemWidth=context.measureText(label).width+colors.length*markerAdvance+10*scale;
    if(x>padding&&x+itemWidth>canvas.width-padding){x=padding;y+=lineHeight;}
    layout.push({x,y,label,colors});x+=itemWidth;
   }
@@ -73,7 +75,7 @@ async function svgImage(svg,width,legend,{maxPlotHeight=Infinity,legendWidth=330
   canvas.height=Math.ceil(height*2+legendHeight);
   context.fillStyle='#ffffff';context.fillRect(0,0,canvas.width,canvas.height);
   context.font=legendFont+'px "Microsoft YaHei","微软雅黑",sans-serif';context.textBaseline='middle';
-  for(const item of layout){let left=item.x;for(const color of item.colors){context.fillStyle='#'+color;context.fillRect(left,item.y+3*scale,5*scale,5*scale);left+=7*scale;}context.fillStyle='#435976';context.fillText(item.label,left+2*scale,item.y+6*scale);}
+  for(const item of layout){let left=item.x;for(const color of item.colors){context.fillStyle='#'+color;context.fillRect(left,item.y+6*scale-marker/2,marker,marker);left+=markerAdvance;}context.fillStyle='#435976';context.fillText(item.label,left+2*scale,item.y+6*scale);}
   context.drawImage(image,0,legendHeight,canvas.width,height*2);
   const png=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
   if(!png)throw Error('报告图表转换失败。');
@@ -83,13 +85,15 @@ async function svgImage(svg,width,legend,{maxPlotHeight=Infinity,legendWidth=330
  }finally{URL.revokeObjectURL(url);}
 }
 function text(node){return (node.innerText||node.textContent||'').replace(/\s+/g,' ').trim();}
-async function grid(children,width,weights,{natureGroup=false,compactOverview=false,wordV2=false,sectionFit}={}){
+async function grid(children,width,weights,{natureGroup=false,compactOverview=false,wordV2=false,sectionFit,statRule=false}={}){
  const sum=weights.reduce((a,b)=>a+b,0),sizes=weights.map(n=>Math.floor(width*n/sum));
  const padding=natureGroup||compactOverview?30:65;
  return new D.Table({
-  layout:D.TableLayoutType.FIXED,width:{size:width,type:D.WidthType.DXA},columnWidths:sizes,borders,
+  layout:D.TableLayoutType.FIXED,width:{size:width,type:D.WidthType.DXA},columnWidths:sizes,
+  borders:statRule?{...borders,top:statTopBorder}:borders,
   rows:[new D.TableRow({cantSplit:natureGroup||compactOverview,children:await Promise.all(children.map(async (node,i)=>new D.TableCell({
    width:{size:sizes[i],type:D.WidthType.DXA},margins:{top:padding,bottom:padding,left:75,right:75},
+   ...(node.querySelector('.report-known-related-summary')?{borders:{top:statTopBorder}}:{}),
    children:await blocks(node,Math.max(200,sizes[i]-160),{natureGroup,compactOverview,wordV2,sectionFit})
   })))})]
  });
@@ -277,7 +281,8 @@ async function blocks(node,width,context={}){
     const emphasized=caption.matches('.report-large-chart-title');
     out.push(paragraph(text(caption),{bold:true,color:emphasized?theme.accent:context.natureGroup?'000000':theme.heading,size:context.natureGroup?20:emphasized?22:16,spacing:context.natureGroup?{after:20,line:220}:undefined}));
    }
-   const chartLayout=child.matches('.report-concentration-chart')?{maxPlotHeight:context.sectionFit==='concentration'?154:245,legendWidth:680}
+   const chartLayout=child.matches('.report-concentration-chart')?{maxPlotHeight:context.sectionFit==='concentration'?154:245,legendWidth:680,
+    legendMarkerSize:context.sectionFit==='concentration'?9:5}
     :context.sectionFit==='features'?{maxPlotHeight:195}
     :context.sectionFit==='compliance'?{maxPlotHeight:151}
     :child.closest('.report-counterparty-summary')?{maxPlotHeight:context.sectionFit==='counterparties'?115:225}
@@ -332,7 +337,7 @@ async function blocks(node,width,context={}){
   if(child.matches('.report-panes')){
    const panes=[...child.children];
    const weights=child.matches('.report-counterparty-summary')?[.38,.62]:child.matches('.report-related-summary')?[2,3]:panes.map(()=>1);
-   if(panes.length)out.push(await grid(panes,width,weights,{natureGroup:child.matches('.report-nature-cards,.report-nature-charts'),compactOverview:context.compactOverview,wordV2:context.wordV2,sectionFit:context.sectionFit}));
+   if(panes.length)out.push(await grid(panes,width,weights,{natureGroup:child.matches('.report-nature-cards,.report-nature-charts'),compactOverview:context.compactOverview,wordV2:context.wordV2,sectionFit:context.sectionFit,statRule:child.classList.contains('report-stat-rule')}));
    continue;
   }
   if(child.matches('.report-direction')){
