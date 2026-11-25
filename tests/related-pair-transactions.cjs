@@ -9,3 +9,13 @@ const director=chart.rows.find(r=>r[0]==='董事'),supervisor=chart.rows.find(r=
 const c=m.sections.find(s=>s.id==='counterparties');assert.equal(c.tables.find(t=>t.headers.includes('客商分类')).rows[1][1],'交易企业01');
 assert.equal(JSON.stringify(d),before);assert(AuditReport.render(AuditReport.selectSections(m,['related']),{allRows:true,forExport:true}).includes('不拼接'));
 console.log('PASS: only matched entity transactions included, filtering before top20 ranking, in/out and counts correct, duplicate type dedup, multi-types separate, type denominator unique total, 2.1 unchanged, source unchanged, exported explanation');
+vm.runInThisContext(fs.readFileSync('src/report-v2.js','utf8'));
+const v2Related=()=>AuditReportV2.compute(d,{from:'2025-01-01',to:'2025-12-31'}).sections.find(section=>section.id==='related');
+d[K.related].rows.push(['甲','乙','被审计单位']);
+let v2=v2Related();
+assert.deepEqual([v2.relationStats.masterPairs,v2.relationStats.addedPairs,v2.relationStats.effectivePairs],[26,1,27]);
+assert.deepEqual(v2.tables.find(table=>table.name==='关联组合明细').rows.filter(row=>row[2]==='被审计单位之间自动补齐'),[['乙','甲','被审计单位之间自动补齐']]);
+d[K.related].rows.push(['乙','甲','被审计单位'],['甲','乙','被审计单位']);
+v2=v2Related();
+assert.deepEqual([v2.relationStats.masterPairs,v2.relationStats.addedPairs,v2.relationStats.effectivePairs],[27,0,27]);
+console.log('PASS: V2 adds only missing directional audited-entity pairs');

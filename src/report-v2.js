@@ -184,7 +184,8 @@ function compute(data,settings={}){
  const relatedByName=E.counterpartyRelationships(data),categoryByName=E.counterpartyCategories(data);
  const relatedPairTypes=new Map();
  for(const row of data[K.related].rows){if(!clean(row[0])||!clean(row[1]))continue;const pair=key(row[0],row[1]);if(!relatedPairTypes.has(pair))relatedPairTypes.set(pair,new Set());for(const role of (clean(row[2])||'其他').split('、').map(clean).filter(Boolean))relatedPairTypes.get(pair).add(role);}
- const masterSets=Object.fromEntries(['customer','supplier','employee','related'].map(k=>[k,new Map(data[K[k]].rows.map(r=>[key(r[0],r[k==='related'?1:2]),r]))]));
+ const masterSets=Object.fromEntries(['customer','supplier'].map(k=>[k,new Set(data[K[k]].rows.map(r=>key(r[0],r[2])))]));
+ const employeePairs=new Set(data[K.employee].rows.filter(r=>clean(r[0])&&clean(r[2])).map(r=>key(r[0],r[2])));
  const own=new Set(data[K.company].rows.map(r=>r[0]).filter(Boolean));
  const present=new Set(periodRows.map(r=>r[0]));
  const external=rows.filter(r=>!own.has(r[3]));
@@ -366,7 +367,9 @@ function compute(data,settings={}){
  const concentration=section('concentration','1.3 资金流水集中度分析（以下数据分析已剔除被审计单位合并范围内各单位之间的交易往来，同时剔除交易对手方为空的数据）','剔除合并范围内单位之间的往来和交易对手方名称为空的流水。先按对手方名称汇总，流入和流出分别在全体剩余外部对手方中统一排名，再拆客商分类及关联方、第三方。统一排名后，逐笔按本方被审计单位＋对手方组合匹配客商分类：同一组合同时命中客户及供应商时，其流水同时计入客户、供应商、客商一体三列，各列不可直接相加。统一排名按对手方真实金额计算一次，不因分类交叉而重复。占比的分母是该方向、该客商分类的总金额。关联性质只按对手方名称匹配整套关联方主档，命中即为关联方，类型为空显示其他；不在清单为第三方。');
  const months=new Map(),counterparties=new Map(),related=new Map(),relations=new Map(),people=new Map(),byCategory=new Map(),byCategoryRelated=new Map(),unidentifiedByName=new Map();
  const relationshipNames=new Map();
- const personPriority=['董监高','员工','其他个人'];
+ const personalTypes=['员工','董监高','其他个人'];
+ const personalTransactions=new Map(personalTypes.map(type=>[type,aggregate()]));
+ const knownPersonalNames=new Set();
  for(const r of external){
   const k=key(r[0],r[3]),named=!!clean(r[3]);
   const category=categoryByName.get(clean(r[3]))||'非客商';
@@ -395,11 +398,14 @@ function compute(data,settings={}){
     relationshipNames.get(role).add(name);
    }
   }
-  const employee=masterSets.employee.has(k);
-  const personType=String(relationship||'').split('、').some(role=>E.isRelatedOfficer(name,role))?'董监高':employee?'员工':isShortCounterpartyName(r[3])?'其他个人':'';
-  if(personType){
+  const employeeMatch=employeePairs.has(k);
+  const officerMatch=String(relationship||'').split('、').some(role=>E.isRelatedOfficer(name,role));
+  if(named&&(employeeMatch||officerMatch))knownPersonalNames.add(name);
+  if(isShortCounterpartyName(r[3])){
+   const personType=employeeMatch?'员工':officerMatch?'董监高':'其他个人';
+   add(personalTransactions.get(personType),r,fx);
    const person=group(people,name,{name,personType},r,fx);
-   if(personPriority.indexOf(personType)<personPriority.indexOf(person.personType))person.personType=personType;
+   if(personalTypes.indexOf(personType)<personalTypes.indexOf(person.personType))person.personType=personType;
   }
  }
  const monthKeys=[];
@@ -475,7 +481,7 @@ function compute(data,settings={}){
  const registryHitGroups=[];
  const profiles=new Map((settings.registry||[]).map(r=>[clean(r.name),r]));
  const originalProfiles=new Map((settings.registryOriginal||settings.registry||[]).map(r=>[clean(r.name),r]));
- const isPersonal=name=>isShortCounterpartyName(name)||people.has(name);
+ const isPersonal=name=>isShortCounterpartyName(name)||knownPersonalNames.has(name);
  const enterprise=cp.filter(x=>x.name!=='【对手方为空】'&&!isPersonal(x.name));
  const matched=enterprise.filter(x=>profiles.has(x.name));
  const flagged=cp.filter(x=>x.black);
@@ -523,14 +529,13 @@ function compute(data,settings={}){
  const fieldTable=R.table(matched.map(x=>{const profile=profiles.get(x.name);return {...profile,days:R.value(profile,'days',registryEnd,rates)};}),registryEnd,rates);
  table(compliance,'本期工商匹配明细',[...fieldTable.headers,'导入原经营天数','报告结束日期','按日期计算经营天数','计算值－原天数',...moneyHeaders],fieldTable.rows.map((r,i)=>{const profile=profiles.get(matched[i].name),days=R.value(profile,'days',registryEnd,rates),raw=originalProfiles.get(matched[i].name)?.days;return [...r,raw??null,registryEnd,days,days!=null&&raw!=null&&String(raw).trim()!==''&&Number.isFinite(Number(raw))?days-Number(raw):null,...financial(matched[i])];}));
 
- const persons=section('people','2.3.2 交易对手方为个人或疑似个人的分析','先识别符合个人分类规则的流水，再按姓名汇总。每个姓名只归入一类，优先级为董监高、员工、其他个人。合计为三类之和。');
+ const persons=section('people','2.3.2 交易对手方为个人或疑似个人的分析','合计包括所选期间合并范围外、对手方名称去掉首尾空格后非空且不超过4个字符的全部流水。金额和笔数逐笔分类，按本方单位＋姓名匹配员工主档，其次按关联方主档识别董监高，剩余流水归为其他个人。人数按姓名去重，依员工、董监高、其他个人的顺序归入一类。');
  const individuals=[...people.values()];
  const personalTotal=totals(individuals);
- const personalGroups=[['合计',individuals],...['员工','董监高','其他个人'].map(n=>[n,individuals.filter(x=>x.personType===n)])];
- table(persons,'个人交易汇总',['类型','人数（人）',...directionHeaders,...totalHeaders.slice(0,2)],personalGroups.map(([label,rs])=>{
-  const stats=totals(rs);
-  return [label,new Set(rs.map(x=>x.name)).size,...directions(stats,personalTotal),amount(turnover(stats)),stats.n];
- }));
+ const personalGroups=[['合计',individuals.length,personalTotal],...personalTypes.map(type=>
+  [type,individuals.filter(x=>x.personType===type).length,personalTransactions.get(type)])];
+ table(persons,'个人交易汇总',['类型','人数（人）',...directionHeaders,...totalHeaders.slice(0,2)],personalGroups.map(([label,count,stats])=>
+  [label,count,...directions(stats,personalTotal),amount(turnover(stats)),stats.n]));
  Object.assign(persons.tables.at(-1),{grouped:true,totalColumns:2});
  persons.note+=' 流入和流出占比分别以本节同方向金额为分母，按换算成百万前的金额计算。';
  table(persons,'个人交易明细',['姓名','个人类型',...moneyHeaders],sortBy(individuals,turnover).map(x=>[x.name,x.personType,...financial(x)]));
@@ -932,8 +937,8 @@ function sectionBody(s,m,continuations){
   const amountLine=(direction,i)=>'<p class="report-scope-detail">流'+direction+'总额/交易笔数/占总流'+direction+
    '比例：<strong>'+currency.format(r[i])+'百万/'+integer(r[i+1])+'笔/'+display(r[i+2],'占比')+'</strong></p>';
   const overview='<div class="report-scope-v2 report-known-related-summary">'+
-   '<p class="report-scope-label">有效关联组合数量（含被审计单位间自动补齐）</p>'+
-   '<p class="report-scope-value">'+integer(stats.effectivePairs)+'组</p>'+
+   '<p class="report-scope-label">已上传关联方主档中关联方个数</p>'+
+   '<p class="report-scope-value">'+integer(stats.masterPairs)+'组</p>'+
    '<p class="report-scope-reference">详见本报告2.2.2</p>'+amountLine('入',2)+amountLine('出',5)+'</div>';
   return subhead('2.2.1 已知关联方资金交易汇总')+
    sideBySide([overview,tableHTML({...distribution,columnWidths:[26,10,15,10,9,12,9,9]})],'report-related-summary')+
