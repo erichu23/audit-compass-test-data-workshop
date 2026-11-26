@@ -121,7 +121,14 @@ async function render(blob){
     const merge=child(props,'vMerge'),previous=merges.get(column);
     if(merge&&attr(merge,'val')!=='restart'&&previous){previous.rowSpan++;column+=span;continue;}
     const td=create('td');td.colSpan=span;
-    renderTopBorder(td,child(props,'tcBorders'));
+    const cellBorders=child(props,'tcBorders');
+    renderTopBorder(td,cellBorders);
+    for(const side of ['right','bottom','left']){
+     const edge=child(cellBorders,side);
+     if(attr(edge,'val')==='single'&&number(edge,'sz')>4){
+      td.style['border'+side[0].toUpperCase()+side.slice(1)]=number(edge,'sz')/8+'pt solid '+color(attr(edge,'color'));
+     }
+    }
     if(merge)merges.set(column,td);else merges.delete(column);
     const fill=color(attr(child(props,'shd'),'fill'));if(fill)td.style.backgroundColor=fill;
     if(attr(child(props,'vAlign'),'val')==='center')td.style.verticalAlign='middle';

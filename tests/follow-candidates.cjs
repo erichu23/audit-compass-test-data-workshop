@@ -14,10 +14,15 @@ console.log('PASS: one-way ratio zero in first band, blank names/null/spaces agg
 vm.runInThisContext(fs.readFileSync('src/report-v2.js','utf8'));
 const v2=AuditReportV2.compute(d,settings).sections.find(section=>section.id==='follow');
 assert.equal(v2.charts[0].rows[0][1],3);
-assert.equal(v2.charts[1].rows[1][1],0);
+assert.deepEqual(v2.charts[1].rows[1].filter((_,i)=>i!==4&&i!==7),['5～<10百万',1,9,1,.037,37]);
 const v2Unknown=v2.tables.find(t=>t.name==='未识别客商关系明细');
-assert(!v2Unknown.rows.some(row=>row[0]==='【对手方为空】'));
+assert.deepEqual(v2Unknown.rows.find(row=>row[0]==='【对手方为空】').slice(2,8),[9,1,.037,37,9.037,38]);
 assert.deepEqual(v2Unknown.rows.find(row=>row[0]==='部分匹配企业').slice(2,6),[1,1,.2,1]);
+assert.equal(v2Unknown.rows[0][0],'【对手方为空】');
+const representative=v2.tables[0].rows[1].at(-1);
+assert.equal(representative,'其中（非空对手方），单向付款企业交易总额最高，流入金额0.00百万元，流出金额2.00百万元。');
+const blankOnly=AuditReportV2.compute(d,{...settings,criteria:{...settings.criteria,unknownAmount:3000000}}).sections.find(section=>section.id==='follow');
+assert.equal(blankOnly.tables[0].rows[1].at(-1),'本期无符合筛选条件且名称非空的对手方。');
 assert.equal(JSON.stringify(d),before);
 
 d[K.employee].rows=[['甲',null,'王小明'],['甲',null,' 王小明 '],['甲',null,'林小红'],['甲',null,'赵小亮'],['甲',null,'五字符员工'],['甲',null,' ']];
@@ -42,4 +47,4 @@ assert.equal(other[5],.0002);
 assert(people.tables[1].rows.some(row=>row[0]==='赵小亮'&&row[1]==='其他个人'));
 assert(!people.tables[1].rows.some(row=>row[0]==='林小红'||row[0]==='五字符员工'));
 assert.equal(people.tables.at(-1).rows[0][1],'本类别总合计');
-console.log('PASS: V2 excludes blanks only from unknown merchants and assigns a name to one personal category');
+console.log('PASS: V2 includes blank-name inflow and outflow in unknown merchants and assigns a name to one personal category');

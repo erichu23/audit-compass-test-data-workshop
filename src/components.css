@@ -1002,6 +1002,12 @@ body #content table thead th.ba-filtered .ba-filter-btn::before{background-image
 .report-v2-document .report-cover-notes p{margin:4px 0 6px}
 .report-v2-document .report-stat-rule,
 .report-v2-document .report-related-summary>.report-pane:first-child{border-top:2px solid #668dbd}
+.report-v2-document .report-sheet table:not(.report-cover-grid)>tbody>tr>td:is(.report-amount,.report-count-share){text-align:right}
+.report-v2-document .report-title-emphasis{color:#c00000}
+.report-v2-document .report-chapter-note{font-size:14pt}
+.report-v2-document .report-subhead-note{font-size:.82em}
+.report-v2-document .report-table .report-person-muted>td{background:#f1f2f4;color:#6e7681}
+.report-v2-document .report-compliance-distributions{margin-top:8px}
 .report-v2-document .report-unknown-bands .table-scroll>table tbody td:first-child{white-space:nowrap!important}
 .report-sheet .report-counterparty-summary .report-chart{padding:0;border:0;margin:0}
 @media screen and (max-width:760px){.report-sheet .report-counterparty-summary,.report-sheet .report-related-summary{grid-template-columns:minmax(0,1fr)}}
@@ -1023,3 +1029,59 @@ body #content table thead th.ba-filtered .ba-filter-btn::before{background-image
 .report-document .report-compliance-card .report-scope-label,
 .report-document .report-compliance-card .report-scope-detail{color:#51647b;font-size:11px;line-height:1.35}
 .report-document .report-compliance-card .report-scope-value{margin-top:8px;color:#172438;font-size:16px;font-weight:700}
+
+
+.report-v2-document .report-cover-impact{font-size:.86em;color:#536681}
+.report-v2-document #report-executive-summary>h2{color:#193a62;margin:6px 0 8px}
+.report-v2-document .report-executive-intro{color:#536681;margin:0 0 13px}
+.report-v2-document .report-executive-row{gap:10px;margin:0 0 11px;border:0}
+.report-v2-document .report-executive-row>.report-pane{padding:0;border:1px solid #cedbec;border-top:2px solid #668dbd;border-radius:3px;background:#f3f7fc}
+.report-v2-document .report-executive-card{display:flex;flex-direction:column;height:100%;padding:9px 12px;box-sizing:border-box}
+.report-v2-document .report-executive-card p{margin:0}
+.report-v2-document .report-executive-card .report-executive-label{color:#193a62;font-weight:700;font-size:14px;margin-bottom:3px}
+.report-v2-document .report-executive-metrics{color:#536681;font-size:11px}
+.report-v2-document .report-executive-value{color:#193a62;font-weight:700;font-size:20px;line-height:1.35}
+.report-v2-document .report-executive-hit,.report-v2-document .report-executive-flag{color:#9e2635}
+.report-v2-document .report-executive-in{color:#24569e}
+.report-v2-document .report-executive-out,.report-v2-document .report-executive-condition,.report-v2-document .report-executive-highlight{color:#536681}
+.report-v2-document .report-executive-flow,.report-v2-document .report-executive-highlight,.report-v2-document .report-executive-condition{font-size:11px;line-height:1.45}
+.report-v2-document .report-executive-origin{color:#264a72;font-weight:700}
+.report-v2-document .report-executive-card .report-executive-condition{margin:4px 0}
+.report-v2-document .report-executive-result{margin:3px 0 5px;padding:4px 6px;border-left:2px solid #bd7180;background:#fff}
+.report-v2-document .report-executive-representative{font-size:11px;font-weight:700;color:#193a62;overflow-wrap:anywhere}
+.report-v2-document .report-executive-link{align-self:flex-start;margin-top:auto;color:#24569e;font-size:11px;font-weight:600}
+.report-v2-document .report-nature-index{margin:4px 0 15px;background:#f3f7fc}
+.report-v2-document .report-nature-index>.report-pane{padding:7px 12px}
+.report-v2-document .report-nature-index p{margin:0;font-weight:700;color:#172438;font-size:13px}
+.report-v2-document .report-nature-index-number{margin-right:4px;color:#24569e;font-size:11px}
+.report-v2-document .report-large-overview .report-large-card{min-height:0;padding:4px 6px}
+.report-v2-document .report-large-overview .report-large-scopes{display:grid;align-content:center;height:100%}
+.report-v2-document .report-large-overview .report-large-overview-metrics{margin:7px 0}
+.report-v2-document .report-nature-inline .report-detail-summary{margin:4px 0;color:#435976}
+
+.report-v2-document .report-nature-analysis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--report-border);border-top:2px solid #668dbd;margin:8px 0 12px}
+.report-v2-document .report-nature-analysis>.report-panes{display:contents}
+.report-v2-document .report-nature-analysis .report-large-overview>.report-pane:last-child{grid-column:span 2}
+.report-v2-document .report-nature-analysis .report-nature-charts>.report-pane{border-top:1px solid var(--report-border)}
+@media screen and (max-width:690px){
+ .report-v2-document .report-nature-analysis{grid-template-columns:minmax(0,1fr)}
+ .report-v2-document .report-nature-analysis .report-large-overview>.report-pane:last-child{grid-column:auto}
+}
+.report-v2-document .report-nature-detail-frame{margin:5px 0 12px}
+.report-v2-document .report-nature-detail-frame>.report-table{margin:0}
+.report-v2-document .report-nature-detail-frame table{width:100%;table-layout:fixed}
+.report-v2-document .report-nature-detail-frame .report-nature-summary-cell{background:#f7f9fc;border-top:2px solid #668dbd;padding:5px 10px;text-align:left;white-space:normal}
+.report-v2-document .report-nature-summary-cell .report-detail-summary{margin:2px 0}
+
+.report-v2-document .report-nature-inline strong{font-size:1.22em;color:#172438}
+
+.report-v2-document .report-focus-card-title{font-size:14px;font-weight:700;color:#203b5d;margin:0 0 6px}
+.report-v2-document .report-compliance-flows{font-size:12px;color:#51647b}
+.report-v2-document .report-compliance-flows strong:not(.report-executive-in){color:#172438}
+
+.report-v2-document #report-large-entity{margin-top:14px}
+
+.report-v2-document .report-concentration td[data-concentration-edges~="top"]{border-top:2px solid #c00000}
+.report-v2-document .report-concentration td[data-concentration-edges~="right"]{border-right:2px solid #c00000}
+.report-v2-document .report-concentration td[data-concentration-edges~="bottom"]{border-bottom:2px solid #c00000}
+.report-v2-document .report-concentration td[data-concentration-edges~="left"]{border-left:2px solid #c00000}

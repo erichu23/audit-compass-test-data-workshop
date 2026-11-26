@@ -10,6 +10,7 @@ class ReportTableOfContents extends D.TableOfContents {
 let headingBookmarks=new WeakMap(),reportTocEntries=[];
 const border={style:D.BorderStyle.SINGLE,size:4,color:theme.border};
 const borders={top:border,bottom:border,left:border,right:border,insideHorizontal:border,insideVertical:border};
+const summaryBookmark=id=>id.replaceAll('-','_');
 const statTopBorder={...border,size:12,color:'668DBD'};
 function legendHex(value){
  const color=String(value||'').trim();if(/^#[0-9a-f]{6}$/i.test(color))return color.slice(1).toUpperCase();
@@ -33,15 +34,19 @@ function cachedPageReference(entry){
 function wordContents(compact=false){
  const entries=reportTocEntries.map(entry=>new D.Paragraph({
   style:'TOC'+entry.level,...(compact?{spacing:{before:entry.level===1?60:0,after:70,line:285}}:{}),tabStops:[{type:D.TabStopType.RIGHT,position:pageWidth,leader:D.LeaderType.DOT}],
-  children:[new D.InternalHyperlink({anchor:entry.href,children:[new D.TextRun({text:entry.title,font,size:24,bold:entry.level===1,color:theme.ink})]}),new D.TextRun({text:'\t',font}),cachedPageReference(entry)]
+  children:[new D.InternalHyperlink({anchor:entry.href,children:headingTextRuns(entry.title,{size:24,bold:entry.level===1,color:theme.ink},compact&&entry.title.startsWith('2.3 '))}),new D.TextRun({text:'\t',font}),cachedPageReference(entry)]
  }));
  return new ReportTableOfContents('报告目录',{hyperlink:true,headingStyleRange:'1-3',contentChildren:entries,beginDirty:true});
+}
+function headingTextRuns(title,options,emphasize=false){
+ const parts=emphasize?title.split(/(重点)/):[title];
+ return parts.filter(Boolean).map(part=>new D.TextRun({text:part,font,...options,color:emphasize&&part==='重点'?'C00000':options.color}));
 }
 function paragraph(text,{heading,align,bold=false,color=theme.ink,size=18,characterSpacing,bookmark,runs,spacing={after:65,line:240},snapToGrid,pageBreakBefore}={}){
  return new D.Paragraph({
   ...(heading?{heading}:{}),
   alignment:align,spacing,snapToGrid,pageBreakBefore,keepNext:!!heading,
-  children:bookmark?[new D.Bookmark({id:bookmark,children:[new D.TextRun({text:String(text??''),font,size,bold,color,characterSpacing})]})]:(runs||[new D.TextRun({text:String(text??''),font,size,bold,color,characterSpacing})])
+  children:bookmark?[new D.Bookmark({id:bookmark,children:runs||[new D.TextRun({text:String(text??''),font,size,bold,color,characterSpacing})]})]:(runs||[new D.TextRun({text:String(text??''),font,size,bold,color,characterSpacing})])
  });
 }
 async function svgImage(svg,width,legend,{maxPlotHeight=Infinity,legendWidth=330,legendMarkerSize=5}={}){
@@ -85,17 +90,55 @@ async function svgImage(svg,width,legend,{maxPlotHeight=Infinity,legendWidth=330
  }finally{URL.revokeObjectURL(url);}
 }
 function text(node){return (node.innerText||node.textContent||'').replace(/\s+/g,' ').trim();}
-async function grid(children,width,weights,{natureGroup=false,compactOverview=false,wordV2=false,sectionFit,statRule=false}={}){
+async function paneRow(children,sizes,context,{padding,side=75,fill,cantSplit,spans=[]}){
+ return new D.TableRow({cantSplit,children:await Promise.all(children.map(async (node,i)=>new D.TableCell({
+  width:{size:sizes[i],type:D.WidthType.DXA},columnSpan:spans[i],margins:{top:padding,bottom:padding,left:side,right:side},
+  ...(fill?{shading:{fill}}:{}),
+  ...(node.querySelector('.report-known-related-summary')?{borders:{top:statTopBorder}}:{}),
+  children:await blocks(node,Math.max(200,sizes[i]-side*2),context)
+ })))});
+}
+async function grid(children,width,weights,{natureGroup=false,compactOverview=false,wordV2=false,sectionFit,statRule=false,natureIndex=false}={}){
  const sum=weights.reduce((a,b)=>a+b,0),sizes=weights.map(n=>Math.floor(width*n/sum));
- const padding=natureGroup||compactOverview?30:65;
+ if(natureIndex)sizes[sizes.length-1]+=width-sizes.reduce((total,size)=>total+size,0);
+ const padding=natureIndex?95:natureGroup||compactOverview?30:65;
+ const side=natureIndex?185:75;
  return new D.Table({
   layout:D.TableLayoutType.FIXED,width:{size:width,type:D.WidthType.DXA},columnWidths:sizes,
+  alignment:natureIndex?D.AlignmentType.CENTER:undefined,
   borders:statRule?{...borders,top:statTopBorder}:borders,
-  rows:[new D.TableRow({cantSplit:natureGroup||compactOverview,children:await Promise.all(children.map(async (node,i)=>new D.TableCell({
-   width:{size:sizes[i],type:D.WidthType.DXA},margins:{top:padding,bottom:padding,left:75,right:75},
-   ...(node.querySelector('.report-known-related-summary')?{borders:{top:statTopBorder}}:{}),
-   children:await blocks(node,Math.max(200,sizes[i]-160),{natureGroup,compactOverview,wordV2,sectionFit})
-  })))})]
+  rows:[await paneRow(children,sizes,{natureGroup,compactOverview,wordV2,sectionFit},{
+   padding,side,fill:natureIndex?'F3F7FC':undefined,cantSplit:natureIndex||natureGroup||compactOverview
+  })]
+ });
+}
+async function executiveGrid(panes,width,context){
+ const gutter=150,side=170,cardWidth=Math.floor((width-2*gutter)/3);
+ const sizes=[cardWidth,gutter,cardWidth,gutter,width-2*cardWidth-2*gutter];
+ const noBorder={style:D.BorderStyle.NONE,size:0,color:'FFFFFF'};
+ const tableBorders=Object.fromEntries(Object.keys(borders).map(edge=>[edge,noBorder]));
+ const children=await Promise.all(sizes.map(async (size,i)=>new D.TableCell({
+  width:{size,type:D.WidthType.DXA},
+  ...(i%2?{margins:{top:0,bottom:0,left:0,right:0},children:[paragraph('',{size:2})]}:{
+   borders:{top:statTopBorder,right:border,bottom:border,left:border},
+   shading:{fill:'F3F7FC'},margins:{top:90,bottom:90,left:side,right:side},
+   children:await blocks(panes[i/2],size-2*side,context)
+  })
+ })));
+ return new D.Table({layout:D.TableLayoutType.FIXED,width:{size:width,type:D.WidthType.DXA},columnWidths:sizes,
+  borders:tableBorders,rows:[new D.TableRow({cantSplit:true,children})]});
+}
+async function natureAnalysisTable(node,width,context){
+ const third=Math.floor(width/3),sizes=[third,third,width-2*third];
+ const overview=[...node.querySelector('.report-large-overview').children];
+ const charts=[...node.querySelector('.report-nature-charts').children];
+ return new D.Table({
+  layout:D.TableLayoutType.FIXED,width:{size:width,type:D.WidthType.DXA},columnWidths:sizes,
+  alignment:D.AlignmentType.CENTER,borders:{...borders,top:statTopBorder},
+  rows:await Promise.all([
+   paneRow(overview,[sizes[0],sizes[1]+sizes[2]],{...context,natureGroup:true},{padding:105,side:185,cantSplit:true,spans:[1,2]}),
+   paneRow(charts,sizes,{...context,natureGroup:true},{padding:30,cantSplit:true})
+  ])
  });
 }
 function coverColumnWidths(width){
@@ -133,9 +176,10 @@ const sectionRankColumnWeights={
  '诉讼案件数量':54,'行政处罚数量':54,'失信被执行人':53,'经营天数':45,'所属行业':72,
  '注册资本':61,'社保人数':44,'未识别客商关系':60,'收支重合':51,'说明':43
 };
-function sectionRankWidths(header){
+function sectionRankWidths(header,complianceRanks){
  const weights=[...header.cells].map(cell=>{
   const title=text(cell);
+  if(complianceRanks&&title==='对手方名称')return 230;
   return sectionRankColumnWeights[title]||(/金额/.test(title)?76:/占比/.test(title)?56:48);
  });
  const total=weights.reduce((sum,n)=>sum+n,0);
@@ -150,31 +194,33 @@ async function table(node,width,context){
  // The eight-column analysis tables start with two row-spanning label cells.
  const overviewDistribution=context.compactOverview&&columns===8&&node.tHead?.rows.length===2;
  const narrowDistribution=overviewDistribution&&width<5500;
- const registryResults=context.compactOverview&&!!node.closest('#report-compliance .report-registry-screen');
+ const registryResults=context.compactOverview&&!!node.closest('#report-registry .report-registry-screen');
  const tableWidth=registryResults?Math.floor(width*.94):width;
  const unit=Math.floor(tableWidth/columns);
  const capitalDistribution=narrowDistribution&&text(rows[0].cells[0])==='注册资本';
  const columnWidths=[...node.querySelectorAll(':scope > colgroup > col')].map(col=>parseFloat(col.style.width)/100);
- const spanWidths=flowSummary||overviewDistribution||largeDetail||columnWidths.length===columns;
+ const spanWidths=flowSummary||overviewDistribution||largeDetail||columnWidths.length===columns||!!node.querySelector('tbody .report-category-band');
  const counterpartyRanks=node.classList.contains('report-counterparty-rank-table');
  const relatedRanks=context.wordV2&&!!node.closest('.report-related-ranking');
  const directionPage=context.sectionFit==='counterparties';
  const denseRanks=directionPage&&counterpartyRanks&&rows.filter(row=>text(row.cells[1]).length>24).length>=8;
  const sectionRanks=node.classList.contains('report-section-rank-table');
+ const complianceRanks=sectionRanks&&context.sectionFit==='compliance-checks';
  const compactRows=largeDetail||counterpartyRanks||sectionRanks;
  const concentrationTable=context.sectionFit==='concentration'&&node.classList.contains('report-concentration');
  const peoplePage=context.sectionFit==='people';
  const peopleSummary=peoplePage&&!sectionRanks;
+ const peopleRanks=peoplePage&&sectionRanks;
  const rowPadding=cover
   ?(node.classList.contains('report-cover-status')?context.coverSpacing.status:context.coverSpacing.table)
-  :registryResults?24:narrowDistribution?18:detailLayout?detailLayout.padding:concentrationTable?20:peopleSummary?44:directionPage?16:relatedRanks||peoplePage?22:context.sectionFit==='features'?48:context.sectionFit?30:compactRows?23:context?.natureGroup?85:context.compactOverview?27:45;
+  :registryResults?24:narrowDistribution?18:detailLayout?detailLayout.padding:concentrationTable?20:peopleSummary?44:directionPage?16:complianceRanks?17:peopleRanks?19:relatedRanks?22:context.sectionFit==='features'?48:context.sectionFit?30:compactRows?23:context?.natureGroup?85:context.compactOverview?27:45;
  const sidePadding=cover?coverSidePadding:narrowDistribution?10:directionPage||relatedRanks||overviewDistribution?30:55;
  const coverFrame=cover&&node.classList.contains('report-cover-grid');
  const natureRowSpan=node.closest('.report-counterparty-summary')&&Number(node.tBodies[0]?.rows[0]?.cells[0]?.rowSpan)>1
   ?node.tBodies[0].rows[0].cells[0].rowSpan:0;
  const alignDataCells=context.wordV2&&!coverFrame;
  const customWidths=node.classList.contains('report-cover-grid')?[.23,.77]
-  :node.classList.contains('report-cover-status')?[.40,.22,.38]
+  :node.classList.contains('report-cover-status')?(context.wordV2?[.57,.16,.27]:[.40,.22,.38])
   :largeDetail?(detailLayout?v2LargeDetailWidths:largeDetailWidths)
   :flowSummary?[.25,.13,.085,.09,.13,.085,.09,.14]
   :registryResults?[.44,.56]
@@ -183,11 +229,14 @@ async function table(node,width,context){
   :overviewDistribution?[.114,.117,.145,.11,.129,.145,.11,.13]
   :relatedRanks||directionPage&&counterpartyRanks?v2CounterpartyWidths
   :counterpartyRanks?[.033,.171,.083,.11,.057,.071,.047,.052,.071,.047,.052,.082,.06,.064]
-  :sectionRanks?sectionRankWidths(rows[0]):null;
+  :sectionRanks?sectionRankWidths(rows[0],complianceRanks):null;
  const widths=coverFrame?coverColumnWidths(width):customWidths?customWidths.map(n=>Math.floor(tableWidth*n)):Array(columns).fill(unit);
+ const matchDetailFrame=context.wordV2&&flowSummary&&!!node.querySelector('.report-nature-summary-cell');
+ const headerStart=node.tHead?.rows[matchDetailFrame?1:0];
+ if(matchDetailFrame)widths[widths.length-1]+=tableWidth-widths.reduce((sum,n)=>sum+n,0);
  return new D.Table({
   layout:D.TableLayoutType.FIXED,width:registryResults?{size:94,type:D.WidthType.PERCENTAGE}:{size:width,type:D.WidthType.DXA},columnWidths:widths,borders,
-  ...(coverFrame?{alignment:D.AlignmentType.CENTER}:{}),
+  alignment:coverFrame||matchDetailFrame?D.AlignmentType.CENTER:undefined,
   rows:await Promise.all(rows.map(async (row,rowIndex)=>new D.TableRow({
    tableHeader:row.parentElement.tagName==='THEAD',cantSplit:true,
    ...(registryResults||narrowDistribution||detailLayout||peopleSummary||coverFrame&&rowIndex===0?{height:{
@@ -195,9 +244,17 @@ async function table(node,width,context){
    }}:{}),
    children:await Promise.all([...row.cells].map(async (cell,i)=>{
     const header=cell.tagName==='TH',total=row.classList.contains('report-total'),categoryBand=row.classList.contains('report-category-band');
+    const muted=row.classList.contains('report-person-muted');
+    if(matchDetailFrame&&cell.matches('.report-nature-summary-cell')){
+     return new D.TableCell({
+      columnSpan:columns,width:{size:tableWidth,type:D.WidthType.DXA},shading:{fill:'F7F9FC'},
+      margins:{top:64,bottom:64,left:185,right:185},borders:{top:statTopBorder},
+      children:await blocks(cell,tableWidth-370,context)
+     });
+    }
     const cellFontSize=peopleSummary?16:peoplePage||concentrationTable||relatedRanks||directionPage?(denseRanks&&i===1&&!header?13:14):narrowDistribution?(header?12:14):overviewDistribution&&header?14:registryResults?15:detailLayout?detailLayout.fontSize:undefined;
-    const rowOffset=header&&row.sectionRowIndex===1&&spanWidths
-     ?[...node.tHead.rows[0].cells].findIndex(cell=>cell.rowSpan===1)
+    const rowOffset=header&&headerStart&&row.sectionRowIndex===headerStart.sectionRowIndex+1&&spanWidths
+     ?[...headerStart.cells].findIndex(cell=>cell.rowSpan===1)
      :natureRowSpan&&row.parentElement.tagName==='TBODY'&&row.sectionRowIndex%natureRowSpan!==0?1:0;
     const column=spanWidths?[...row.cells].slice(0,i).reduce((sum,c)=>sum+c.colSpan,rowOffset):i;
     const cellWidth=spanWidths?widths.slice(column,column+cell.colSpan).reduce((sum,w)=>sum+w,0):customWidths?widths[i]:unit*cell.colSpan;
@@ -207,27 +264,42 @@ async function table(node,width,context){
     const rangeText=capitalDistribution&&!header&&i===0?text(cell).replace(/百万(?=～)/g,''):undefined;
     let align=status||node.classList.contains('report-cover-status')&&i>0?D.AlignmentType.CENTER:undefined;
     if(alignDataCells){
-     align=row.parentElement.tagName==='THEAD'||status?D.AlignmentType.CENTER:D.AlignmentType.LEFT;
+     align=row.parentElement.tagName==='THEAD'||status?D.AlignmentType.CENTER:cell.matches('.report-amount,.report-count-share')?D.AlignmentType.RIGHT:D.AlignmentType.LEFT;
     }else if(narrowDistribution||registryResults||detailLayout){
      align=header?D.AlignmentType.CENTER:cell.classList.contains('report-num')||registryResults&&i===1?D.AlignmentType.RIGHT:D.AlignmentType.LEFT;
     }
+    const outline=cell.dataset.concentrationEdges?.split(' ');
     return new D.TableCell({
      width:{size:cellWidth,type:D.WidthType.DXA},columnSpan:cell.colSpan,rowSpan:cell.rowSpan,
      margins:{top:rowPadding,bottom:rowPadding,left:sidePadding,right:sidePadding},
      verticalAlign:alignDataCells||narrowDistribution||registryResults||detailLayout?'center':undefined,
-     ...(categoryBand?{borders:{top:{...border,color:'91A9C6',size:6}}}:{}),
-     shading:status?{fill:status.fill}:categoryBand?{fill:'F1F5F9'}:header||total?{fill:header?theme.fill:theme.total}:narrowDistribution&&rowIndex%2===0?{fill:'F6F9FD'}:undefined,
+     ...(outline?{borders:Object.fromEntries(outline.map(edge=>[edge,{...border,color:'C00000',size:10}]))}:
+      categoryBand?{borders:{top:{...border,color:'91A9C6',size:6}}}:{}),
+     shading:muted?{fill:'F1F2F4'}:status?{fill:status.fill}:categoryBand?{fill:'F1F5F9'}:header||total?{fill:header?theme.fill:theme.total}:narrowDistribution&&rowIndex%2===0?{fill:'F6F9FD'}:undefined,
      children:await blocks(cell,Math.max(200,cellWidth-120),{
       cell:true,wordV2:context?.wordV2,coverSpacing:context?.coverSpacing,compactRows,compactOverview:context.compactOverview,
-      registryResults,narrowDistribution,detailLayout,sectionFit:context.sectionFit,cellLine:peopleSummary?235:relatedRanks?210:denseRanks?181:undefined,rangeText,cellFontSize,characterSpacing:narrowDistribution&&header?-8:undefined,
-      largeDetail:largeDetail||sectionRanks,bold:header||total||categoryBand||!!status,color:unidentified?'C00000':status?.text||(header||categoryBand?theme.heading:theme.ink),align
+      registryResults,narrowDistribution,detailLayout,sectionFit:context.sectionFit,cellLine:peopleSummary?235:peopleRanks?185:relatedRanks?210:complianceRanks?176:denseRanks?181:undefined,rangeText,cellFontSize,characterSpacing:narrowDistribution&&header?-8:undefined,
+      largeDetail:largeDetail||sectionRanks,bold:header||total||categoryBand||!!status,color:muted?'6E7681':unidentified?'C00000':status?.text||(header||categoryBand?theme.heading:theme.ink),align
      })
     });
    }))
   })))
  });
 }
+function focusCardTitle(node){
+ return paragraph(text(node),{bold:true,color:theme.heading,size:21,
+  bookmark:node.hasAttribute('data-summary-target')?summaryBookmark(node.id):undefined,
+  spacing:{before:0,after:65,line:252}});
+}
 async function blocks(node,width,context={}){
+ const hint=context.cell&&node.querySelector(':scope > .report-cover-impact');
+ if(hint){
+  const runs=[...node.childNodes].map(part=>new D.TextRun({
+   text:part.textContent,font,size:part===hint?14:context.coverSpacing.tableSize,
+   color:part===hint?theme.muted:theme.ink
+  }));
+  return [paragraph('',{runs,spacing:{after:0,line:230,lineRule:D.LineRuleType.EXACT}})];
+ }
  const out=[];
  const tableLine=context.cellLine??({concentration:190,features:244,people:195,counterparties:190}[context.sectionFit]??214);
  const detailSpacing=(context.detailLayout||context.sectionFit||context.cellLine)&&{
@@ -258,9 +330,52 @@ async function blocks(node,width,context={}){
    out.push(...await blocks(notes,width,context));
    continue;
   }
+  if(child.matches('#report-executive-summary > h2')){
+   out.push(paragraph(text(child),{bold:true,color:theme.navy,size:38,pageBreakBefore:context.frontPageBreak,spacing:{before:0,after:90,line:390}}));
+   continue;
+  }
+  if(child.matches('.report-executive-link')){
+   const anchor=summaryBookmark(child.getAttribute('href').slice(1));
+   const link=new D.InternalHyperlink({anchor,children:[new D.TextRun({text:text(child),font,color:theme.link,size:16,underline:{}})]});
+   out.push(paragraph('',{runs:[link],spacing:{before:25,after:0,line:195}}));
+   continue;
+  }
+  if(child.matches('.report-executive-flow,.report-executive-condition,.report-executive-metrics,.report-executive-highlight')){
+   const metrics=child.classList.contains('report-executive-metrics');
+   const condition=child.classList.contains('report-executive-condition');
+   const color=child.classList.contains('report-executive-in')?theme.link:theme.muted;
+   const runs=[...child.childNodes].map(node=>{
+    const element=node.nodeType===1;
+    const value=element&&node.matches('.report-executive-value');
+    const red=element&&node.matches('.report-executive-flag,.report-executive-hit');
+    return new D.TextRun({text:node.textContent,font,size:value?28:condition||child.matches('.report-executive-highlight')?16:18,
+     color:red?'9E2635':value?theme.navy:color,bold:element});
+   });
+   const result=child.closest('.report-executive-result');
+   const spacing={before:condition?30:result&&child===result.firstElementChild?45:0,after:metrics?35:18,line:metrics?330:207};
+   out.push(result?new D.Paragraph({children:runs,spacing,shading:{fill:'FFFFFF'}}):paragraph('',{runs,spacing}));
+   continue;
+  }
+  if(child.matches('.report-executive-intro,.report-executive-label,.report-executive-representative')){
+   const title=child.matches('.report-executive-label'),intro=child.matches('.report-executive-intro');
+   const representative=child.classList.contains('report-executive-representative');
+   const color=intro?theme.muted:theme.navy,size=title?21:representative?17:18;
+   const spacing={before:0,after:intro?125:38,line:title?229:211};
+   out.push(representative?new D.Paragraph({children:[new D.TextRun({text:text(child),font,bold:true,color,size})],
+    shading:{fill:'FFFFFF'},spacing}):paragraph(text(child),{bold:!intro,color,size,spacing}));
+   continue;
+  }
+  if(child.matches('.report-nature-index-item')){
+   const runs=[...child.childNodes].map(node=>{
+    const number=node.nodeType===1;
+    return new D.TextRun({text:node.textContent,font,size:number?16:19,bold:true,color:number?theme.accent:theme.ink});
+   });
+   out.push(paragraph('',{runs,spacing:{before:0,after:0,line:235}}));
+   continue;
+  }
   if(child.matches('.report-toc')){
    const title=context.wordV2?text(child.querySelector('h2')):'报告目录';
-   out.push(paragraph(title,{bold:true,color:theme.navy,size:context.wordV2?38:32,pageBreakBefore:context.tocAfterCover}));
+   out.push(paragraph(title,{bold:true,color:theme.navy,size:context.wordV2?38:32,pageBreakBefore:context.frontPageBreak}));
    if(context.wordV2){
     const accent=Math.floor(width*.12);
     const fillCells=[theme.accent,theme.fill].map((fill,i)=>new D.TableCell({
@@ -275,18 +390,29 @@ async function blocks(node,width,context={}){
    out.push(wordContents(context.wordV2));
    continue;
   }
+  if(child.matches('.report-focus-card-title')){
+   out.push(focusCardTitle(child));
+   continue;
+  }
+  if(child.matches('.report-compliance-flows')){
+   const runs=[...child.childNodes].map(node=>new D.TextRun({text:node.textContent,font,size:18,
+    bold:node.nodeType===1,color:node.nodeType!==1?theme.muted:node.matches('.report-executive-in')?theme.link:theme.ink}));
+   out.push(paragraph('',{runs,spacing:{before:25,after:42,line:250}}));
+   continue;
+  }
   if(child.matches('.report-chart')&&child.querySelector('svg')){
    const caption=child.querySelector('figcaption');
-   if(caption){
+   if(caption?.matches('.report-focus-card-title'))out.push(focusCardTitle(caption));
+   else if(caption){
     const emphasized=caption.matches('.report-large-chart-title');
-    out.push(paragraph(text(caption),{bold:true,color:emphasized?theme.accent:context.natureGroup?'000000':theme.heading,size:context.natureGroup?20:emphasized?22:16,spacing:context.natureGroup?{after:20,line:220}:undefined}));
+    out.push(paragraph(text(caption),{bold:true,color:emphasized?theme.accent:context.natureGroup?'000000':theme.heading,size:context.natureGroup?20:emphasized?22:16,bookmark:caption.hasAttribute('data-summary-target')?summaryBookmark(caption.id):undefined,spacing:context.natureGroup?{after:20,line:220}:undefined}));
    }
    const chartLayout=child.matches('.report-concentration-chart')?{maxPlotHeight:context.sectionFit==='concentration'?154:245,legendWidth:680,
     legendMarkerSize:context.sectionFit==='concentration'?9:5}
     :context.sectionFit==='features'?{maxPlotHeight:195}
-    :context.sectionFit==='compliance'?{maxPlotHeight:151}
+    :context.sectionFit==='registry'?{maxPlotHeight:173}
     :child.closest('.report-counterparty-summary')?{maxPlotHeight:context.sectionFit==='counterparties'?115:225}
-    :child.closest('#report-compliance')?{maxPlotHeight:157}
+    :child.closest('#report-registry')?{maxPlotHeight:157}
     :child.closest('#report-follow')?{maxPlotHeight:170}:undefined;
    out.push(await svgImage(child.querySelector('svg'),width,child.querySelector('.report-stack-legend,.report-legend'),chartLayout));
    for(const note of child.querySelectorAll(':scope > p'))out.push(paragraph(text(note),{size:15,color:theme.muted}));
@@ -302,7 +428,7 @@ async function blocks(node,width,context={}){
     const element=part.nodeType===1;
     const red=element&&part.matches('.report-large-red');
     const scope=element&&part.matches('.report-large-scope');
-    const company=element&&part.matches('.report-large-company');
+    const company=element&&part.matches('.report-large-company,.report-large-value');
     const groupTotal=element&&part.matches('.report-nature-group-total');
     return new D.TextRun({
      text:part.textContent,font,size:headline||company?22:red?17:16,
@@ -331,13 +457,27 @@ async function blocks(node,width,context={}){
     text:part.textContent,font,size,bold:value||part.nodeType===1,
     color:part.nodeType===1&&part.matches('.report-scope-red')?'C00000':muted?theme.muted:theme.ink
    }));
-   out.push(paragraph('',{runs,spacing:compliance?{before:value?60:0,after:context.sectionFit==='compliance'?35:10,line:context.sectionFit==='compliance'?(value?295:245):220}:undefined}));
+   out.push(paragraph('',{runs,bookmark:child.hasAttribute('data-summary-target')?summaryBookmark(child.id):undefined,spacing:compliance?{before:value?60:0,after:context.sectionFit==='compliance-checks'?35:10,line:context.sectionFit==='compliance-checks'?(value?295:245):220}:undefined}));
+   continue;
+  }
+  if(context.wordV2&&child.matches('.report-nature-analysis')){
+   out.push(await natureAnalysisTable(child,width,context));
    continue;
   }
   if(child.matches('.report-panes')){
    const panes=[...child.children];
+   const natureIndex=child.matches('.report-nature-index');
    const weights=child.matches('.report-counterparty-summary')?[.38,.62]:child.matches('.report-related-summary')?[2,3]:panes.map(()=>1);
-   if(panes.length)out.push(await grid(panes,width,weights,{natureGroup:child.matches('.report-nature-cards,.report-nature-charts'),compactOverview:context.compactOverview,wordV2:context.wordV2,sectionFit:context.sectionFit,statRule:child.classList.contains('report-stat-rule')}));
+   if(child.matches('.report-compliance-distributions'))out.push(paragraph('',{size:2,snapToGrid:false,spacing:{before:0,after:0,line:120,lineRule:D.LineRuleType.EXACT}}));
+   if(child.matches('.report-executive-row')){
+    if(child.previousElementSibling?.matches('.report-executive-row'))out.push(paragraph('',{
+     size:2,snapToGrid:false,spacing:{before:0,after:135,line:25,lineRule:D.LineRuleType.EXACT}
+    }));
+    out.push(await executiveGrid(panes,width,context));
+    continue;
+   }
+   if(panes.length)out.push(await grid(panes,width,weights,{natureIndex,natureGroup:child.matches('.report-nature-cards,.report-nature-charts'),compactOverview:context.compactOverview,wordV2:context.wordV2,sectionFit:context.sectionFit,statRule:natureIndex||child.classList.contains('report-stat-rule')}));
+   if(natureIndex)out.push(paragraph('',{size:2,snapToGrid:false,spacing:{before:0,after:0,line:175,lineRule:D.LineRuleType.EXACT}}));
    continue;
   }
   if(child.matches('.report-direction')){
@@ -354,7 +494,7 @@ async function blocks(node,width,context={}){
     out.push(paragraph(text(child),{bold:true,color:theme.heading,size:18,snapToGrid:false,spacing:{before:54,after:38,line:215,lineRule:D.LineRuleType.EXACT}}));
     continue;
    }
-   const registryFilter=child.matches('#report-compliance .report-registry-screen > h4');
+   const registryFilter=child.matches('#report-registry .report-registry-screen > h4');
    if(registryFilter){
     out.push(paragraph('筛选条件',{bold:true,size:18,align:D.AlignmentType.LEFT,spacing:{before:105,after:24,line:220}}));
     continue;
@@ -366,7 +506,13 @@ async function blocks(node,width,context={}){
    const main=tag==='h2',level=headingBookmarks.has(child)?[D.HeadingLevel.HEADING_1,D.HeadingLevel.HEADING_2,D.HeadingLevel.HEADING_3][headingDepth(child)-1]:undefined;
    const color=child.matches('.report-focus-heading')?'C00000':toc?theme.navy:theme.ink;
    const rankTitle=child.matches('.report-section-rank-title');
-   out.push(paragraph(text(child),{heading:child.textContent.includes('综合分析报告（年审适用）')?D.HeadingLevel.TITLE:level,bold:!rankTitle,color,size:main?32:rankTitle?18:23,bookmark:headingBookmarks.get(child),snapToGrid:detailSpacing?false:undefined,spacing:rankTitle?{before:30,after:55,line:240}:detailSpacing?{...detailSpacing,line:main?440:320}:spaciousCover?{before:60,after:145,line:290}:context.compactOverview?{before:0,after:30,line:240}:undefined}));
+   const subheadNote=child.querySelector('.report-subhead-note');
+   const runs=child.querySelector('.report-title-emphasis,.report-chapter-note,.report-subhead-note')?[...child.childNodes].map(node=>new D.TextRun({
+    text:node.textContent,font,bold:true,size:subheadNote?(node===subheadNote?18:23):node.matches?.('.report-chapter-note')?28:32,
+    color:node.matches?.('.report-title-emphasis')?'C00000':color
+   })):undefined;
+   const compactHeading=context.detailLayout?.headingSpacing;
+   out.push(paragraph(text(child),{heading:child.textContent.includes('综合分析报告（年审适用）')?D.HeadingLevel.TITLE:level,bold:!rankTitle,color,size:main?32:rankTitle?18:23,runs,bookmark:headingBookmarks.get(child),snapToGrid:detailSpacing?false:undefined,spacing:rankTitle?{before:30,after:55,line:240}:detailSpacing?{...detailSpacing,line:main?440:320,...compactHeading}:spaciousCover?{before:60,after:145,line:290}:context.compactOverview?{before:0,after:30,line:240}:undefined}));
    if(toc)out.push(new D.Table({
     layout:D.TableLayoutType.FIXED,width:{size:width,type:D.WidthType.DXA},columnWidths:[Math.floor(width*.12),Math.ceil(width*.88)],
     borders:Object.fromEntries(Object.keys(borders).map(key=>[key,{style:D.BorderStyle.NONE,size:0,color:'FFFFFF'}])),
@@ -399,13 +545,14 @@ async function blocks(node,width,context={}){
     if(value){
      const bold=context.bold||['b','strong','figcaption'].includes(tag),size=spaciousCover?(context.cell?context.coverSpacing.tableSize:context.coverSpacing.noteSize):context.cell?(context.cellFontSize??15):18;
      if(child.matches('.report-detail-summary,.report-registry-condition')){
+      const natureFigures=!!child.closest('.report-nature-inline');
       const registry=child.matches('.report-registry-condition');
-      const compactRegistry=registry&&!!child.closest('#report-compliance');
+      const compactRegistry=registry&&!!child.closest('#report-registry');
       const compactFollow=registry&&!!child.closest('#report-follow');
       const runSize=compactFollow?14:compactRegistry?15:registry?16:size;
       const runs=[],color=context.color||theme.ink;
-      const visit=(node,heavy=false)=>{if(node.nodeType===3){runs.push(new D.TextRun({text:node.textContent,font,size:runSize,bold:!!bold||heavy,color}));return;}for(const part of node.childNodes)visit(part,heavy||['STRONG','B'].includes(node.tagName));};
-      visit(temp);out.push(paragraph('',{runs,color,align:context.align,size,snapToGrid:detailSpacing?false:undefined,spacing:detailSpacing??(registry?{after:30,line:220}:undefined)}));
+      const visit=(node,heavy=false)=>{if(node.nodeType===3){runs.push(new D.TextRun({text:node.textContent,font,size:natureFigures&&heavy?22:runSize,bold:!!bold||heavy,color}));return;}for(const part of node.childNodes)visit(part,heavy||['STRONG','B'].includes(node.tagName));};
+      visit(temp);out.push(paragraph('',{runs,color,align:context.align,size,snapToGrid:detailSpacing?false:undefined,spacing:natureFigures?{...detailSpacing,line:265}:detailSpacing??(registry?{after:30,line:220}:undefined)}));
      }else out.push(paragraph(value,{bold,color:context.color,align:context.align,size,snapToGrid:detailSpacing?false:undefined,spacing:detailSpacing??(spaciousCover?{before:!context.cell&&bold?context.coverSpacing.noteTop:0,after:context.cell?36:context.coverSpacing.noteAfter,line:context.cell?230:270}:context.compactOverview?{after:25,line:220}:undefined)}));
     }
    }
@@ -478,8 +625,11 @@ async function report(model,template=g.AuditReport){
   const front=page.dataset?.reportFront==='true'||!!page.querySelector?.('#report-cover,.report-toc');
   if(!front)bodyPage++;
   page.querySelectorAll(wordV2?'.report-chapter,.report-section > h3,#report-accounts':'.report-chapter,.report-section > h3').forEach(node=>{
-  const id='ReportHeading'+(reportTocEntries.length+1);headingBookmarks.set(node,id);
-  reportTocEntries.push({title:text(node),level:headingDepth(node),href:id,page:bodyPage});
+  const target=node.parentElement.matches('.report-section[data-summary-target]')?node.parentElement.id:'';
+  const id=target?summaryBookmark(target):'ReportHeading'+(reportTocEntries.length+1);headingBookmarks.set(node,id);
+  const personScope=node.querySelector('.report-person-scope');
+  const title=personScope?text(node).slice(0,-text(personScope).length):text(node);
+  reportTocEntries.push({title,level:headingDepth(node),href:id,page:bodyPage});
  });});
  const run=t=>new D.TextRun({text:t,font,size:15,color:theme.muted});
  const footerPeriod=(wordV2?'财务报表期间：':'')+(model.from&&model.to?model.from+' ～ '+model.to:'无流水');
@@ -496,9 +646,8 @@ async function report(model,template=g.AuditReport){
  })]});
  const frontFooter=new D.Footer({children:[new D.Paragraph({spacing:{before:60},tabStops:[{type:D.TabStopType.CENTER,position:Math.floor(pageWidth/2)}],border:{top:{style:D.BorderStyle.SINGLE,size:4,color:theme.border}},children:[run('审计项目资料'),run('\t'+footerPeriod)]})]});
  const detailLayouts=[
-   ['#report-large-internal',{rowHeight:270,padding:24,fontSize:14,line:204}],
-   ['#report-large-external',{rowHeight:265,padding:22,fontSize:14,line:204}],
-   ['#report-blank-memo',{rowHeight:260,padding:24,fontSize:15,line:210}]
+   ['#report-large-external',{rowHeight:205,padding:15,fontSize:14,line:173,headingSpacing:{before:70,after:42,line:275}}],
+   ['#report-blank-memo',{rowHeight:184,padding:14,fontSize:14,line:170,headingSpacing:{before:65,after:32,line:275}}]
   ];
  const sections=[];let bodyStarted=false;
  for(const [pageIndex,page] of pages.entries()){
@@ -506,19 +655,19 @@ async function report(model,template=g.AuditReport){
   const restart=!front&&!bodyStarted;if(!front)bodyStarted=true;
   const coverSpacing=wordV2&&page.querySelector('#report-cover')?coverSpacingFor(page):undefined;
   const isV2Toc=wordV2&&!!page.querySelector('.report-toc');
-  const tocAfterCover=isV2Toc&&!!pages[pageIndex-1]?.querySelector('#report-cover');
+  const frontPageBreak=wordV2&&front&&pages[pageIndex-1]?.dataset.reportFront==='true';
   const detailLayout=wordV2?detailLayouts.find(([selector])=>page.querySelector(selector))?.[1]:undefined;
-  const compactOverview=wordV2&&!!page.querySelector('#report-compliance,#report-follow');
+  const compactOverview=wordV2&&!!page.querySelector('#report-compliance-checks,#report-registry,#report-follow');
   const sectionFit=wordV2&&(page.querySelector('.report-counterparty-summary')?'counterparties':
-   ['features','concentration','compliance','people'].find(id=>page.querySelector('#report-'+id)));
+   ['features','concentration','compliance-checks','registry','people'].find(id=>page.querySelector('#report-'+id)));
   const boundedPage=detailLayout||coverSpacing||sectionFit;
-  const content=await blocks(page,pageWidth,{wordV2,coverSpacing,compactOverview,detailLayout,sectionFit,tocAfterCover});
-  if(tocAfterCover){
-   // A single page break avoids a separate cover section ending before the TOC.
+  const content=await blocks(page,pageWidth,{wordV2,coverSpacing,compactOverview,detailLayout,sectionFit,frontPageBreak});
+  if(frontPageBreak){
+   // Keep the unnumbered pages in one Word section with explicit page breaks.
    sections.at(-1).children.push(...content);
    continue;
   }
-  if(!isV2Toc&&!(coverSpacing&&pages[pageIndex+1]?.querySelector('.report-toc')))content.push(new D.Paragraph({spacing:{before:0,after:0,line:20,...(boundedPage?{lineRule:D.LineRuleType.EXACT}:{})},snapToGrid:boundedPage?false:undefined,children:[new D.TextRun({text:'',size:2})]}));
+  if(!isV2Toc&&!(coverSpacing&&pages[pageIndex+1]?.dataset.reportFront==='true'))content.push(new D.Paragraph({spacing:{before:0,after:0,line:20,...(boundedPage?{lineRule:D.LineRuleType.EXACT}:{})},snapToGrid:boundedPage?false:undefined,children:[new D.TextRun({text:'',size:2})]}));
   sections.push({
    properties:{type:D.SectionType.NEXT_PAGE,...(boundedPage?{grid:{type:D.DocumentGridType.DEFAULT}}:{}),page:{size:{width:11906,height:16838,orientation:D.PageOrientation.LANDSCAPE},pageNumbers:restart?{start:1}:{},margin:{top:coverSpacing?680:detailLayout||sectionFit?660:compactOverview?760:850,right:567,bottom:coverSpacing?650:detailLayout||sectionFit?660:compactOverview?760:850,left:567,header:300,footer:300}}},
    headers:{default:header},footers:{default:front?frontFooter:footer},children:content
