@@ -1036,17 +1036,17 @@ body #content table thead th.ba-filtered .ba-filter-btn::before{background-image
 .report-v2-document .report-executive-intro{color:#536681;margin:0 0 8px}
 .report-v2-document .report-executive-row{gap:10px;margin:0 0 11px;border:0}
 .report-v2-document .report-executive-row>.report-pane{padding:0;border:1px solid #cedbec;border-top:2px solid #668dbd;border-radius:3px;background:#f3f7fc}
-.report-v2-document .report-executive-card{display:flex;flex-direction:column;height:100%;padding:9px 12px;box-sizing:border-box}
+.report-v2-document .report-executive-card{display:flex;flex-direction:column;height:100%;padding:12px 14px;box-sizing:border-box}
 .report-v2-document .report-executive-card p{margin:0}
-.report-v2-document .report-executive-card .report-executive-label{color:#193a62;font-weight:700;font-size:14px;margin-bottom:3px}
-.report-v2-document .report-executive-metrics{color:#536681;font-size:11px}
+.report-v2-document .report-executive-card .report-executive-label{color:#193a62;font-weight:700;font-size:14px;margin-bottom:5px}
+.report-v2-document .report-executive-card .report-executive-metrics{color:#536681;font-size:11px;margin-bottom:3px}
 .report-v2-document .report-executive-value{color:#193a62;font-weight:700;font-size:20px;line-height:1.35}
 .report-v2-document .report-executive-hit,.report-v2-document .report-executive-flag{color:#9e2635}
 .report-v2-document .report-executive-in{color:#24569e}
 .report-v2-document .report-executive-out,.report-v2-document .report-executive-condition,.report-v2-document .report-executive-highlight{color:#536681}
-.report-v2-document .report-executive-flow,.report-v2-document .report-executive-highlight,.report-v2-document .report-executive-condition{font-size:11px;line-height:1.45}
+.report-v2-document .report-executive-flow,.report-v2-document .report-executive-highlight,.report-v2-document .report-executive-condition{font-size:11px;line-height:1.55}
 .report-v2-document .report-executive-origin{color:#264a72;font-weight:700}
-.report-v2-document .report-executive-card .report-executive-condition{margin:4px 0}
+.report-v2-document .report-executive-card .report-executive-condition{margin:5px 0}
 .report-v2-document .report-executive-result{margin:3px 0 5px;padding:4px 6px;border-left:2px solid #bd7180;background:#fff}
 .report-v2-document .report-executive-representative{font-size:11px;font-weight:700;color:#193a62;overflow-wrap:anywhere}
 .report-v2-document .report-executive-link{align-self:flex-start;margin-top:auto;color:#24569e;font-size:11px;font-weight:600}

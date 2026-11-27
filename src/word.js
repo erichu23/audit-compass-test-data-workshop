@@ -121,7 +121,7 @@ async function executiveGrid(panes,width,context){
   width:{size,type:D.WidthType.DXA},
   ...(i%2?{margins:{top:0,bottom:0,left:0,right:0},children:[paragraph('',{size:2})]}:{
    borders:{top:statTopBorder,right:border,bottom:border,left:border},
-   shading:{fill:'F3F7FC'},margins:{top:90,bottom:90,left:side,right:side},
+   shading:{fill:'F3F7FC'},margins:{top:145,bottom:145,left:side,right:side},
    children:await blocks(panes[i/2],size-2*side,context)
   })
  })));
@@ -346,7 +346,7 @@ async function blocks(node,width,context={}){
   if(child.matches('.report-executive-link')){
    const anchor=summaryBookmark(child.getAttribute('href').slice(1));
    const link=new D.InternalHyperlink({anchor,children:[new D.TextRun({text:text(child),font,color:theme.link,size:16,underline:{}})]});
-   out.push(paragraph('',{runs:[link],snapToGrid:false,spacing:{before:18,after:0,line:202,lineRule:D.LineRuleType.EXACT}}));
+   out.push(paragraph('',{runs:[link],snapToGrid:false,spacing:{before:35,after:0,line:220,lineRule:D.LineRuleType.EXACT}}));
    continue;
   }
   if(child.matches('.report-executive-flow,.report-executive-condition,.report-executive-metrics,.report-executive-highlight')){
@@ -361,7 +361,7 @@ async function blocks(node,width,context={}){
      color:red?'9E2635':value?theme.navy:color,bold:element});
    });
    const result=child.closest('.report-executive-result');
-   const spacing={before:condition?25:result&&child===result.firstElementChild?30:0,after:metrics?24:10,line:metrics?325:216,lineRule:D.LineRuleType.EXACT};
+   const spacing={before:condition?40:result&&child===result.firstElementChild?50:0,after:metrics?44:16,line:metrics?350:238,lineRule:D.LineRuleType.EXACT};
    out.push(result?new D.Paragraph({children:runs,snapToGrid:false,spacing,shading:{fill:'FFFFFF'}}):paragraph('',{runs,snapToGrid:false,spacing}));
    continue;
   }
@@ -369,7 +369,7 @@ async function blocks(node,width,context={}){
    const title=child.matches('.report-executive-label'),intro=child.matches('.report-executive-intro');
    const representative=child.classList.contains('report-executive-representative');
    const color=intro?theme.muted:theme.navy,size=title?21:representative?17:18;
-   const spacing={before:0,after:intro?80:22,line:title?252:220,lineRule:D.LineRuleType.EXACT};
+   const spacing={before:0,after:intro?105:title?40:24,line:title?272:238,lineRule:D.LineRuleType.EXACT};
    out.push(representative?new D.Paragraph({children:[new D.TextRun({text:text(child),font,bold:true,color,size})],
     shading:{fill:'FFFFFF'},snapToGrid:false,spacing}):paragraph(text(child),{bold:!intro,color,size,snapToGrid:false,spacing}));
    continue;
@@ -481,7 +481,7 @@ async function blocks(node,width,context={}){
    if(child.matches('.report-compliance-distributions'))out.push(paragraph('',{size:2,snapToGrid:false,spacing:{before:0,after:0,line:120,lineRule:D.LineRuleType.EXACT}}));
    if(child.matches('.report-executive-row')){
     if(child.previousElementSibling?.matches('.report-executive-row'))out.push(paragraph('',{
-     size:2,snapToGrid:false,spacing:{before:0,after:135,line:25,lineRule:D.LineRuleType.EXACT}
+     size:2,snapToGrid:false,spacing:{before:0,after:160,line:25,lineRule:D.LineRuleType.EXACT}
     }));
     out.push(await executiveGrid(panes,width,context));
     continue;
