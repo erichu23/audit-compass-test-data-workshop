@@ -998,8 +998,17 @@ body #content table thead th.ba-filtered .ba-filter-btn::before{background-image
 .report-sheet .report-counterparty-summary{grid-template-columns:minmax(0,38fr) minmax(0,62fr)}
 .report-sheet .report-related-summary{grid-template-columns:minmax(0,2fr) minmax(0,3fr)}
 .report-v2-document .report-table h4.report-section-rank-title{font-size:12px;font-weight:400}
+.report-v2-document #report-cover .report-masthead{border-top-width:26px;padding-top:11px;margin-bottom:6px}
+.report-v2-document #report-cover>h2{color:#153763;font-size:29px;line-height:1.15;margin:0 0 13px}
 .report-v2-document .report-cover-grid>tbody>tr:first-child{height:4.5em}
-.report-v2-document .report-cover-notes p{margin:4px 0 6px}
+.report-v2-document #report-cover .report-cover-grid>tbody>tr>:is(th,td){text-align:left;vertical-align:middle}
+.report-v2-document .report-cover-notes{margin-top:14px;font-size:12px;line-height:1.5}
+.report-v2-document .report-cover-notes>b{font-size:14px;color:#153763}
+.report-v2-document .report-cover-notes p{margin:5px 0 12px}
+@media screen and (min-width:761px){
+ .report-v2-document .report-cover-grid>tbody>tr>:is(th,td){padding:9px 12px}
+ .report-v2-document #report-cover .report-cover-status :is(th,td){padding:6px 10px}
+}
 .report-v2-document .report-stat-rule,
 .report-v2-document .report-related-summary>.report-pane:first-child{border-top:2px solid #668dbd}
 .report-v2-document .report-sheet table:not(.report-cover-grid)>tbody>tr>td:is(.report-amount,.report-count-share){text-align:right}

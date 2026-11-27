@@ -164,16 +164,16 @@ function coverHeadingBlocks(width,heading,spacing){
    columnSpan:2,width:{size:width,type:D.WidthType.DXA},shading:{fill:theme.navy},
    margins:{top:0,bottom:0,left:coverSidePadding,right:coverSidePadding},
    children:[new D.Paragraph({
-    snapToGrid:false,spacing:{before:0,after:0,line:210,lineRule:D.LineRuleType.EXACT},
+    snapToGrid:false,spacing:{before:0,after:0,line:390,lineRule:D.LineRuleType.EXACT},
     children:[new D.TextRun({text:' ',font,size:2})]
    })]
   })]})]
  });
  return [
   stripe,
-  paragraph(heading.brand,{bold:true,color:theme.accent,size:24,snapToGrid:false,spacing:{before:spacing.headingTop,after:25,line:260,lineRule:D.LineRuleType.EXACT}}),
-  paragraph(text(heading.title),{heading:D.HeadingLevel.TITLE,bold:true,color:theme.navy,size:38,
-   runs:styledHeadingRuns(heading.title,{size:38,noteSize:28,color:theme.navy}),snapToGrid:false,spacing:{before:0,after:spacing.headingBottom,line:420,lineRule:D.LineRuleType.EXACT}})
+  paragraph(heading.brand,{bold:true,color:theme.accent,size:26,snapToGrid:false,spacing:{before:spacing.headingTop,after:65,line:310,lineRule:D.LineRuleType.EXACT}}),
+  paragraph(text(heading.title),{heading:D.HeadingLevel.TITLE,bold:true,color:theme.navy,size:44,
+   runs:styledHeadingRuns(heading.title,{size:44,noteSize:30,color:theme.navy}),snapToGrid:false,spacing:{before:0,after:spacing.headingBottom,line:505,lineRule:D.LineRuleType.EXACT}})
  ];
 }
 // Give company names and account numbers enough width for the top-20 detail pages.
@@ -252,7 +252,7 @@ async function table(node,width,context){
   rows:await Promise.all(rows.map(async (row,rowIndex)=>new D.TableRow({
    tableHeader:row.parentElement.tagName==='THEAD',cantSplit:true,
    ...(registryResults||narrowDistribution||detailLayout||peopleSummary||coverFrame&&rowIndex===0?{height:{
-    value:coverFrame?3*230+2*rowPadding:peopleSummary?(row.parentElement.tagName==='THEAD'?330:395):detailLayout?detailLayout.rowHeight:registryResults?(context.sectionFit?295:340):row.parentElement.tagName==='THEAD'?255:context.sectionFit?315:410,rule:D.HeightRule.ATLEAST
+    value:coverFrame?3*context.coverSpacing.tableLine+2*rowPadding:peopleSummary?(row.parentElement.tagName==='THEAD'?330:395):detailLayout?detailLayout.rowHeight:registryResults?(context.sectionFit?295:340):row.parentElement.tagName==='THEAD'?255:context.sectionFit?315:410,rule:D.HeightRule.ATLEAST
    }}:{}),
    children:await Promise.all([...row.cells].map(async (cell,i)=>{
     const header=cell.tagName==='TH',total=row.classList.contains('report-total'),categoryBand=row.classList.contains('report-category-band');
@@ -286,7 +286,7 @@ async function table(node,width,context){
     return new D.TableCell({
      width:{size:cellWidth,type:D.WidthType.DXA},columnSpan:cell.colSpan,rowSpan:cell.rowSpan,
      margins:{top:rowPadding,bottom:rowPadding,left:sidePadding,right:sidePadding},
-     verticalAlign:alignDataCells||narrowDistribution||registryResults||detailLayout?'center':undefined,
+     verticalAlign:coverFrame||alignDataCells||narrowDistribution||registryResults||detailLayout?'center':undefined,
      ...(outline?{borders:Object.fromEntries(outline.map(edge=>[edge,{...border,color:'C00000',size:16}]))}:
       categoryBand?{borders:{top:{...border,color:'91A9C6',size:6}}}:{}),
      shading:muted?{fill:'F1F2F4'}:status?{fill:status.fill}:categoryBand?{fill:'F1F5F9'}:header||total||flowLabel?{fill:header?theme.fill:theme.total}:narrowDistribution&&rowIndex%2===0?{fill:'F6F9FD'}:undefined,
@@ -556,7 +556,7 @@ async function blocks(node,width,context={}){
     const temp=document.createElement('div');temp.innerHTML=line;
     const value=text(temp);
     if(value){
-     const bold=context.bold||['b','strong','figcaption'].includes(tag),size=spaciousCover?(context.cell?context.coverSpacing.tableSize:context.coverSpacing.noteSize):context.cell?(context.cellFontSize??15):18;
+     const bold=context.bold||['b','strong','figcaption'].includes(tag),size=spaciousCover?(context.cell?context.coverSpacing.tableSize:bold?20:context.coverSpacing.noteSize):context.cell?(context.cellFontSize??15):18;
      if(child.matches('.report-detail-summary,.report-registry-condition')){
       const natureFigures=!!child.closest('.report-nature-inline');
       const registry=child.matches('.report-registry-condition');
@@ -568,10 +568,10 @@ async function blocks(node,width,context={}){
       visit(temp);out.push(paragraph('',{runs,color,align:context.align,size,snapToGrid:detailSpacing?false:undefined,spacing:natureFigures?{...detailSpacing,line:265}:detailSpacing??(registry?{after:30,line:220}:undefined)}));
      }else{
       const coverNoteSpacing=spaciousCover&&!context.cell?{
-       before:bold?context.coverSpacing.noteTop:0,after:bold?25:context.coverSpacing.noteAfter,
+       before:bold?context.coverSpacing.noteTop:0,after:bold?65:context.coverSpacing.noteAfter,
        line:context.coverSpacing.noteLine,lineRule:D.LineRuleType.EXACT
       }:undefined;
-      out.push(paragraph(value,{bold,color:context.color,align:context.align,size,
+      out.push(paragraph(value,{bold,color:coverNoteSpacing&&bold?theme.navy:context.color,align:context.align,size,
        snapToGrid:detailSpacing||coverCellSpacing||coverNoteSpacing?false:undefined,keepNext:!!coverNoteSpacing&&bold,
        spacing:detailSpacing??coverCellSpacing??coverNoteSpacing??(context.compactOverview?{after:25,line:220}:undefined)}));
      }
@@ -605,9 +605,10 @@ function coverSpacingFor(page){
  const longest=rows.reduce((max,row)=>Math.max(max,text(row.cells[1]||row).length),0);
  const companyLength=rows[0]?.cells[1]?text(rows[0].cells[1]).length:0;
  const dense=companyLength>140||longest>450;
- return dense
-  ?{table:36,status:26,tableSize:14,tableLine:190,noteSize:16,noteLine:220,headingTop:65,headingBottom:50,noteTop:45,noteAfter:25}
-  :{table:50,status:35,tableSize:16,tableLine:205,noteSize:18,noteLine:240,headingTop:80,headingBottom:60,noteTop:55,noteAfter:35};
+ return {
+  table:dense?68:82,status:dense?63:78,tableSize:17,tableLine:235,
+  headingTop:150,headingBottom:155,noteSize:18,noteLine:270,noteTop:125,noteAfter:45
+ };
 }
 async function report(model,template=g.AuditReport){
  const container=document.createElement('div');
