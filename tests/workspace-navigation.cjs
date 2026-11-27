@@ -77,7 +77,9 @@ assert(v2Preview.includes('href="#report-accounts"'));
 assert(scopePage.includes('id="report-accounts"'));
 const followTitle='2.3.4 已识别有待进一步分析的交易对手方的分析（收支重合和未识别客商关系）';
 assert(v2WordHtml.includes('<a href="#report-follow">'+followTitle+'</a>'));
-assert(v2WordHtml.includes('<h3>'+followTitle+'</h3>'));
+assert(v2WordHtml.includes('<h3>'+followTitle.replace('（','<span class="report-subhead-note">（')+'</span></h3>'));
+assert(v2WordHtml.includes('2 被审计单位资金流水按交易对手方分析总览<span class="report-chapter-note">（'));
+assert(v2WordHtml.includes('2.2 关联方资金流水分析<span class="report-subhead-note">（'));
 const executivePage=v2WordPages[1];
 assert(v2WordPages[0].includes('id="report-cover"')&&executivePage.includes('id="report-executive-summary"'));
 assert(v2WordPages[2].includes('class="report-toc"')&&v2WordPages[3]===scopePage);
@@ -110,7 +112,7 @@ const tunedSummary=ctx.AuditReportV2.render({...report2,criteria:{...report2.cri
 assert.equal((tunedSummary.match(/report-executive-origin">项目组自定义/g)||[]).length,1);
 assert(summaryTargets.every(id=>v2WordHtml.includes('id="'+id+'" data-summary-target')));
 const summaryOnlySelection=ctx.AuditReportV2.render(ctx.AuditReportV2.selectSections(report2,['cover','toc']),{forExport:true});
-assert(summaryOnlySelection.includes('重点分析概览')&&!summaryOnlySelection.includes('class="report-executive-link"'));
+assert(summaryOnlySelection.includes('重点分析事项')&&!summaryOnlySelection.includes('class="report-executive-link"'));
 assert(scopePage.includes('class="report-scope-value">35 个'));
 assert(!scopePage.includes('详见系统[银行流水分析-账户总览]'));
 assert(!scopePage.split('id="report-accounts"')[1].includes('已上传账户个数'));
@@ -292,7 +294,7 @@ assert.equal(memoFullTotal[6],1);
 const concentrationPage=v2WordPages.findIndex(page=>page.includes('id="report-concentration"'));
 assert(v2WordPages[2].includes('同时剔除交易对手方为空的数据'));
 assert(v2WordPages[concentrationPage].includes('同时剔除交易对手方为空的数据'));
-assert(v2WordPages[concentrationPage].includes('关联方资金流水集中度（关联方交易详情见2.2）'));
+assert(v2WordPages[concentrationPage].includes('关联方资金流水集中度<span class="report-subhead-note">（关联方交易详情见2.2）</span>'));
 assert(v2WordPages[concentrationPage+1].includes('第三方资金流水集中度'));
 assert(!v2WordPages[concentrationPage].includes('data-concentration-edges'));
 const thirdConcentration=v2WordPages[concentrationPage+1];
@@ -381,7 +383,7 @@ for(const [i,direction] of ['流入','流出'].entries()){
  assert.equal((overview.match(/<td rowspan="4"/g)||[]).length,2);
  assert(ranking.includes('<h4>'+direction+'第三方前20大对手方</h4>'));
  assert(ranking.includes('report-counterparty-rank-table'));
- for(const header of ['交易总金额（百万）','交易总金额笔数（笔）','交易总金额第三方占比（%）'])assert(ranking.includes('<th>'+header+'</th>'));
+ for(const header of ['交易总额（百万）','交易笔数（笔）','第三方交易占比（%）'])assert(ranking.includes('<th>'+header+'</th>'));
 }
 
 for(const html of [v2WordHtml,v2Preview]){
@@ -441,7 +443,7 @@ for(const [id,include,exclude] of [
  assert(details.every((row,i)=>i===0||row[amount]<=details[i-1][amount]));
  for(const h of include)assert(t.headers.includes(h));
  for(const h of exclude)assert(!t.headers.includes(h));
- assert(v2WordHtml.includes('<h4 class="report-section-rank-title">'+section.title.replace(/^2\.3\.\d+\s+/,'').replace('（收支重合和未识别客商关系）','')+'（符合上述筛选条件的前20大交易对手方）</h4>'));
+ assert(v2WordHtml.includes('<h4 class="report-section-rank-title">'+section.title.replace(/^2\.3\.\d+\s+/,'').replace('（收支重合和未识别客商关系）','')+'<span class="report-subhead-note">（符合上述筛选条件的前20大交易对手方）</span></h4>'));
  assert(reportTables[t.name]);
 }
 
@@ -528,7 +530,7 @@ assert.equal((peoplePage.match(/<table class="table"/g)||[]).length,1);
 for(const name of ['类型','人数（人）'])assert(peoplePage.includes('<th rowspan="2">'+name+'</th>'));
 for(const direction of ['流入','流出'])assert(peoplePage.includes('<th colspan="3">'+direction+'</th>'));
 assert(peoplePage.includes('<th colspan="2">交易金额合计</th>'));
-assert(v2WordHtml.includes('>交易对手方为个人或疑似个人的分析（符合上述筛选条件的前20大交易对手方）</h4>'));
+assert(v2WordHtml.includes('>交易对手方为个人或疑似个人的分析<span class="report-subhead-note">（符合上述筛选条件的前20大交易对手方）</span></h4>'));
 
 for(const id of ['compliance-checks','registry','people','follow']){
  const overviewIndex=v2WordPages.findIndex(page=>page.includes('id="report-'+id+'"'));

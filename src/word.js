@@ -146,6 +146,14 @@ function coverColumnWidths(width){
  return [labelWidth,width-labelWidth];
 }
 const coverSidePadding=115;
+function styledHeadingRuns(node,{size,color,bold=true,noteSize=Math.floor(size*.82)}){
+ if(!node.querySelector('.report-title-emphasis,.report-chapter-note,.report-subhead-note,.report-person-scope'))return undefined;
+ return [...node.childNodes].map(part=>{
+  const note=part.matches?.('.report-chapter-note,.report-subhead-note,.report-person-scope');
+  return new D.TextRun({text:part.textContent,font,bold,size:note?noteSize:size,
+   color:part.matches?.('.report-title-emphasis')?'C00000':color});
+ });
+}
 function coverHeadingBlocks(width,heading,spacing){
  const noBorder={style:D.BorderStyle.NONE,size:0,color:'FFFFFF'};
  const stripe=new D.Table({
@@ -164,7 +172,8 @@ function coverHeadingBlocks(width,heading,spacing){
  return [
   stripe,
   paragraph(heading.brand,{bold:true,color:theme.accent,size:24,spacing:{before:spacing.headingTop,after:40,line:250}}),
-  paragraph(heading.title,{heading:D.HeadingLevel.TITLE,bold:true,color:theme.navy,size:38,spacing:{before:0,after:spacing.headingBottom,line:360}})
+  paragraph(text(heading.title),{heading:D.HeadingLevel.TITLE,bold:true,color:theme.navy,size:38,
+   runs:styledHeadingRuns(heading.title,{size:38,noteSize:28,color:theme.navy}),spacing:{before:0,after:spacing.headingBottom,line:360}})
  ];
 }
 // Give company names and account numbers enough width for the top-20 detail pages.
@@ -174,7 +183,7 @@ const v2CounterpartyWidths=[27,178,62,73,43,48,39,45,48,39,45,49,43,46].map(n=>n
 const sectionRankColumnWeights={
  '排名':27,'对手方名称':120,'客商分类':76,'关联关系':86,'黑名单':48,'个人类型':53,
  '诉讼案件数量':54,'行政处罚数量':54,'失信被执行人':53,'经营天数':45,'所属行业':72,
- '注册资本':61,'社保人数':44,'未识别客商关系':60,'收支重合':51,'说明':43
+ '注册资本':61,'社保人数':44,'交易总额（百万）':76,'交易笔数（笔）':76,'交易占比（%）':76,'未识别客商关系':60,'收支重合':51,'说明':43
 };
 function sectionRankWidths(header,complianceRanks){
  const weights=[...header.cells].map(cell=>{
@@ -323,7 +332,7 @@ async function blocks(node,width,context={}){
   if(tag==='details'||child.matches('.report-extra'))continue;
   if(context.coverSpacing&&child.matches('#report-cover')){
    const sourceTable=child.querySelector('.report-cover-grid');
-   const coverHeading={brand:text(child.querySelector('.report-masthead')),title:text(child.querySelector('h2'))};
+   const coverHeading={brand:text(child.querySelector('.report-masthead')),title:child.querySelector('h2')};
    out.push(...coverHeadingBlocks(width,coverHeading,context.coverSpacing));
    out.push(await table(sourceTable,width,context));
    const notes=child.querySelector('.report-cover-notes');
@@ -331,13 +340,13 @@ async function blocks(node,width,context={}){
    continue;
   }
   if(child.matches('#report-executive-summary > h2')){
-   out.push(paragraph(text(child),{bold:true,color:theme.navy,size:38,pageBreakBefore:context.frontPageBreak,spacing:{before:0,after:90,line:390}}));
+   out.push(paragraph(text(child),{bold:true,color:theme.navy,size:38,pageBreakBefore:context.frontPageBreak,snapToGrid:false,spacing:{before:0,after:36,line:410,lineRule:D.LineRuleType.EXACT}}));
    continue;
   }
   if(child.matches('.report-executive-link')){
    const anchor=summaryBookmark(child.getAttribute('href').slice(1));
    const link=new D.InternalHyperlink({anchor,children:[new D.TextRun({text:text(child),font,color:theme.link,size:16,underline:{}})]});
-   out.push(paragraph('',{runs:[link],spacing:{before:25,after:0,line:195}}));
+   out.push(paragraph('',{runs:[link],snapToGrid:false,spacing:{before:18,after:0,line:202,lineRule:D.LineRuleType.EXACT}}));
    continue;
   }
   if(child.matches('.report-executive-flow,.report-executive-condition,.report-executive-metrics,.report-executive-highlight')){
@@ -352,17 +361,17 @@ async function blocks(node,width,context={}){
      color:red?'9E2635':value?theme.navy:color,bold:element});
    });
    const result=child.closest('.report-executive-result');
-   const spacing={before:condition?30:result&&child===result.firstElementChild?45:0,after:metrics?35:18,line:metrics?330:207};
-   out.push(result?new D.Paragraph({children:runs,spacing,shading:{fill:'FFFFFF'}}):paragraph('',{runs,spacing}));
+   const spacing={before:condition?25:result&&child===result.firstElementChild?30:0,after:metrics?24:10,line:metrics?325:216,lineRule:D.LineRuleType.EXACT};
+   out.push(result?new D.Paragraph({children:runs,snapToGrid:false,spacing,shading:{fill:'FFFFFF'}}):paragraph('',{runs,snapToGrid:false,spacing}));
    continue;
   }
   if(child.matches('.report-executive-intro,.report-executive-label,.report-executive-representative')){
    const title=child.matches('.report-executive-label'),intro=child.matches('.report-executive-intro');
    const representative=child.classList.contains('report-executive-representative');
    const color=intro?theme.muted:theme.navy,size=title?21:representative?17:18;
-   const spacing={before:0,after:intro?125:38,line:title?229:211};
+   const spacing={before:0,after:intro?80:22,line:title?252:220,lineRule:D.LineRuleType.EXACT};
    out.push(representative?new D.Paragraph({children:[new D.TextRun({text:text(child),font,bold:true,color,size})],
-    shading:{fill:'FFFFFF'},spacing}):paragraph(text(child),{bold:!intro,color,size,spacing}));
+    shading:{fill:'FFFFFF'},snapToGrid:false,spacing}):paragraph(text(child),{bold:!intro,color,size,snapToGrid:false,spacing}));
    continue;
   }
   if(child.matches('.report-nature-index-item')){
@@ -405,7 +414,8 @@ async function blocks(node,width,context={}){
    if(caption?.matches('.report-focus-card-title'))out.push(focusCardTitle(caption));
    else if(caption){
     const emphasized=caption.matches('.report-large-chart-title');
-    out.push(paragraph(text(caption),{bold:true,color:emphasized?theme.accent:context.natureGroup?'000000':theme.heading,size:context.natureGroup?20:emphasized?22:16,bookmark:caption.hasAttribute('data-summary-target')?summaryBookmark(caption.id):undefined,spacing:context.natureGroup?{after:20,line:220}:undefined}));
+    const color=emphasized?theme.accent:context.natureGroup?'000000':theme.heading,size=context.natureGroup?20:emphasized?22:16;
+    out.push(paragraph(text(caption),{bold:true,color,size,runs:styledHeadingRuns(caption,{size,color}),bookmark:caption.hasAttribute('data-summary-target')?summaryBookmark(caption.id):undefined,spacing:context.natureGroup?{after:20,line:220}:undefined}));
    }
    const chartLayout=child.matches('.report-concentration-chart')?{maxPlotHeight:context.sectionFit==='concentration'?154:245,legendWidth:680,
     legendMarkerSize:context.sectionFit==='concentration'?9:5}
@@ -506,13 +516,10 @@ async function blocks(node,width,context={}){
    const main=tag==='h2',level=headingBookmarks.has(child)?[D.HeadingLevel.HEADING_1,D.HeadingLevel.HEADING_2,D.HeadingLevel.HEADING_3][headingDepth(child)-1]:undefined;
    const color=child.matches('.report-focus-heading')?'C00000':toc?theme.navy:theme.ink;
    const rankTitle=child.matches('.report-section-rank-title');
-   const subheadNote=child.querySelector('.report-subhead-note');
-   const runs=child.querySelector('.report-title-emphasis,.report-chapter-note,.report-subhead-note')?[...child.childNodes].map(node=>new D.TextRun({
-    text:node.textContent,font,bold:true,size:subheadNote?(node===subheadNote?18:23):node.matches?.('.report-chapter-note')?28:32,
-    color:node.matches?.('.report-title-emphasis')?'C00000':color
-   })):undefined;
+   const size=main?32:rankTitle?18:23;
+   const runs=styledHeadingRuns(child,{size,color,bold:!rankTitle,noteSize:main?28:Math.floor(size*.82)});
    const compactHeading=context.detailLayout?.headingSpacing;
-   out.push(paragraph(text(child),{heading:child.textContent.includes('综合分析报告（年审适用）')?D.HeadingLevel.TITLE:level,bold:!rankTitle,color,size:main?32:rankTitle?18:23,runs,bookmark:headingBookmarks.get(child),snapToGrid:detailSpacing?false:undefined,spacing:rankTitle?{before:30,after:55,line:240}:detailSpacing?{...detailSpacing,line:main?440:320,...compactHeading}:spaciousCover?{before:60,after:145,line:290}:context.compactOverview?{before:0,after:30,line:240}:undefined}));
+   out.push(paragraph(text(child),{heading:child.textContent.includes('综合分析报告（年审适用）')?D.HeadingLevel.TITLE:level,bold:!rankTitle,color,size,runs,bookmark:headingBookmarks.get(child),snapToGrid:detailSpacing?false:undefined,spacing:rankTitle?{before:30,after:55,line:240}:detailSpacing?{...detailSpacing,line:main?440:320,...compactHeading}:spaciousCover?{before:60,after:145,line:290}:context.compactOverview?{before:0,after:30,line:240}:undefined}));
    if(toc)out.push(new D.Table({
     layout:D.TableLayoutType.FIXED,width:{size:width,type:D.WidthType.DXA},columnWidths:[Math.floor(width*.12),Math.ceil(width*.88)],
     borders:Object.fromEntries(Object.keys(borders).map(key=>[key,{style:D.BorderStyle.NONE,size:0,color:'FFFFFF'}])),

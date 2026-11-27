@@ -45,7 +45,7 @@ function overviewHighlight(item,measure){
 }
 const highestTurnoverHighlight=items=>overviewHighlight(sortBy(items,turnover)[0]);
 const financial=a=>[amount(a.in),a.ins,amount(a.out),a.outs,amount(turnover(a)),a.n];
-const totalHeaders=['交易总金额（百万）','交易总金额笔数','交易总金额占比'];
+const totalHeaders=['交易总额（百万）','交易笔数','交易占比'];
 const moneyHeaders=['流入金额（百万元）','流入笔数','流出金额（百万元）','流出笔数',...totalHeaders.slice(0,2)];
 const rangeLabel=(a,b)=>a&&b?a+' ～ '+b:'无流水';
 function fiscalPeriod(year,cut){
@@ -483,7 +483,7 @@ function compute(data,settings={}){
  });
  const thirdParties=cpForTypes.filter(x=>x.relationships.size===0);
  const thirdPartyTotals=totals(thirdParties);
- const thirdPartyHeaders=cpHeaders.map(h=>h.replace('占比','第三方占比'));
+ const thirdPartyHeaders=cpHeaders.map(h=>h==='交易占比'?'第三方交易占比':h.replace('占比','第三方占比'));
  for(const [dir,metric] of [['流入','in'],['流出','out']]){
   const ranked=sortBy(thirdParties.filter(x=>x[metric]>0),x=>x[metric]);
   table(cpSection,dir+'第三方前20大对手方',thirdPartyHeaders,
@@ -701,7 +701,7 @@ const currency=new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFra
 const integer=n=>Number(n).toLocaleString('en-US',{maximumFractionDigits:0});
 const formatRate=n=>n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:20});
 const thresholdNumber=new Intl.NumberFormat('zh-CN',{maximumFractionDigits:6});
-const display=(v,header)=>typeof v!=='number'?esc(v):/占比|比例/.test(header)?(100*v).toFixed(2)+'%':/金额|余额/.test(header)?currency.format(v):/笔数|总交易行数/.test(header)?integer(v):String(v);
+const display=(v,header)=>typeof v!=='number'?esc(v):/占比|比例/.test(header)?(100*v).toFixed(2)+'%':/金额|余额|交易总额/.test(header)?currency.format(v):/笔数|总交易行数/.test(header)?integer(v):String(v);
 const palette=['#24569e','#5283c5','#83a9dc','#abc6eb','#a92226','#cc4c50','#df8588','#efb9bb'];
 const natureReference=section=>'<p class="report-nature-reference">详见本报告'+section+'</p>';
 function natureCardHTML(card){
@@ -745,7 +745,7 @@ function detailRowsHTML(t,rows){
    const rowspan=groupSize?' rowspan="'+Math.min(groupSize,rows.length-index)+'"':'';
    const numeric=typeof value==='number';
    const countOrShare=value!==''&&value!=null&&/笔数|占比/.test(h);
-   const monetary=numeric&&/金额|余额|^(注册资本|实缴资本)/.test(h)&&!/占比|笔数/.test(h)||h==='本期结果'&&/金额/.test(r[0]);
+   const monetary=numeric&&/金额|余额|交易总额|^(注册资本|实缴资本)/.test(h)&&!/占比|笔数/.test(h)||h==='本期结果'&&/金额/.test(r[0]);
    return '<td'+rowspan+' class="'+[numeric?'report-num':'',monetary?'report-amount':'',countOrShare?'report-count-share':''].filter(Boolean).join(' ')+'">'+tableCell(value,h)+'</td>';
   });
   if(subtotal)cells.unshift('<td colspan="'+amountColumn+'">'+esc(r[0])+'</td>');
@@ -772,7 +772,7 @@ function tableHTML(t){
   '<tr>'+t.headers.map(heading).join('')+'</tr>';
  const summaryRow=t.summaryHTML?'<tr><td class="report-nature-summary-cell" colspan="'+t.headers.length+'">'+t.summaryHTML+'</td></tr>':'';
  const colgroup=t.columnWidths?'<colgroup>'+t.columnWidths.map(width=>'<col style="width:'+width+'%">').join('')+'</colgroup>':'';
- return '<div class="report-table">'+(t.hideTitle?'':'<h4'+(t.sectionRanks?' class="report-section-rank-title"':'')+'>'+esc(t.name)+'</h4>')+(t.note?detailSummaryHTML(t.note):'')+
+ return '<div class="report-table">'+(t.hideTitle?'':'<h4'+(t.sectionRanks?' class="report-section-rank-title"':'')+'>'+headingTitleHTML(t.name)+'</h4>')+(t.note?detailSummaryHTML(t.note):'')+
   '<div class="table-scroll"><table class="table'+(t.largeDetail?' report-large-detail-table':t.flowSummary?' report-flow-summary-table':t.counterpartyRanks?' report-counterparty-rank-table':t.sectionRanks?' report-section-rank-table':'')+'"'+(interactiveId==null?'':' data-report-table="'+interactiveId+'"')+'>'+colgroup+(t.hideHeader?'':'<thead>'+summaryRow+head+(t.filterHeaders?'<tr class="report-filter-header">'+t.filterHeaders.map(v=>'<th>'+esc(v)+'</th>').join('')+'</tr>':'')+'</thead>')+'<tbody>'+detailRowsHTML(t,visible)+'</tbody></table></div>'+
   (pageable?'<div class="pagination" data-report-pager="'+id+'" aria-label="'+esc(t.name)+'分页"></div>':visible.length<t.rows.length?'<p class="muted">页面显示前 '+visible.length+' 行，共 '+t.rows.length+' 行。完整明细见本期核验 Excel。</p>':'')+'</div>';
 }
@@ -813,7 +813,7 @@ function stackedHTML(c,onlyDirection,{highlightTitle=false,showEmptyNote=true,su
   return segments+'<text x="'+(x+31)+'" y="158" text-anchor="middle">'+dir+'</text><text x="'+(x+31)+'" y="173" text-anchor="middle">'+esc(currency.format(total[d])+' 百万')+'</text>';
  }).join('');
  const legendDirections=onlyDirection===undefined?[0,1]:[onlyDirection];
- return '<figure class="report-chart report-stacked"><figcaption'+(summaryTarget?' id="'+esc(summaryTarget)+'" data-summary-target':'')+(highlightTitle||captionClass?' class="'+(highlightTitle?'report-large-chart-title':captionClass)+'"':'')+'>'+esc(c.name)+'</figcaption><ul class="report-stack-legend">'+c.rows.map((r,i)=>'<li>'+legendDirections.map(d=>'<i style="background:'+fill(i,d)+'"></i>').join('')+esc(r[0])+'</li>').join('')+'</ul><svg role="img" aria-label="'+esc(c.name+(onlyDirection===undefined?'，左为流入，右为流出':onlyDirection?'，流出':'，流入'))+'" viewBox="0 0 330 181"><text x="54" y="15">金额（百万元）</text>'+ticks+bars+'</svg>'+(peak||!showEmptyNote?'':'<p class="muted">本期无命中金额</p>')+'</figure>';
+ return '<figure class="report-chart report-stacked"><figcaption'+(summaryTarget?' id="'+esc(summaryTarget)+'" data-summary-target':'')+(highlightTitle||captionClass?' class="'+(highlightTitle?'report-large-chart-title':captionClass)+'"':'')+'>'+headingTitleHTML(c.name)+'</figcaption><ul class="report-stack-legend">'+c.rows.map((r,i)=>'<li>'+legendDirections.map(d=>'<i style="background:'+fill(i,d)+'"></i>').join('')+esc(r[0])+'</li>').join('')+'</ul><svg role="img" aria-label="'+esc(c.name+(onlyDirection===undefined?'，左为流入，右为流出':onlyDirection?'，流出':'，流入'))+'" viewBox="0 0 330 181"><text x="54" y="15">金额（百万元）</text>'+ticks+bars+'</svg>'+(peak||!showEmptyNote?'':'<p class="muted">本期无命中金额</p>')+'</figure>';
 }
 const filterValue=n=>'<strong>['+esc(n)+']</strong>';
 const defaultCriteriaFor=(group,c)=>criteriaFields[group].every(([key])=>c[key]===criteriaDefaults[key]);
@@ -885,13 +885,13 @@ function trendHTML(t){
   }
   return html;
  }).join('');
- return '<figure class="report-chart report-concentration-chart"><figcaption>月度资金流水（百万元）</figcaption><div class="table-scroll"><svg role="img" aria-label="各月流入与流出金额" width="'+width+'" height="'+height+'" viewBox="0 0 '+width+' '+height+'"><path d="M52 28V158H'+(width-4)+'" stroke="#bacad0" fill="none"/><text x="4" y="18">百万</text>'+ticks+bars+'</svg></div><ul class="report-legend">'+categories.flatMap((c,i)=>[0,1].map(d=>'<li><i style="background:'+palette[i+d*4]+'"></i>'+c+(d?'流出':'流入')+'</li>')).join('')+'</ul></figure>';
+ return '<figure class="report-chart report-concentration-chart"><figcaption>月度资金流水<span class="report-subhead-note">（百万元）</span></figcaption><div class="table-scroll"><svg role="img" aria-label="各月流入与流出金额" width="'+width+'" height="'+height+'" viewBox="0 0 '+width+' '+height+'"><path d="M52 28V158H'+(width-4)+'" stroke="#bacad0" fill="none"/><text x="4" y="18">百万</text>'+ticks+bars+'</svg></div><ul class="report-legend">'+categories.flatMap((c,i)=>[0,1].map(d=>'<li><i style="background:'+palette[i+d*4]+'"></i>'+c+(d?'流出':'流入')+'</li>')).join('')+'</ul></figure>';
 }
 function sideBySide(items,variant=''){
  return '<div class="report-panes '+variant+'">'+items.map(x=>'<div class="report-pane">'+x+'</div>').join('')+'</div>';
 }
 function subhead(title,note=''){
- return '<h4 class="report-subhead">'+esc(title)+(note?'<span class="report-subhead-note">（'+esc(note)+'）</span>':'')+'</h4>';
+ return '<h4 class="report-subhead">'+headingTitleHTML(title+(note?'（'+note+'）':''))+'</h4>';
 }
 function extra(title,content){if(renderForExport)return '';return '<details class="report-extra"><summary>'+esc(title)+'</summary>'+content+'</details>';}
 function metricHTML(label,main,detail=''){
@@ -995,7 +995,7 @@ function sectionBody(s,m,continuations){
    tableHTML({...source.top20Summary,hideTitle:true,columnWidths:[25,13,8.5,9,13,8.5,9,14],
     summaryHTML:natureCardHTML(card)+detailSummaryHTML(source.note.split('\n')[1])})+'</div>';
   continuations.push(
-   '<section class="report-section" id="report-large-external"><h4 class="report-subhead report-focus-heading">'+esc('重点关注：'+largeExternalScope)+'</h4>'+
+   '<section class="report-section" id="report-large-external"><h4 class="report-subhead report-focus-heading">'+headingTitleHTML('重点关注：'+largeExternalScope)+'</h4>'+
     detailSummaryHTML(s.largeExternalSummary)+detailSummaryHTML(externalTop20.note)+
     tableHTML(externalTop20.table)+
     '<div id="report-large-entity">'+subhead(internalEntitySummaryTitle)+
@@ -1106,18 +1106,18 @@ const focusSectionIds=['compliance-checks','registry','people','follow'];
 function chapterFor(s,m){
  return chapterTitles[s.id]||(s.id===m.sections.find(section=>focusSectionIds.includes(section.id))?.id?chapterTitles.focus:undefined);
 }
-function chapterHeadingHTML(title,body=false){
+function headingTitleHTML(title,body=true,mainChapter=false){
  const split=title.indexOf('（');
- const reduceNote=body&&/^(1 |2\.3 )/.test(title)&&split!==-1;
+ const reduceNote=body&&split!==-1&&title.endsWith('）');
  const main=esc(reduceNote?title.slice(0,split):title);
  const highlighted=title.startsWith('2.3 ')?main.replace('重点','<span class="report-title-emphasis">重点</span>'):main;
- return highlighted+(reduceNote?'<span class="report-chapter-note">'+esc(title.slice(split))+'</span>':'');
+ return highlighted+(reduceNote?'<span class="'+(mainChapter?'report-chapter-note':'report-subhead-note')+'">'+esc(title.slice(split))+'</span>':'');
 }
 function reportSection(s,m,continuations){
  const tag=s.id==='cover'?'h2':'h3';
  const personScope=s.id==='people'?'<span class="report-person-scope">（对手方名称小于等于四个字）</span>':'';
  const chapter=chapterFor(s,m);
- return (chapter?'<h2 class="report-chapter">'+chapterHeadingHTML(chapter,true)+'</h2>':'')+'<section class="report-section" id="report-'+s.id+'"'+(s.id==='people'?' data-summary-target':'')+'>'+(s.id==='cover'?'<div class="report-masthead"><span>毕马威审计罗盘</span></div>':'')+'<'+tag+'>'+esc(s.title)+personScope+'</'+tag+'>'+sectionBody(s,m,continuations)+'</section>';
+ return (chapter?'<h2 class="report-chapter">'+headingTitleHTML(chapter,true,true)+'</h2>':'')+'<section class="report-section" id="report-'+s.id+'"'+(s.id==='people'?' data-summary-target':'')+'>'+(s.id==='cover'?'<div class="report-masthead"><span>毕马威审计罗盘</span></div>':'')+'<'+tag+'>'+headingTitleHTML(s.title)+personScope+'</'+tag+'>'+sectionBody(s,m,continuations)+'</section>';
 }
 function amountLabels(text,code){
  const converted=text.replaceAll('百万元','百万');
@@ -1137,7 +1137,7 @@ function formatTables(tables,code){return Object.fromEntries(Object.entries(tabl
 
 function tocDepth(title){return Math.min(3,(String(title).match(/^\d+(?:\.\d+)*/)?.[0]||'1').split('.').length);}
 function tocHTML(m){
- const item=(title,id)=>'<li class="toc-level-'+tocDepth(title)+'"><a href="#report-'+id+'">'+chapterHeadingHTML(title)+'</a></li>';
+ const item=(title,id)=>'<li class="toc-level-'+tocDepth(title)+'"><a href="#report-'+id+'">'+headingTitleHTML(title,false)+'</a></li>';
  return '<nav class="report-toc" aria-label="报告目录"><h2>目录</h2><ol>'+m.sections.filter(s=>!['cover','background'].includes(s.id)).map(s=>(chapterFor(s,m)?item(chapterFor(s,m),s.id):'')+item(s.title,s.id)+(s.id==='scope'?item(accountSectionTitle,'accounts'):'')).join('')+(m.sections.some(s=>s.id==='scope')?item(missingAppendixTitle,'scope-appendix'):'')+'</ol></nav>';
 }
 function selectSections(model,ids){
@@ -1176,7 +1176,7 @@ function executiveSummaryHTML(m){
   return '<article class="report-executive-card">'+
    '<p class="report-executive-label">'+esc(label)+'</p>'+
    '<p class="report-executive-metrics"><strong class="report-executive-value'+(count?' report-executive-hit':'')+'">'+
-   (available?integer(count)+' '+unit:missingValue)+'</strong>　交易总金额 '+strong(money(amount),available&&amount)+'</p>'+
+   (available?integer(count)+' '+unit:missingValue)+'</strong>　交易总额 '+strong(money(amount),available&&amount)+'</p>'+
    flow('流入',inflow,inCount,'in')+flow('流出',outflow,outCount,'out')+
    '<p class="report-executive-condition"><span class="report-executive-origin">'+origin+'</span> '+esc(condition)+'</p>'+
    highlight+link+'</article>';
@@ -1212,7 +1212,7 @@ function executiveSummaryHTML(m){
    condition:'交易总额 ≥ '+currency.format(unknownAmount)+currencyUnit,
    highlight:highlight(follow.overviewHighlights[1],{basis:'交易总额最高（非空对手方）',named:true,flows:true})})
  ];
- return '<section id="report-executive-summary"><h2>重点分析概览</h2>'+
+ return '<section id="report-executive-summary"><h2>重点分析事项</h2>'+
   '<p class="report-executive-intro">汇总本期各项分析的对手方数量和交易金额。同一对手方可出现在多项分析中。</p>'+
   cardRow(complianceCards)+cardRow(registryCards)+cardRow([
    card({label:'交易对手方为个人或疑似个人',target:'people',section:'people',number:'2.3.3',
@@ -1259,7 +1259,7 @@ function render(m,{allRows=false,forExport=false}={}){
   if(end>=(m.minimum||m.from)&&start<=(m.maximum||m.to))presets.push([y+' 财年 · '+start+' ～ '+end,start+'|'+end,y]);
  }
  const current=m.from+'|'+m.to;
- const output='<section class="panel report-controls"><div class="panel-heading"><h3>选择分析与导出期间</h3><div class="actions"><button id="reportPrint"'+(m.sections.length?'':' disabled')+'>打印横版报告</button><button id="reportWordPreview"'+(m.sections.length?'':' disabled')+'>预览 Word</button><button id="reportWord"'+(m.sections.length?'':' disabled')+'>下载 Word 报告</button><button class="primary" id="reportExport"'+(m.sections.length?'':' disabled')+'>下载本期核验 Excel</button></div></div><div class="report-inputs"><label>金额口径<select id="reportCurrency"><option value="">'+(m.rates.importedRmb?'使用流水文件的等值人民币（CNY）':'折算人民币（CNY）')+'</option>'+m.currencies.map(code=>'<option value="'+code+'"'+(code===m.originalCurrency?' selected':'')+'>原币 · '+code+'</option>').join('')+'</select></label><label>财年截止日<select id="reportCut">'+['03-31','06-30','09-30','12-31'].map(c=>'<option'+(c===m.cut?' selected':'')+'>'+c+'</option>').join('')+'</select></label><label>期间快捷选择<select id="reportPreset"><option value="">自定义日期</option>'+presets.map(([label,value,year])=>'<option value="'+esc(value)+'"'+(year?' data-year="'+year+'"':'')+(value===current?' selected':'')+'>'+esc(label)+'</option>').join('')+'</select></label><label>开始日期<input id="reportFrom" type="date" value="'+esc(m.from)+'"></label><label>结束日期<input id="reportTo" type="date" value="'+esc(m.to)+'"></label><button id="reportApply">应用区间</button></div><p class="muted">Word 目录需在打开后更新域，页码按正文重新计算，封面、重点分析概览和目录不编号。日期包含首尾两天。财年按结束年份命名；导出使用已应用的期间，含核验表及本期流水。上传整套数据请使用「测试数据生成 → 导出测试数据」。</p>'+ '<details class="report-macro-tools"><summary>目录更新宏设置（首次配置后，允许宏时打开报告自动弹窗）</summary><p>先下载配置包，在 Word 中保存宏模板，再导入此处。导入后下载的报告为 .docm；未导入时仍为 .docx。宏受 Word 安全设置控制。</p><div class="actions"><button id="reportMacroKit">下载宏代码与设置说明</button><button id="reportMacroTemplate">导入宏模板（.docm / .dotm）</button><span>'+ (g.AuditWord?.hasMacroTemplate()?'本次会话已加载宏模板':'尚未加载宏模板')+'</span></div></details>'+sectionPicker(m)+'<nav class="report-index" aria-label="报告章节">'+m.sections.filter(s=>s.id!=='background').map(s=>'<a href="#report-'+s.id+'">'+esc(s.title.startsWith('综合')?'封面':s.title.split(' ').slice(0,2).join(' '))+'</a>').join('')+'</nav></section>'+
+ const output='<section class="panel report-controls"><div class="panel-heading"><h3>选择分析与导出期间</h3><div class="actions"><button id="reportPrint"'+(m.sections.length?'':' disabled')+'>打印横版报告</button><button id="reportWordPreview"'+(m.sections.length?'':' disabled')+'>预览 Word</button><button id="reportWord"'+(m.sections.length?'':' disabled')+'>下载 Word 报告</button><button class="primary" id="reportExport"'+(m.sections.length?'':' disabled')+'>下载本期核验 Excel</button></div></div><div class="report-inputs"><label>金额口径<select id="reportCurrency"><option value="">'+(m.rates.importedRmb?'使用流水文件的等值人民币（CNY）':'折算人民币（CNY）')+'</option>'+m.currencies.map(code=>'<option value="'+code+'"'+(code===m.originalCurrency?' selected':'')+'>原币 · '+code+'</option>').join('')+'</select></label><label>财年截止日<select id="reportCut">'+['03-31','06-30','09-30','12-31'].map(c=>'<option'+(c===m.cut?' selected':'')+'>'+c+'</option>').join('')+'</select></label><label>期间快捷选择<select id="reportPreset"><option value="">自定义日期</option>'+presets.map(([label,value,year])=>'<option value="'+esc(value)+'"'+(year?' data-year="'+year+'"':'')+(value===current?' selected':'')+'>'+esc(label)+'</option>').join('')+'</select></label><label>开始日期<input id="reportFrom" type="date" value="'+esc(m.from)+'"></label><label>结束日期<input id="reportTo" type="date" value="'+esc(m.to)+'"></label><button id="reportApply">应用区间</button></div><p class="muted">Word 目录需在打开后更新域，页码按正文重新计算，封面、重点分析事项和目录不编号。日期包含首尾两天。财年按结束年份命名；导出使用已应用的期间，含核验表及本期流水。上传整套数据请使用「测试数据生成 → 导出测试数据」。</p>'+ '<details class="report-macro-tools"><summary>目录更新宏设置（首次配置后，允许宏时打开报告自动弹窗）</summary><p>先下载配置包，在 Word 中保存宏模板，再导入此处。导入后下载的报告为 .docm；未导入时仍为 .docx。宏受 Word 安全设置控制。</p><div class="actions"><button id="reportMacroKit">下载宏代码与设置说明</button><button id="reportMacroTemplate">导入宏模板（.docm / .dotm）</button><span>'+ (g.AuditWord?.hasMacroTemplate()?'本次会话已加载宏模板':'尚未加载宏模板')+'</span></div></details>'+sectionPicker(m)+'<nav class="report-index" aria-label="报告章节">'+m.sections.filter(s=>s.id!=='background').map(s=>'<a href="#report-'+s.id+'">'+esc(s.title.startsWith('综合')?'封面':s.title.split(' ').slice(0,2).join(' '))+'</a>').join('')+'</nav></section>'+
  '<article class="report-document report-v2-document" aria-label="综合分析报告预览">'+(m.mixedFx?'<p class="report-boundary-note"><strong>金额口径：本报告包含缺少当日汇率、按原币数值计入的交易，属于人民币与未折算原币的混合口径。请结合逐笔汇率换算明细核验。</strong></p>':'')+(m.sections.length?amountLabels(reportPages(m),m.originalCurrency):'<p class="empty">请至少勾选一个报告章节，预览和导出将按所选内容生成。</p>')+'</article>';
  renderAllRows=false;renderForExport=false;
  return output;

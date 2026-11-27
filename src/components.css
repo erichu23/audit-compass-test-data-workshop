@@ -1005,7 +1005,7 @@ body #content table thead th.ba-filtered .ba-filter-btn::before{background-image
 .report-v2-document .report-sheet table:not(.report-cover-grid)>tbody>tr>td:is(.report-amount,.report-count-share){text-align:right}
 .report-v2-document .report-title-emphasis{color:#c00000}
 .report-v2-document .report-chapter-note{font-size:14pt}
-.report-v2-document .report-subhead-note{font-size:.82em}
+.report-v2-document .report-subhead-note,.report-v2-document .report-person-scope{font-size:.82em}
 .report-v2-document .report-table .report-person-muted>td{background:#f1f2f4;color:#6e7681}
 .report-v2-document .report-compliance-distributions{margin-top:8px}
 .report-v2-document .report-unknown-bands .table-scroll>table tbody td:first-child{white-space:nowrap!important}
@@ -1032,8 +1032,8 @@ body #content table thead th.ba-filtered .ba-filter-btn::before{background-image
 
 
 .report-v2-document .report-cover-impact{font-size:.86em;color:#536681}
-.report-v2-document #report-executive-summary>h2{color:#193a62;margin:6px 0 8px}
-.report-v2-document .report-executive-intro{color:#536681;margin:0 0 13px}
+.report-v2-document #report-executive-summary>h2{color:#193a62;margin:4px 0 3px}
+.report-v2-document .report-executive-intro{color:#536681;margin:0 0 8px}
 .report-v2-document .report-executive-row{gap:10px;margin:0 0 11px;border:0}
 .report-v2-document .report-executive-row>.report-pane{padding:0;border:1px solid #cedbec;border-top:2px solid #668dbd;border-radius:3px;background:#f3f7fc}
 .report-v2-document .report-executive-card{display:flex;flex-direction:column;height:100%;padding:9px 12px;box-sizing:border-box}
