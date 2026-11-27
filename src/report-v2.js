@@ -296,7 +296,8 @@ function compute(data,settings={}){
  const blankWithMemo=blank.filter(r=>clean(r[16]));
  features.cards=[
   {name:'大额单笔交易',...cardStats(big),condition:thresholdLabel,section:'1.2.1',
-   breakdown:largeScopes.map(([scope,rs])=>[scope,involved(rs,3),amount(turnover(sum(rs))),rs.length])},
+   breakdown:largeScopes.map(([scope,rs])=>[scope,involved(rs,3),amount(turnover(sum(rs))),rs.length]),
+   blankCounterparty:cardTotals(big.filter(r=>!clean(r[3])))},
   {name:'摘要信息为空的交易',...cardStats(blankSummary),section:'1.2.3',
    partyGroups:[['有交易对手方',{...cardTotals(namedSummary),parties:involved(namedSummary,3)}],['无交易对手方',cardTotals(unnamedSummary)]]},
   {name:'交易对手方信息为空的交易',...cardStats(blank),section:'1.2.2',
@@ -390,7 +391,7 @@ function compute(data,settings={}){
 
 
 
- const concentration=section('concentration','1.3 资金流水集中度分析（以下数据分析已剔除被审计单位合并范围内各单位之间的交易往来，同时剔除交易对手方为空的数据）','剔除合并范围内单位之间的往来和交易对手方名称为空的流水。先按对手方名称汇总，流入和流出分别在全体剩余外部对手方中统一排名，再拆客商分类及关联方、第三方。统一排名后，逐笔按本方被审计单位＋对手方组合匹配客商分类：同一组合同时命中客户及供应商时，其流水同时计入客户、供应商、客商一体三列，各列不可直接相加。统一排名按对手方真实金额计算一次，不因分类交叉而重复。占比的分母是该方向、该客商分类的总金额。关联性质只按对手方名称匹配整套关联方主档，命中即为关联方，类型为空显示其他；不在清单为第三方。');
+ const concentration=section('concentration','1.3 资金流水集中度分析（集中度分析已剔除被审计单位合并范围内各单位之间的交易往来，同时剔除交易对手方为空的数据）','剔除合并范围内单位之间的往来和交易对手方名称为空的流水。先按对手方名称汇总，流入和流出分别在全体剩余外部对手方中统一排名，再拆客商分类及关联方、第三方。统一排名后，逐笔按本方被审计单位＋对手方组合匹配客商分类：同一组合同时命中客户及供应商时，其流水同时计入客户、供应商、客商一体三列，各列不可直接相加。统一排名按对手方真实金额计算一次，不因分类交叉而重复。占比的分母是该方向、该客商分类的总金额。关联性质只按对手方名称匹配整套关联方主档，命中即为关联方，类型为空显示其他；不在清单为第三方。');
  const months=new Map(),counterparties=new Map(),related=new Map(),relations=new Map(),people=new Map(),byCategory=new Map(),byCategoryRelated=new Map(),unidentifiedByName=new Map();
  const relationshipNames=new Map();
  const personalTypes=['员工','董监高','其他个人'];
@@ -458,6 +459,23 @@ function compute(data,settings={}){
  table(concentration,'集中度排名明细',['方向','客商分类','对手方名称','全体对手方排名','关联性质','等值人民币金额（百万元）','交易笔数','金额占比'],
   a.concentrationDetail.filter(r=>r[0]==='所选合计').map(r=>[...r.slice(1,6),r[6]/1e6,r[7],r[8]]));
 
+ const flowGroups={internal:aggregate(),related:aggregate(),blank:aggregate(),thirdParty:aggregate()};
+ for(const r of rows){
+  const name=clean(r[3]);
+  const bucket=!name?'blank':isInternal(r)?'internal':relatedByName.has(name)?'related':'thirdParty';
+  add(flowGroups[bucket],r,fx);
+ }
+ const breakdown=Object.values(flowGroups);
+ const overall=totals(breakdown);
+ const flowHeader='本期流水（百万'+(originalCurrency?' '+originalCurrency:'')+'）';
+ table(concentration,'本期流入流出汇总',[flowHeader,'合计','合并范围内','关联方','对手方为空','第三方'],
+  [['流入','in'],['流出','out']].map(([label,metric])=>[label,...[overall,...breakdown].map(stats=>amount(stats[metric]))]));
+ concentration.flowOverview=concentration.tables.at(-1);
+
+ const R=g.AuditRegistry;
+ const registryEnd=settings.registryAsOf||to;
+ const profiles=new Map((settings.registry||[]).map(r=>[clean(r.name),r]));
+ const isPersonal=name=>isShortCounterpartyName(name)||knownPersonalNames.has(name);
  const cpSection=section('counterparties','2.1 资金流水按交易对手方类型分析','剔除合并范围内往来。按对手方名称汇总；客商类型按本方单位＋对手方组合匹配；同一组合两表都有为客商一体，仅客户为客户，仅供应商为供应商，两表都没有为非客商。流入、流出前20大仅在名称未命中关联方主档的第三方中排名，同一名称只列一次，金额占比按第三方相应金额为分母；分类标签合并展示本期实际交易组合命中的类型，不把不同本方的客户和供应商身份自动合成客商一体；左侧分类表和柱图按本方单位＋对手方组合匹配客商主档；同一组合同时命中两表时，该组合流水交叉计入客户、供应商及客商一体。左侧关联性质仍按名称判断。本节流入、流出均剔除对手方名称为空的流水。');
  const cp=[...counterparties.values()];
  const cpForTypes=cp.filter(x=>x.named).map(x=>({...x,categories:new Set(categories.filter(c=>x.pairCategories.has(c)))}));
@@ -483,11 +501,15 @@ function compute(data,settings={}){
  });
  const thirdParties=cpForTypes.filter(x=>x.relationships.size===0);
  const thirdPartyTotals=totals(thirdParties);
- const thirdPartyHeaders=cpHeaders.map(h=>h==='交易占比'?'第三方交易占比':h.replace('占比','第三方占比'));
+ const thirdPartyHeaders=cpHeaders.map(h=>h==='交易占比'?'第三方交易占比':h.replace('占比','第三方占比'))
+  .concat('成立日期','社保人数','注册资本（人民币元）');
  for(const [dir,metric] of [['流入','in'],['流出','out']]){
   const ranked=sortBy(thirdParties.filter(x=>x[metric]>0),x=>x[metric]);
-  table(cpSection,dir+'第三方前20大对手方',thirdPartyHeaders,
-   ranking(ranked,thirdPartyTotals,20,thirdParties.filter(x=>x[metric]<=0)));
+  const rankedRows=ranking(ranked,thirdPartyTotals,20,thirdParties.filter(x=>x[metric]<=0)).map(row=>{
+   const profile=typeof row[0]==='number'&&!isPersonal(row[1])?profiles.get(row[1]):undefined;
+   return [...row,profile?.formed??'',R.value(profile,'insured',registryEnd,rates)??'',R.value(profile,'capital',registryEnd,rates)??''];
+  });
+  table(cpSection,dir+'第三方前20大对手方',thirdPartyHeaders,rankedRows);
  }
  const relatedSection=section('related','2.2 关联方资金流水分析（以下数据分析是依据系统中关联方主档名单进行汇总）','关联组合按被审计单位公司名称＋关联方名称去重，不按关联关系类型或重复主档行重复计数。在已有主档组合基础上，自动补齐不同被审计单位之间的有向关联组合（X→Y和Y→X分别计一组），不自动增加自身组合，也不扩展第三方关系。组合数量使用“组”，不同关联方名称数量使用“个”。本节交易按本方被审计单位名称＋对手方名称匹配主档，未命中的本方交易不计入。先筛选命中流水，再按对手方汇总并取前20大。类型为空为其他；同一组合多种类型分别计入对应类型，交易合计和排名不重复。交易统计仍剔除合并范围内往来。');
  const rels=[...related.values()];
@@ -511,15 +533,11 @@ function compute(data,settings={}){
  table(relatedSection,'关联组合数量核验',['指标','数量'],[['主档不同关联方名称数量（个）',masterRelatedNames.size],['主档去重关联组合数量（组）',masterPairCount],['自动补齐被审计单位间组合（组）',relationPairs.size-masterPairCount],['有效关联组合数量（组）',relationPairs.size]]);
  table(relatedSection,'关联组合明细',['被审计单位公司名称','关联方名称','组合来源'],[...relationPairs.values()]);
 
- const R=g.AuditRegistry;
  const compliance=section('compliance-checks','2.3.1 交易对手方合规事项分析','汇总本期合并范围外对手方的黑名单、失信被执行人及行政处罚命中情况。失信和行政处罚按对手方全称关联企业工商档案。');
  const registrySection=section('registry','2.3.2 交易对手方工商信息分析','按对手方全称关联工商档案，只统计本期有交易的范围外企业。名称去掉首尾空格后不超过4个字符的非空对手方，以及识别为员工或董监高的对手方，即使有工商档案也不计入工商分类和工商合规指标。经营天数＝报告结束日期－导入的经营开始时间，按自然日日期差计算，不额外加一天；不读取导入原经营天数作为计算结果，不反推或修改经营开始时间，也不按经营结束时间截断。原经营天数仅保留供对照。经营日期独立于报告导出期间；所有区间统一包含下限、不包含上限，最后一档为大于等于最后分界值。经营时长按365天折算1年；恰好3年、100人和注册资本1百万分别归入最后一档。注册资本按人民币归档。工商区间图表仅统计对应字段有有效数值的本期范围外对手方，缺失或无效字段不参与该图的金额及占比计算。');
- const registryEnd=settings.registryAsOf||to;
  const registryHitGroups=[];
  registrySection.overviewHighlights={};
- const profiles=new Map((settings.registry||[]).map(r=>[clean(r.name),r]));
  const originalProfiles=new Map((settings.registryOriginal||settings.registry||[]).map(r=>[clean(r.name),r]));
- const isPersonal=name=>isShortCounterpartyName(name)||knownPersonalNames.has(name);
  const enterprise=cp.filter(x=>x.name!=='【对手方为空】'&&!isPersonal(x.name));
  const matched=enterprise.filter(x=>profiles.has(x.name));
  const flagged=cp.filter(x=>x.black);
@@ -716,7 +734,9 @@ function natureCardHTML(card){
   '<p class="report-large-line report-large-group">涉及<span class="report-large-scope">'+esc(label)+
   '</span>对手方个数/交易总额/交易笔数：<strong class="report-large-red">'+
   integer(parties)+'家/'+total({amount,count})+'</strong></p>'
- ).join('');
+ ).join('')+
+  '<p class="report-large-line report-large-group">涉及<span class="report-large-scope">对手方为空</span>'+
+  '交易总额/交易笔数：<strong class="report-large-red">'+total(card.blankCounterparty)+'</strong></p>';
  const overview='<div class="report-large-card"><p class="report-large-line report-large-condition">'+esc(card.condition)+'</p>'+
   '<p class="report-large-line report-large-overview-metrics">交易总额/交易笔数：<strong class="report-large-value">'+total(card)+'</strong></p>'+
   '<p class="report-large-line">涉及被审计单位：<strong class="report-large-company">'+integer(card.companies)+' 家</strong></p></div>';
@@ -726,6 +746,7 @@ function natureCardHTML(card){
 function tableCell(value,header){
  if(header==='未识别客商关系'&&value==='未识别')return '<span class="report-unidentified">未识别</span>';
  if(header==='状态'&&['已上传','部分缺失','未上传'].includes(value))return '<span class="report-status" data-status="'+esc(value)+'">'+esc(value)+'</span>';
+ if(typeof value==='number'&&/^注册资本（人民币元）$/.test(header))return currency.format(value);
  if(typeof value==='number'&&/占比|比例/.test(header))return (100*value).toFixed(2);
  if(typeof value==='string'&&header.includes('%')&&/区间|占比|比例/.test(header))return esc(value.replace(/(\d)%/g,'$1'));
  return display(value,header);
@@ -744,9 +765,12 @@ function detailRowsHTML(t,rows){
    if(groupSize&&index%groupSize!==0)return '';
    const rowspan=groupSize?' rowspan="'+Math.min(groupSize,rows.length-index)+'"':'';
    const numeric=typeof value==='number';
-   const countOrShare=value!==''&&value!=null&&/笔数|占比/.test(h);
-   const monetary=numeric&&/金额|余额|交易总额|^(注册资本|实缴资本)/.test(h)&&!/占比|笔数/.test(h)||h==='本期结果'&&/金额/.test(r[0]);
-   return '<td'+rowspan+' class="'+[numeric?'report-num':'',monetary?'report-amount':'',countOrShare?'report-count-share':''].filter(Boolean).join(' ')+'">'+tableCell(value,h)+'</td>';
+   const countOrShare=value!==''&&value!=null&&(
+    /笔数|占比/.test(h)||t.rightAlignCount&&/^(对手方数量|人数（人）|社保人数)$/.test(h)||
+    h==='本期结果'&&r[0]==='识别对手方数'
+   );
+   const monetary=numeric&&(t.amountMatrix||/金额|余额|交易总额|^(注册资本|实缴资本)/.test(h)&&!/占比|笔数/.test(h))||h==='本期结果'&&/金额/.test(r[0]);
+   return '<td'+rowspan+' class="'+[numeric?'report-num':'',monetary?'report-amount':'',countOrShare?'report-count-share':''].filter(Boolean).join(' ')+'">'+(t.amountMatrix&&numeric?currency.format(value):tableCell(value,h))+'</td>';
   });
   if(subtotal)cells.unshift('<td colspan="'+amountColumn+'">'+esc(r[0])+'</td>');
   return '<tr'+(category?' class="report-category-band"':total?' class="report-total"':muted?' class="report-person-muted"':'')+'>'+cells.join('')+'</tr>';
@@ -861,7 +885,7 @@ function chartAndTable(chart,tables,criteria,{chartTitle,showTableCaption=true,s
    (criteria?criteriaForm(filterGroup,criteria):'')+condition+screenResultHTML(r)+'</div>';
  }
  const headers=registryDimension?[registryDimension,...table.headers.slice(1)]:table?.headers;
- return stackedHTML(chartTitle?{...chart,name:chartTitle}:chart,undefined,{summaryTarget,captionClass})+(table?tableHTML({...table,headers,columnWidths,hideTitle:!showTableCaption}):'')+
+ return stackedHTML(chartTitle?{...chart,name:chartTitle}:chart,undefined,{summaryTarget,captionClass})+(table?tableHTML({...table,headers,columnWidths,rightAlignCount:true,hideTitle:!showTableCaption}):'')+
   (showBoundaryNote&&chart.boundaryNote?'<p class="report-boundary-note">'+esc(chart.boundaryNote)+'</p>':'')+results;
 }
 function trendHTML(t){
@@ -911,9 +935,9 @@ function coverHTML(s){
  const statusRows=status.rows.filter(r=>r[0]!=='总账科目余额表').map(r=>{
   const hint=missingImpacts[r[0]];
   return '<tr>'+[0,1,3].map(i=>'<td'+(i===1?' title="'+esc(r[4])+'"':'')+'>'+tableCell(r[i],status.headers[i])+
-   (i===0&&hint?'<span class="report-cover-impact">　'+esc(hint)+'</span>':'')+'</td>').join('')+'</tr>';
+   '</td>').join('')+'<td>'+esc(hint)+'</td></tr>';
  }).join('');
- return '<table class="report-cover-grid"><tbody>'+info.map(row).join('')+'<tr><th scope="row">分析数据范围</th><td><div class="table-scroll"><table class="report-cover-status"><colgroup><col style="width:57%"><col style="width:16%"><col style="width:27%"></colgroup><thead><tr>'+[0,1,3].map(i=>'<th>'+esc(status.headers[i])+'</th>').join('')+'</tr></thead><tbody>'+statusRows+'</tbody></table></div></td></tr>'+row(version)+'</tbody></table><div class="report-cover-notes"><b>本报告数据展示说明</b><p>本报告仅展示特定指标的汇总分析，以及重点内容的前20大清单。特定分析事项的完整清单请见本报告附录Excel文件。依据交易对手方汇总的资金流水全量分析，请见同报告一同导出的&lt;资金流水核查和工商信息汇总明细附件.xlsx&gt;。</p><b>报告说明</b><p>本报告是由毕马威审计罗盘平台输出生成，基于对项目组上传的资金交易明细，通过平台设定的数据分析方法，帮助项目组对被审计单位进行风险画像，以及识别包括集中度高、可能存在潜在舞弊风险的交易对手方及相关交易。该报告属于审计风险评价的一部分，不构成任何实质性审计证据或审计意见。</p></div>';
+ return '<table class="report-cover-grid"><tbody>'+info.map(row).join('')+'<tr><th scope="row">分析数据范围</th><td><div class="table-scroll"><table class="report-cover-status"><colgroup><col style="width:20%"><col style="width:12%"><col style="width:20%"><col style="width:48%"></colgroup><thead><tr>'+[0,1,3].map(i=>'<th>'+esc(status.headers[i])+'</th>').join('')+'<th>说明</th></tr></thead><tbody>'+statusRows+'</tbody></table></div></td></tr>'+row(version)+'</tbody></table><div class="report-cover-notes"><b>本报告数据展示说明</b><p>本报告仅展示特定指标的汇总分析，以及重点内容的前20大清单。特定分析事项的完整清单请见本报告附录Excel文件。依据交易对手方汇总的资金流水全量分析，请见同报告一同导出的&lt;资金流水核查和工商信息汇总明细附件.xlsx&gt;。</p><b>报告说明</b><p>本报告是由毕马威审计罗盘平台输出生成，基于对项目组上传的资金交易明细，通过平台设定的数据分析方法，帮助项目组对被审计单位进行风险画像，以及识别包括集中度高、可能存在潜在舞弊风险的交易对手方及相关交易。该报告属于审计风险评价的一部分，不构成任何实质性审计证据或审计意见。</p></div>';
 }
 function concentrationHTML(t,{outline=false}={}){
  const groups=['流入','流出'].map(direction=>{
@@ -932,10 +956,11 @@ function concentrationHTML(t,{outline=false}={}){
    }).join('')+'</tr>'
   ).join('')+'</tbody>';
  });
+ const hint=outline?'<p class="report-section-hint report-concentration-hint">提示：请项目组重点关注客户流出、供应商流入、以及客商一体和非客商的交易，其中非客商交易的进一步分析请见本报告2.3.4</p>':'';
  return subhead(t.name)+'<div class="table-scroll"><table class="report-concentration"><thead><tr><th rowspan="2">方向</th><th rowspan="2">分布</th><th rowspan="2">性质</th>'+
   categories.map(c=>'<th scope="colgroup" colspan="3">'+esc(c)+'</th>').join('')+'</tr><tr>'+
   categories.map(()=>'<th>金额（百万）</th><th>笔数（笔）</th><th>占比（%）</th>').join('')+'</tr></thead>'+
-  groups.join('')+'</table></div>';
+  groups.join('')+'</table></div>'+hint;
 }
 
 function criteriaForm(group,criteria,bounds){
@@ -984,7 +1009,7 @@ function sectionBody(s,m,continuations){
   return sideBySide([company,bank],'report-scope-panes report-scope-v2 report-stat-rule');
  }
  if(s.id==='features'){
-  const breakdown=(c,i)=>stackedHTML(c,undefined,{highlightTitle:i<2,showEmptyNote:false})+tableHTML({
+  const breakdown=(c,i)=>stackedHTML(c,undefined,{highlightTitle:true,showEmptyNote:false})+tableHTML({
    name:'单笔交易金额分布',hideTitle:true,headers:['单笔交易',...totalHeaders],rows:c.amountBands
   })+natureReference(i<2?'1.2.1':'1.2.2');
   const [blankParty,blankMemo]=tables.slice(-2);
@@ -1017,7 +1042,8 @@ function sectionBody(s,m,continuations){
  if(s.id==='concentration'){
   const [,relatedTable,thirdPartyTable]=tables;
   continuations.push('<div class="report-concentration-third-party">'+concentrationHTML(thirdPartyTable,{outline:true})+'</div>');
-  return trendHTML(s.trend)+concentrationHTML({...relatedTable,name:relatedTable.name+'（关联方交易详情见2.2）'});
+  return '<div class="report-concentration-overview">'+tableHTML({...s.flowOverview,hideTitle:true,amountMatrix:true})+'</div>'+
+   trendHTML(s.trend)+concentrationHTML({...relatedTable,name:relatedTable.name+'（关联方交易详情见2.2）'});
  }
  if(s.id==='counterparties'){
   const layouts=tables.slice(1).map((t,i)=>{
@@ -1031,7 +1057,7 @@ function sectionBody(s,m,continuations){
    const plot=stackedHTML({...charts[0],name:direction+'金额分布'},i);
    return {
     overview:sideBySide([plot,tableHTML(summary)],'report-counterparty-summary'),
-    ranking:'<div class="report-counterparty-ranking">'+tableHTML({...t,limit:23,counterpartyRanks:true})+'</div>'
+    ranking:'<div class="report-counterparty-ranking">'+tableHTML({...t,limit:23,counterpartyRanks:true,rightAlignCount:true})+'</div>'
    };
   });
   const [inflow,outflow]=layouts;
@@ -1085,7 +1111,7 @@ function sectionBody(s,m,continuations){
    extra('其他工商区间',sideBySide(more.map(c=>chartAndTable(c,tables))))+
    extra('本期工商匹配明细',tableHTML(tables.at(-2)));
  }
- if(s.id==='people')return tableHTML({...tables[0],hideTitle:true})+
+ if(s.id==='people')return tableHTML({...tables[0],hideTitle:true,rightAlignCount:true})+
   extra('个人交易明细',tableHTML(tables[1]));
  if(s.id==='follow')return sideBySide(charts.map((c,i)=>{
   const r=tables[0].rows[i],group=i?'unknown':'overlap';
@@ -1113,11 +1139,20 @@ function headingTitleHTML(title,body=true,mainChapter=false){
  const highlighted=title.startsWith('2.3 ')?main.replace('重点','<span class="report-title-emphasis">重点</span>'):main;
  return highlighted+(reduceNote?'<span class="'+(mainChapter?'report-chapter-note':'report-subhead-note')+'">'+esc(title.slice(split))+'</span>':'');
 }
+const merchantListHint='如项目组未在审计罗盘系统中上传完整的客户清单和供应商清单，则本报告下述统计结果可能会受影响。';
+const sectionHints={
+ counterparties:merchantListHint,
+ follow:merchantListHint,
+ related:'如项目组未在审计罗盘系统中上传完整的关联方清单，则本报告下述统计结果可能会受影响。',
+ registry:'如项目组未在审计罗盘系统中获取全部对手方的工商信息，则本报告下述统计结果可能会受影响。',
+ people:'如项目组未在审计罗盘系统中上传完整的员工清单和关联方董监高清单，则本报告下述统计结果可能会受影响。'
+};
 function reportSection(s,m,continuations){
  const tag=s.id==='cover'?'h2':'h3';
  const personScope=s.id==='people'?'<span class="report-person-scope">（对手方名称小于等于四个字）</span>':'';
  const chapter=chapterFor(s,m);
- return (chapter?'<h2 class="report-chapter">'+headingTitleHTML(chapter,true,true)+'</h2>':'')+'<section class="report-section" id="report-'+s.id+'"'+(s.id==='people'?' data-summary-target':'')+'>'+(s.id==='cover'?'<div class="report-masthead"><span>毕马威审计罗盘</span></div>':'')+'<'+tag+'>'+headingTitleHTML(s.title)+personScope+'</'+tag+'>'+sectionBody(s,m,continuations)+'</section>';
+ const hint=sectionHints[s.id]?'<p class="report-section-hint">提示：'+esc(sectionHints[s.id])+'</p>':'';
+ return (chapter?'<h2 class="report-chapter">'+headingTitleHTML(chapter,true,true)+'</h2>':'')+'<section class="report-section" id="report-'+s.id+'"'+(s.id==='people'?' data-summary-target':'')+'>'+(s.id==='cover'?'<div class="report-masthead"><span>毕马威审计罗盘</span></div>':'')+'<'+tag+'>'+headingTitleHTML(s.title)+personScope+'</'+tag+'>'+hint+sectionBody(s,m,continuations)+'</section>';
 }
 function amountLabels(text,code){
  const converted=text.replaceAll('百万元','百万');
@@ -1178,12 +1213,12 @@ function executiveSummaryHTML(m){
    '<p class="report-executive-metrics"><strong class="report-executive-value'+(count?' report-executive-hit':'')+'">'+
    (available?integer(count)+' '+unit:missingValue)+'</strong>　交易总额 '+strong(money(amount),available&&amount)+'</p>'+
    flow('流入',inflow,inCount,'in')+flow('流出',outflow,outCount,'out')+
-   '<p class="report-executive-condition"><span class="report-executive-origin">'+origin+'</span> '+esc(condition)+'</p>'+
+   (condition?'<p class="report-executive-condition"><span class="report-executive-origin">'+origin+'</span> '+esc(condition)+'</p>':'')+
    highlight+link+'</article>';
  };
- const highlight=(item,{basis='交易总额最高',ratio=false,named=false,flows=false,available=true}={})=>{
+ const highlight=(item,{basis='交易总额最高',ratio=false,named=false,flows=false}={})=>{
   if(!item)return '<p class="report-executive-highlight">'+
-   (!available?'本期暂无可核对的数据':named?'本期无符合条件的非空对手方':'本期无符合条件的对手方')+'</p>';
+   (named?'本期无符合条件的非空对手方':'本期无符合条件的对手方')+'</p>';
   const measure=ratio?(item.measure*100).toFixed(2)+'%':currency.format(item.measure)+' 百万';
   return '<div class="report-executive-result"><p class="report-executive-highlight">'+basis+' '+strong(measure,true)+'</p>'+
    '<p class="report-executive-representative">'+esc(item.name)+'</p>'+
@@ -1191,13 +1226,12 @@ function executiveSummaryHTML(m){
  };
  const cardRow=cards=>sideBySide(cards,'report-three report-executive-row');
  const complianceCards=[
-  ['黑名单','blacklist','本期有交易且命中黑名单'],
-  ['失信被执行人','dishonest','工商档案标记为失信被执行人'],
-  ['行政处罚','penalties','工商档案中有行政处罚记录']
- ].map(([label,target,condition])=>{
+  ['黑名单','blacklist'],['失信被执行人','dishonest'],['行政处罚','penalties']
+ ].map(([label,target])=>{
   const known=typeof compliance.tables[0].rows.find(row=>row[0]===label)?.[1]==='number';
-  return card({label,target,section:'compliance-checks',number:'2.3.1',metrics:known?compliance.results[label]:[null],condition,
-   highlight:highlight(compliance.overviewHighlights[label],{available:known})});
+  const winner=compliance.overviewHighlights[label];
+  return card({label,target,section:'compliance-checks',number:'2.3.1',metrics:known?compliance.results[label]:[null],
+   highlight:winner?highlight(winner):''});
  });
  const registryCards=[['经营时间','days','registryDays'],['社保人数','insured','registryInsured'],['注册资本','capital','registryCapital']]
   .map(([label,id,filter],i)=>card({label,target:'registry-'+id,section:'registry',number:'2.3.2',

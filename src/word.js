@@ -42,10 +42,10 @@ function headingTextRuns(title,options,emphasize=false){
  const parts=emphasize?title.split(/(重点)/):[title];
  return parts.filter(Boolean).map(part=>new D.TextRun({text:part,font,...options,color:emphasize&&part==='重点'?'C00000':options.color}));
 }
-function paragraph(text,{heading,align,bold=false,color=theme.ink,size=18,characterSpacing,bookmark,runs,spacing={after:65,line:240},snapToGrid,pageBreakBefore}={}){
+function paragraph(text,{heading,align,bold=false,color=theme.ink,size=18,characterSpacing,bookmark,runs,spacing={after:65,line:240},snapToGrid,pageBreakBefore,keepNext=!!heading}={}){
  return new D.Paragraph({
   ...(heading?{heading}:{}),
-  alignment:align,spacing,snapToGrid,pageBreakBefore,keepNext:!!heading,
+  alignment:align,spacing,snapToGrid,pageBreakBefore,keepNext,
   children:bookmark?[new D.Bookmark({id:bookmark,children:runs||[new D.TextRun({text:String(text??''),font,size,bold,color,characterSpacing})]})]:(runs||[new D.TextRun({text:String(text??''),font,size,bold,color,characterSpacing})])
  });
 }
@@ -164,22 +164,23 @@ function coverHeadingBlocks(width,heading,spacing){
    columnSpan:2,width:{size:width,type:D.WidthType.DXA},shading:{fill:theme.navy},
    margins:{top:0,bottom:0,left:coverSidePadding,right:coverSidePadding},
    children:[new D.Paragraph({
-    spacing:{before:0,after:0,line:240,lineRule:D.LineRuleType.EXACT},
+    snapToGrid:false,spacing:{before:0,after:0,line:210,lineRule:D.LineRuleType.EXACT},
     children:[new D.TextRun({text:' ',font,size:2})]
    })]
   })]})]
  });
  return [
   stripe,
-  paragraph(heading.brand,{bold:true,color:theme.accent,size:24,spacing:{before:spacing.headingTop,after:40,line:250}}),
+  paragraph(heading.brand,{bold:true,color:theme.accent,size:24,snapToGrid:false,spacing:{before:spacing.headingTop,after:25,line:260,lineRule:D.LineRuleType.EXACT}}),
   paragraph(text(heading.title),{heading:D.HeadingLevel.TITLE,bold:true,color:theme.navy,size:38,
-   runs:styledHeadingRuns(heading.title,{size:38,noteSize:28,color:theme.navy}),spacing:{before:0,after:spacing.headingBottom,line:360}})
+   runs:styledHeadingRuns(heading.title,{size:38,noteSize:28,color:theme.navy}),snapToGrid:false,spacing:{before:0,after:spacing.headingBottom,line:420,lineRule:D.LineRuleType.EXACT}})
  ];
 }
 // Give company names and account numbers enough width for the top-20 detail pages.
 const largeDetailWidths=[24,78,83,71,83,83,55,46,30,57,57,44,74].map(n=>n/785);
 const v2LargeDetailWidths=[24,96,84,54,105,84,49,42,29,56,56,38,68].map(n=>n/785);
 const v2CounterpartyWidths=[27,178,62,73,43,48,39,45,48,39,45,49,43,46].map(n=>n/785);
+const v2ThirdPartyRankWidths=[23,143,51,48,29,41,32,39,41,32,39,41,33,39,52,36,56].map(n=>n/775);
 const sectionRankColumnWeights={
  '排名':27,'对手方名称':120,'客商分类':76,'关联关系':86,'黑名单':48,'个人类型':53,
  '诉讼案件数量':54,'行政处罚数量':54,'失信被执行人':53,'经营天数':45,'所属行业':72,
@@ -217,25 +218,27 @@ async function table(node,width,context){
  const complianceRanks=sectionRanks&&context.sectionFit==='compliance-checks';
  const compactRows=largeDetail||counterpartyRanks||sectionRanks;
  const concentrationTable=context.sectionFit==='concentration'&&node.classList.contains('report-concentration');
+ const concentrationOverview=!!node.closest('.report-concentration-overview');
  const peoplePage=context.sectionFit==='people';
  const peopleSummary=peoplePage&&!sectionRanks;
  const peopleRanks=peoplePage&&sectionRanks;
  const rowPadding=cover
   ?(node.classList.contains('report-cover-status')?context.coverSpacing.status:context.coverSpacing.table)
-  :registryResults?24:narrowDistribution?18:detailLayout?detailLayout.padding:concentrationTable?20:peopleSummary?44:directionPage?16:complianceRanks?17:peopleRanks?19:relatedRanks?22:context.sectionFit==='features'?48:context.sectionFit?30:compactRows?23:context?.natureGroup?85:context.compactOverview?27:45;
+  :registryResults?24:narrowDistribution?18:detailLayout?detailLayout.padding:concentrationOverview?15:concentrationTable?16:peopleSummary?44:directionPage?16:complianceRanks?17:peopleRanks?19:relatedRanks?22:context.sectionFit==='features'?48:context.sectionFit?30:compactRows?23:context?.natureGroup?85:context.compactOverview?27:45;
  const sidePadding=cover?coverSidePadding:narrowDistribution?10:directionPage||relatedRanks||overviewDistribution?30:55;
  const coverFrame=cover&&node.classList.contains('report-cover-grid');
  const natureRowSpan=node.closest('.report-counterparty-summary')&&Number(node.tBodies[0]?.rows[0]?.cells[0]?.rowSpan)>1
   ?node.tBodies[0].rows[0].cells[0].rowSpan:0;
  const alignDataCells=context.wordV2&&!coverFrame;
  const customWidths=node.classList.contains('report-cover-grid')?[.23,.77]
-  :node.classList.contains('report-cover-status')?(context.wordV2?[.57,.16,.27]:[.40,.22,.38])
+  :node.classList.contains('report-cover-status')?(context.wordV2?columnWidths:[.40,.22,.38])
   :largeDetail?(detailLayout?v2LargeDetailWidths:largeDetailWidths)
   :flowSummary?[.25,.13,.085,.09,.13,.085,.09,.14]
   :registryResults?[.44,.56]
   :columnWidths.length===columns?columnWidths
   :narrowDistribution?[.103,.127,.162,.116,.107,.162,.116,.107]
   :overviewDistribution?[.114,.117,.145,.11,.129,.145,.11,.13]
+  :directionPage&&counterpartyRanks&&columns===v2ThirdPartyRankWidths.length?v2ThirdPartyRankWidths
   :relatedRanks||directionPage&&counterpartyRanks?v2CounterpartyWidths
   :counterpartyRanks?[.033,.171,.083,.11,.057,.071,.047,.052,.071,.047,.052,.082,.06,.064]
   :sectionRanks?sectionRankWidths(rows[0],complianceRanks):null;
@@ -254,6 +257,8 @@ async function table(node,width,context){
    children:await Promise.all([...row.cells].map(async (cell,i)=>{
     const header=cell.tagName==='TH',total=row.classList.contains('report-total'),categoryBand=row.classList.contains('report-category-band');
     const muted=row.classList.contains('report-person-muted');
+    const flowTotal=concentrationOverview&&!header&&i===1;
+    const flowLabel=concentrationOverview&&!header&&i===0;
     if(matchDetailFrame&&cell.matches('.report-nature-summary-cell')){
      return new D.TableCell({
       columnSpan:columns,width:{size:tableWidth,type:D.WidthType.DXA},shading:{fill:'F7F9FC'},
@@ -261,7 +266,7 @@ async function table(node,width,context){
       children:await blocks(cell,tableWidth-370,context)
      });
     }
-    const cellFontSize=peopleSummary?16:peoplePage||concentrationTable||relatedRanks||directionPage?(denseRanks&&i===1&&!header?13:14):narrowDistribution?(header?12:14):overviewDistribution&&header?14:registryResults?15:detailLayout?detailLayout.fontSize:undefined;
+    const cellFontSize=peopleSummary?16:peoplePage||concentrationTable||concentrationOverview||relatedRanks||directionPage?(denseRanks&&i===1&&!header?13:14):narrowDistribution?(header?12:14):overviewDistribution&&header?14:registryResults?15:detailLayout?detailLayout.fontSize:undefined;
     const rowOffset=header&&headerStart&&row.sectionRowIndex===headerStart.sectionRowIndex+1&&spanWidths
      ?[...headerStart.cells].findIndex(cell=>cell.rowSpan===1)
      :natureRowSpan&&row.parentElement.tagName==='TBODY'&&row.sectionRowIndex%natureRowSpan!==0?1:0;
@@ -282,13 +287,13 @@ async function table(node,width,context){
      width:{size:cellWidth,type:D.WidthType.DXA},columnSpan:cell.colSpan,rowSpan:cell.rowSpan,
      margins:{top:rowPadding,bottom:rowPadding,left:sidePadding,right:sidePadding},
      verticalAlign:alignDataCells||narrowDistribution||registryResults||detailLayout?'center':undefined,
-     ...(outline?{borders:Object.fromEntries(outline.map(edge=>[edge,{...border,color:'C00000',size:10}]))}:
+     ...(outline?{borders:Object.fromEntries(outline.map(edge=>[edge,{...border,color:'C00000',size:16}]))}:
       categoryBand?{borders:{top:{...border,color:'91A9C6',size:6}}}:{}),
-     shading:muted?{fill:'F1F2F4'}:status?{fill:status.fill}:categoryBand?{fill:'F1F5F9'}:header||total?{fill:header?theme.fill:theme.total}:narrowDistribution&&rowIndex%2===0?{fill:'F6F9FD'}:undefined,
+     shading:muted?{fill:'F1F2F4'}:status?{fill:status.fill}:categoryBand?{fill:'F1F5F9'}:header||total||flowLabel?{fill:header?theme.fill:theme.total}:narrowDistribution&&rowIndex%2===0?{fill:'F6F9FD'}:undefined,
      children:await blocks(cell,Math.max(200,cellWidth-120),{
       cell:true,wordV2:context?.wordV2,coverSpacing:context?.coverSpacing,compactRows,compactOverview:context.compactOverview,
       registryResults,narrowDistribution,detailLayout,sectionFit:context.sectionFit,cellLine:peopleSummary?235:peopleRanks?185:relatedRanks?210:complianceRanks?176:denseRanks?181:undefined,rangeText,cellFontSize,characterSpacing:narrowDistribution&&header?-8:undefined,
-      largeDetail:largeDetail||sectionRanks,bold:header||total||categoryBand||!!status,color:muted?'6E7681':unidentified?'C00000':status?.text||(header||categoryBand?theme.heading:theme.ink),align
+      largeDetail:largeDetail||sectionRanks,bold:header||total||categoryBand||flowTotal||!!status,color:muted?'6E7681':unidentified?'C00000':status?.text||(header||categoryBand?theme.heading:theme.ink),align
      })
     });
    }))
@@ -301,15 +306,10 @@ function focusCardTitle(node){
   spacing:{before:0,after:65,line:252}});
 }
 async function blocks(node,width,context={}){
- const hint=context.cell&&node.querySelector(':scope > .report-cover-impact');
- if(hint){
-  const runs=[...node.childNodes].map(part=>new D.TextRun({
-   text:part.textContent,font,size:part===hint?14:context.coverSpacing.tableSize,
-   color:part===hint?theme.muted:theme.ink
-  }));
-  return [paragraph('',{runs,spacing:{after:0,line:230,lineRule:D.LineRuleType.EXACT}})];
- }
  const out=[];
+ const coverCellSpacing=context.coverSpacing&&context.cell?{
+  before:0,after:0,line:context.coverSpacing.tableLine,lineRule:D.LineRuleType.EXACT
+ }:undefined;
  const tableLine=context.cellLine??({concentration:190,features:244,people:195,counterparties:190}[context.sectionFit]??214);
  const detailSpacing=(context.detailLayout||context.sectionFit||context.cellLine)&&{
   before:0,after:context.cell?0:42,line:context.cell?(context.detailLayout?.line??tableLine):240,lineRule:D.LineRuleType.EXACT
@@ -320,8 +320,8 @@ async function blocks(node,width,context={}){
     const cover=context.coverSpacing;
     out.push(paragraph(context.rangeText??child.textContent.trim(),{
      bold:context.bold,color:context.color,align:context.align,characterSpacing:context.characterSpacing,size:context.cell?(context.cellFontSize??cover?.tableSize??(context.largeDetail?14:15)):18,
-     snapToGrid:detailSpacing?false:undefined,
-     spacing:detailSpacing??(cover&&context.cell?{after:0,line:230,lineRule:D.LineRuleType.EXACT}:context.registryResults||context.narrowDistribution?{after:0,line:205}:context.compactRows?{after:0,line:205}:context.compactOverview?{after:25,line:220}:undefined)
+     snapToGrid:detailSpacing||coverCellSpacing?false:undefined,
+     spacing:detailSpacing??coverCellSpacing??(context.registryResults||context.narrowDistribution?{after:0,line:205}:context.compactRows?{after:0,line:205}:context.compactOverview?{after:25,line:220}:undefined)
     }));
    }
    continue;
@@ -337,6 +337,12 @@ async function blocks(node,width,context={}){
    out.push(await table(sourceTable,width,context));
    const notes=child.querySelector('.report-cover-notes');
    out.push(...await blocks(notes,width,context));
+   continue;
+  }
+  if(child.matches('.report-section-hint')){
+   const priority=child.matches('.report-concentration-hint');
+   out.push(paragraph(text(child),{size:16,color:priority?'C00000':theme.muted,snapToGrid:false,
+    keepNext:!priority,spacing:{before:priority?30:0,after:priority?0:65,line:195,lineRule:D.LineRuleType.EXACT}}));
    continue;
   }
   if(child.matches('#report-executive-summary > h2')){
@@ -417,7 +423,7 @@ async function blocks(node,width,context={}){
     const color=emphasized?theme.accent:context.natureGroup?'000000':theme.heading,size=context.natureGroup?20:emphasized?22:16;
     out.push(paragraph(text(caption),{bold:true,color,size,runs:styledHeadingRuns(caption,{size,color}),bookmark:caption.hasAttribute('data-summary-target')?summaryBookmark(caption.id):undefined,spacing:context.natureGroup?{after:20,line:220}:undefined}));
    }
-   const chartLayout=child.matches('.report-concentration-chart')?{maxPlotHeight:context.sectionFit==='concentration'?154:245,legendWidth:680,
+   const chartLayout=child.matches('.report-concentration-chart')?{maxPlotHeight:context.sectionFit==='concentration'?126:245,legendWidth:680,
     legendMarkerSize:context.sectionFit==='concentration'?9:5}
     :context.sectionFit==='features'?{maxPlotHeight:195}
     :context.sectionFit==='registry'?{maxPlotHeight:173}
@@ -560,14 +566,23 @@ async function blocks(node,width,context={}){
       const runs=[],color=context.color||theme.ink;
       const visit=(node,heavy=false)=>{if(node.nodeType===3){runs.push(new D.TextRun({text:node.textContent,font,size:natureFigures&&heavy?22:runSize,bold:!!bold||heavy,color}));return;}for(const part of node.childNodes)visit(part,heavy||['STRONG','B'].includes(node.tagName));};
       visit(temp);out.push(paragraph('',{runs,color,align:context.align,size,snapToGrid:detailSpacing?false:undefined,spacing:natureFigures?{...detailSpacing,line:265}:detailSpacing??(registry?{after:30,line:220}:undefined)}));
-     }else out.push(paragraph(value,{bold,color:context.color,align:context.align,size,snapToGrid:detailSpacing?false:undefined,spacing:detailSpacing??(spaciousCover?{before:!context.cell&&bold?context.coverSpacing.noteTop:0,after:context.cell?36:context.coverSpacing.noteAfter,line:context.cell?230:270}:context.compactOverview?{after:25,line:220}:undefined)}));
+     }else{
+      const coverNoteSpacing=spaciousCover&&!context.cell?{
+       before:bold?context.coverSpacing.noteTop:0,after:bold?25:context.coverSpacing.noteAfter,
+       line:context.coverSpacing.noteLine,lineRule:D.LineRuleType.EXACT
+      }:undefined;
+      out.push(paragraph(value,{bold,color:context.color,align:context.align,size,
+       snapToGrid:detailSpacing||coverCellSpacing||coverNoteSpacing?false:undefined,keepNext:!!coverNoteSpacing&&bold,
+       spacing:detailSpacing??coverCellSpacing??coverNoteSpacing??(context.compactOverview?{after:25,line:220}:undefined)}));
+     }
     }
    }
    continue;
   }
   out.push(...await blocks(child,width,context));
  }
- return out.length?out:[paragraph('',detailSpacing?{snapToGrid:false,spacing:detailSpacing}:undefined)];
+ const emptySpacing=detailSpacing??coverCellSpacing;
+ return out.length?out:[paragraph('',emptySpacing?{snapToGrid:false,spacing:emptySpacing}:undefined)];
 }
 function limitCoverCompanies(names){
  const charLimit=165;
@@ -591,8 +606,8 @@ function coverSpacingFor(page){
  const companyLength=rows[0]?.cells[1]?text(rows[0].cells[1]).length:0;
  const dense=companyLength>140||longest>450;
  return dense
-  ?{table:46,status:37,tableSize:14,noteSize:16,headingTop:90,headingBottom:55,noteTop:50,noteAfter:50}
-  :{table:72,status:53,tableSize:16,noteSize:18,headingTop:110,headingBottom:75,noteTop:70,noteAfter:65};
+  ?{table:36,status:26,tableSize:14,tableLine:190,noteSize:16,noteLine:220,headingTop:65,headingBottom:50,noteTop:45,noteAfter:25}
+  :{table:50,status:35,tableSize:16,tableLine:205,noteSize:18,noteLine:240,headingTop:80,headingBottom:60,noteTop:55,noteAfter:35};
 }
 async function report(model,template=g.AuditReport){
  const container=document.createElement('div');
@@ -654,7 +669,8 @@ async function report(model,template=g.AuditReport){
  const frontFooter=new D.Footer({children:[new D.Paragraph({spacing:{before:60},tabStops:[{type:D.TabStopType.CENTER,position:Math.floor(pageWidth/2)}],border:{top:{style:D.BorderStyle.SINGLE,size:4,color:theme.border}},children:[run('审计项目资料'),run('\t'+footerPeriod)]})]});
  const detailLayouts=[
    ['#report-large-external',{rowHeight:205,padding:15,fontSize:14,line:173,headingSpacing:{before:70,after:42,line:275}}],
-   ['#report-blank-memo',{rowHeight:184,padding:14,fontSize:14,line:170,headingSpacing:{before:65,after:32,line:275}}]
+   ['#report-blank-memo',{rowHeight:184,padding:14,fontSize:14,line:170,headingSpacing:{before:65,after:32,line:275}}],
+   ['#report-scope-appendix',{rowHeight:205,padding:17,fontSize:14,line:180}]
   ];
  const sections=[];let bodyStarted=false;
  for(const [pageIndex,page] of pages.entries()){

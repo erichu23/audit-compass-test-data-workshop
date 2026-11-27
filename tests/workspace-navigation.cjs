@@ -83,7 +83,9 @@ assert(v2WordHtml.includes('2.2 关联方资金流水分析<span class="report-s
 const executivePage=v2WordPages[1];
 assert(v2WordPages[0].includes('id="report-cover"')&&executivePage.includes('id="report-executive-summary"'));
 assert(v2WordPages[2].includes('class="report-toc"')&&v2WordPages[3]===scopePage);
-assert.equal((v2WordPages[0].match(/class="report-cover-impact"/g)||[]).length,4);
+assert(v2WordPages[0].includes('<th>最后更新时间</th><th>说明</th>'));
+assert.equal((v2WordPages[0].match(/<td>未上传影响/g)||[]).length,4);
+assert(!v2WordPages[0].includes('report-cover-impact'));
 assert.equal((executivePage.match(/report-three report-executive-row"/g)||[]).length,3);
 assert(!executivePage.includes('report-executive-group-title'));
 assert.equal((executivePage.match(/class="report-executive-card"/g)||[]).length,9);
@@ -94,7 +96,9 @@ assert(executivePage.includes('收支重合比例最高')&&executivePage.include
 const overviewWinners=report2.sections.find(s=>s.id==='follow').overviewHighlights;
 assert(overviewWinners.every(winner=>executivePage.includes('report-executive-representative">'+winner.name+'</p>')));
 const cardsWithMax=executivePage.split('<article class="report-executive-card">').slice(1);
-assert(cardsWithMax.every(card=>card.includes('最高')||card.includes('本期无符合条件')));
+assert(cardsWithMax.slice(0,3).every(card=>!card.includes('本期无符合条件')&&!card.includes('report-executive-condition')));
+assert(cardsWithMax.slice(3).every(card=>card.includes('report-executive-condition')));
+assert(cardsWithMax.slice(3).every(card=>card.includes('最高')||card.includes('本期无符合条件')));
 for(const id of ['compliance-checks','registry','people']){
  const section=report2.sections.find(s=>s.id===id);
  const winners=section.overviewHighlights?Object.values(section.overviewHighlights):[section.overviewHighlight];
@@ -107,7 +111,7 @@ assert(!executivePage.includes('同进同出'));
 assert(!executivePage.includes('命中对手方 ·'));
 for(const direction of ['流入','流出'])assert(executivePage.includes(direction+' <strong class="report-executive-flag">'));
 for(const direction of ['in','out'])assert.equal((executivePage.match(new RegExp('report-executive-flow report-executive-'+direction,'g'))||[]).length,9);
-assert.equal((executivePage.match(/report-executive-origin">系统默认/g)||[]).length,9);
+assert.equal((executivePage.match(/report-executive-origin">系统默认/g)||[]).length,6);
 const tunedSummary=ctx.AuditReportV2.render({...report2,criteria:{...report2.criteria,unknownAmount:500}},{forExport:true});
 assert.equal((tunedSummary.match(/report-executive-origin">项目组自定义/g)||[]).length,1);
 assert(summaryTargets.every(id=>v2WordHtml.includes('id="'+id+'" data-summary-target')));
@@ -164,6 +168,9 @@ assert(featuresPage.includes('class="report-nature-analysis"'));
 assert.equal((emptyTransactionsPage.match(/class="report-nature-detail-frame"/g)||[]).length,2);
 assert(featuresPage.indexOf('report-three report-nature-index')<featuresPage.indexOf('<h4 class="report-subhead">1.2.1'));
 assert(featuresPage.indexOf('report-large-scope">合并范围外')<featuresPage.indexOf('report-large-scope">合并范围内'));
+assert(featuresPage.indexOf('report-large-scope">合并范围内')<featuresPage.indexOf('report-large-scope">对手方为空'));
+assert(featuresPage.includes('<figcaption class="report-large-chart-title">交易对手方信息为空</figcaption>'));
+
 assert(featuresPage.includes('report-num report-count-share'));
 assert(!featuresPage.includes('有交易对手方：'));
 assert(emptyTransactionsPage.includes('<span class="report-subhead-note">（一般银行交易，通过批量支付）</span>'));
@@ -172,7 +179,6 @@ assert.equal((featuresPage.match(/<figcaption/g)||[]).length,3);
 assert.equal((featuresPage.match(/<table class="table"/g)||[]).length,3);
 assert.equal((featuresPage.match(/report-stat-rule report-large-overview"/g)||[]).length,1);
 assert(featuresPage.includes('report-nature-cards report-stat-rule'));
-assert(featuresPage.includes('<figcaption>交易对手方信息为空</figcaption>'));
 assert.equal((emptyTransactionsPage.match(/class="report-nature-inline"/g)||[]).length,2);
 const emptyFrames=[...emptyTransactionsPage.matchAll(/<thead><tr><td class="report-nature-summary-cell" colspan="8">([\s\S]*?)<\/td><\/tr><tr>/g)];
 assert.equal(emptyFrames.length,2);
@@ -226,6 +232,8 @@ const sample=vm.runInContext(`(()=>{
  return AuditReportV2.compute(books,{threshold:1e6});
 })()`,ctx);
 const sampleFeatures=findFeatures(sample);
+assert.equal(sampleFeatures.cards[0].blankCounterparty.amount,6);
+assert.equal(sampleFeatures.cards[0].blankCounterparty.count,1);
 const sampleCompliance=sample.sections.find(section=>section.id==='compliance-checks');
 assert.deepEqual(Array.from(sampleCompliance.tables[0].rows.find(row=>row[0]==='行政处罚').slice(1,3)),[0,0]);
 const {rows:classified}=sampleFeatures.externalTop20.table;
@@ -291,6 +299,24 @@ assert.equal(blankFullTotal[6],1);
 assert.equal(memoFullTotal[3],1);
 assert.equal(memoFullTotal[6],1);
 
+const concentrationRows=vm.runInContext(`(()=>{
+ const E=AuditEngine, books=structuredClone(data), flow=books[E.KEYS.flow];
+ const [entity,internal]=books[E.KEYS.company].rows.map(r=>r[0]);
+ const related='汇总样本关联方有限公司';
+ books[E.KEYS.related].rows=[[entity,internal,'同一控制方'],[entity,related,'其他']];
+ const source=flow.rows.find(r=>r[7]==='CNY');
+ flow.rows=[internal,related,'   ','汇总样本第三方有限公司',related].map((name,i)=>{
+  const row=source.slice(),incoming=(i+1)*1e6,outgoing=(i+6)*1e6;
+  Object.assign(row,{0:entity,3:name,4:'123456',5:i===4?'2024-12-31':'2025-03-01',7:'CNY',
+   8:incoming,9:incoming,10:outgoing,11:outgoing,15:'concentration-'+i});
+  return row;
+ });
+ const m=AuditReportV2.compute(books,{from:'2025-01-01',to:'2025-12-31'});
+ return AuditReportV2.workbook(m)['本期流入流出汇总'].rows;
+})()`,ctx);
+assert.deepEqual(Array.from(concentrationRows,r=>Array.from(r)),[
+ ['流入',10,1,2,3,4],['流出',30,6,7,8,9]
+]);
 const concentrationPage=v2WordPages.findIndex(page=>page.includes('id="report-concentration"'));
 assert(v2WordPages[2].includes('同时剔除交易对手方为空的数据'));
 assert(v2WordPages[concentrationPage].includes('同时剔除交易对手方为空的数据'));
@@ -298,6 +324,16 @@ assert(v2WordPages[concentrationPage].includes('关联方资金流水集中度<s
 assert(v2WordPages[concentrationPage+1].includes('第三方资金流水集中度'));
 assert(!v2WordPages[concentrationPage].includes('data-concentration-edges'));
 const thirdConcentration=v2WordPages[concentrationPage+1];
+assert(thirdConcentration.includes('</table></div><p class="report-section-hint report-concentration-hint">提示：请项目组重点关注'));
+for(const [id,phrase] of [
+ ['counterparties','上传完整的客户清单和供应商清单'],['related','上传完整的关联方清单'],
+ ['registry','获取全部对手方的工商信息'],['people','上传完整的员工清单和关联方董监高清单'],
+ ['follow','上传完整的客户清单和供应商清单']
+]){
+ const section=v2WordPages.find(page=>page.includes('id="report-'+id+'"'));
+ assert(section.match(/<\/h3><p class="report-section-hint">[^<]+/)[0].includes(phrase));
+}
+
 assert(!thirdConcentration.split('</thead>')[0].includes('data-concentration-edges'));
 const directionBodies=[...thirdConcentration.matchAll(/<tbody>(.*?)<\/tbody>/g)];
 for(const [i,body] of directionBodies.entries()){
@@ -350,7 +386,7 @@ const splitModel=vm.runInContext(`(()=>{
  const settings={start:'2020-01-01',insured:200,capital:2e6,paidIn:800000,currency:'CNY',cases:0,dishonest:'否',penalties:0,industry:'样本行业'};
  const registry=[
   {...settings,name:'合规筛选样本公司',dishonest:'是',penalties:1},
-  {...settings,name:'工商筛选样本公司',insured:5,start:'2025-06-01',capital:200000,paidIn:0},
+  {...settings,name:'工商筛选样本公司',formed:'2024-02-29',insured:5,start:'2025-06-01',capital:200000,paidIn:0},
   {...settings,name:'仅案号实缴样本公司',cases:2}
  ];
  return AuditReportV2.compute(books,{from:'2025-01-01',to:'2025-12-31',registry});
@@ -367,7 +403,9 @@ assert.equal(registryRanking.rows[2][registryRanking.headers.indexOf('黑名单'
 const [thirdIn,thirdOut]=splitSection('counterparties').tables.slice(1);
 assert.deepEqual(matchedNames(thirdIn),['工商筛选样本公司','合规筛选样本公司','仅案号实缴样本公司']);
 assert.deepEqual(matchedNames(thirdOut),['合规筛选样本公司','工商筛选样本公司','仅案号实缴样本公司']);
-assert.deepEqual(Array.from(thirdIn.rows[0].slice(5)),[42,3,1,26,3,1,68,3,1]);
+assert.deepEqual(Array.from(thirdIn.rows[0].slice(5)),[42,3,1,26,3,1,68,3,1,'','','']);
+assert.deepEqual(Array.from(thirdIn.rows[1].slice(-3)),['2024-02-29',5,200000]);
+assert.deepEqual(Array.from(thirdOut.rows[2].slice(-3)),['2024-02-29',5,200000]);
 assert.equal(thirdIn.rows[1][7],30/42);
 assert.equal(thirdOut.rows[1][10],20/26);
 for(const [i,direction] of ['流入','流出'].entries()){
@@ -383,7 +421,7 @@ for(const [i,direction] of ['流入','流出'].entries()){
  assert.equal((overview.match(/<td rowspan="4"/g)||[]).length,2);
  assert(ranking.includes('<h4>'+direction+'第三方前20大对手方</h4>'));
  assert(ranking.includes('report-counterparty-rank-table'));
- for(const header of ['交易总额（百万）','交易笔数（笔）','第三方交易占比（%）'])assert(ranking.includes('<th>'+header+'</th>'));
+ for(const header of ['交易总额（百万）','交易笔数（笔）','第三方交易占比（%）','成立日期','社保人数','注册资本（人民币元）'])assert(ranking.includes('<th>'+header+'</th>'));
 }
 
 for(const html of [v2WordHtml,v2Preview]){
@@ -530,6 +568,12 @@ assert.equal((peoplePage.match(/<table class="table"/g)||[]).length,1);
 for(const name of ['类型','人数（人）'])assert(peoplePage.includes('<th rowspan="2">'+name+'</th>'));
 for(const direction of ['流入','流出'])assert(peoplePage.includes('<th colspan="3">'+direction+'</th>'));
 assert(peoplePage.includes('<th colspan="2">交易金额合计</th>'));
+assert(/<td class="">合计<\/td><td class="report-num report-count-share">/.test(peoplePage));
+for(const id of ['report-registry','report-follow']){
+ const section=v2WordPages.find(page=>page.includes('id="'+id+'"'));
+ const screened=[...section.matchAll(/识别对手方数<\/td><td class="report-count-share">[0-9,]+<\/td>/g)];
+ assert.equal(screened.length,id==='report-registry'?3:2);
+}
 assert(v2WordHtml.includes('>交易对手方为个人或疑似个人的分析<span class="report-subhead-note">（符合上述筛选条件的前20大交易对手方）</span></h4>'));
 
 for(const id of ['compliance-checks','registry','people','follow']){
@@ -560,7 +604,7 @@ for(const html of [v2WordHtml,v2Preview]){
 
 assert(!featuresPage.includes('资金流水中摘要信息为空的交易'));
 assert(!featuresPage.includes('资金流水中交易对手方信息为空的交易'));
-const blankChart=featuresPage.slice(featuresPage.indexOf('<figcaption>交易对手方信息为空</figcaption>'));
+const blankChart=featuresPage.slice(featuresPage.indexOf('<figcaption class="report-large-chart-title">交易对手方信息为空</figcaption>'));
 assert(blankChart.indexOf('</table>')<blankChart.indexOf('详见本报告1.2.2'));
 assert(!v2WordHtml.includes('id="report-large-internal"'));
 assert(v2WordPages.indexOf(outsidePage)===v2WordPages.indexOf(featuresPage)+1);

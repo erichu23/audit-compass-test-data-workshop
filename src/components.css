@@ -1031,7 +1031,9 @@ body #content table thead th.ba-filtered .ba-filter-btn::before{background-image
 .report-document .report-compliance-card .report-scope-value{margin-top:8px;color:#172438;font-size:16px;font-weight:700}
 
 
-.report-v2-document .report-cover-impact{font-size:.86em;color:#536681}
+.report-v2-document .report-cover-status tbody td:last-child{white-space:normal;text-align:left}
+.report-v2-document .report-section-hint{margin:0 0 7px;color:#536681;font-size:12px;line-height:1.45}
+.report-v2-document .report-concentration-hint{margin:5px 0 0;color:#c00000}
 .report-v2-document #report-executive-summary>h2{color:#193a62;margin:4px 0 3px}
 .report-v2-document .report-executive-intro{color:#536681;margin:0 0 8px}
 .report-v2-document .report-executive-row{gap:10px;margin:0 0 11px;border:0}
@@ -1081,7 +1083,14 @@ body #content table thead th.ba-filtered .ba-filter-btn::before{background-image
 
 .report-v2-document #report-large-entity{margin-top:14px}
 
-.report-v2-document .report-concentration td[data-concentration-edges~="top"]{border-top:2px solid #c00000}
-.report-v2-document .report-concentration td[data-concentration-edges~="right"]{border-right:2px solid #c00000}
-.report-v2-document .report-concentration td[data-concentration-edges~="bottom"]{border-bottom:2px solid #c00000}
-.report-v2-document .report-concentration td[data-concentration-edges~="left"]{border-left:2px solid #c00000}
+.report-v2-document .report-concentration-overview{margin:0 0 8px}
+.report-v2-document .report-concentration-overview .report-table{margin:0}
+.report-v2-document .report-concentration-overview :is(th,td){padding:3px 8px;font-size:12px}
+.report-v2-document .report-concentration-overview tbody td:first-child{background:#eef5fc}
+.report-v2-document .report-concentration-overview tbody td:nth-child(2){font-weight:700}
+.report-v2-document .report-concentration td[data-concentration-edges~="top"]{border-top:3px solid #c00000}
+.report-v2-document .report-concentration td[data-concentration-edges~="right"]{border-right:3px solid #c00000}
+.report-v2-document .report-concentration td[data-concentration-edges~="bottom"]{border-bottom:3px solid #c00000}
+.report-v2-document .report-concentration td[data-concentration-edges~="left"]{border-left:3px solid #c00000}
+
+.report-v2-document #report-scope-appendix .report-table :is(th,td){padding:3px 8px}
