@@ -607,7 +607,7 @@ function coverSpacingFor(page){
  const dense=companyLength>140||longest>450;
  return {
   table:dense?68:82,status:dense?63:78,tableSize:17,tableLine:235,
-  headingTop:150,headingBottom:155,noteSize:18,noteLine:270,noteTop:125,noteAfter:45
+  headingTop:150,headingBottom:335,noteSize:18,noteLine:270,noteTop:125,noteAfter:45
  };
 }
 async function report(model,template=g.AuditReport){
